@@ -1586,6 +1586,10 @@ public:
      */
     Type type() const noexcept override;
 
+    // THORVG_GUI
+
+    Result textMetrics(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) noexcept;
+
     _TVG_DECLARE_PRIVATE(Text);
 };
 

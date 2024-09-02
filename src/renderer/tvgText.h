@@ -98,7 +98,7 @@ struct Text::Impl
     {
         if (!loader) return false;
 
-        loader->request(shape, utf8, italic);
+        loader->request(shape, utf8, fontSize, italic);
         //reload
         if (changed) {
             loader->read();
@@ -164,6 +164,14 @@ struct Text::Impl
     Iterator* iterator()
     {
         return nullptr;
+    }
+
+    Result textMetrics(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
+    {
+        if(!loader) return Result::InsufficientCondition;
+        return loader->request(nullptr, text, fontSize, italic) &&
+            loader->metrics(roundMethod, widthLimit, indexLimit, width, index) ? 
+            Result::Success : Result::Unknown;
     }
 };
 

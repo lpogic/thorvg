@@ -213,8 +213,6 @@ bool TtfLoader::resize(Paint* paint, float sx, TVG_UNUSED float sy)
 {
     if (!paint) return false;
     auto shift = 0.0f;
-    auto dpi = 96.0f / 72.0f;   //dpi base?
-    scale = sx * dpi / reader.metrics.unitsPerEm;
     if (italic) shift = -scale * 0.18f;  //experimental decision.
     Matrix m = {scale, shift, -(shift * reader.metrics.minw), 0, scale, 0, 0, 0, 1};
     paint->transform(m);
@@ -258,12 +256,13 @@ bool TtfLoader::open(const char* data, uint32_t size, TVG_UNUSED const string& r
 }
 
 
-bool TtfLoader::request(Shape* shape, char* text, bool italic)
+bool TtfLoader::request(Shape* shape, const char* text, float fontSize, bool italic)
 {
     this->shape = shape;
     this->text = text;
     this->italic = italic;
 
+    scale = fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
     return true;
 }
 
@@ -296,6 +295,73 @@ bool TtfLoader::read()
         //store the first glyph min size for italic transform.
         if (idx == 0) reader.metrics.minw = gmetrics.minw;
         ++idx;
+    }
+
+    free(code);
+
+    return true;
+}
+
+
+bool TtfLoader::metrics(int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
+{
+    if (!text) {
+        if(width) *width = 0.0f;
+        if(index) *index = 0;
+        return true;
+    }
+
+    auto n = strlen(text);
+    auto code = _codepoints(text, n);
+
+    widthLimit = widthLimit / scale;
+    
+    TtfGlyphMetrics gmetrics;
+    Point offset = {0.0f, reader.metrics.hhea.ascent};
+    float nextOffset;
+    float lastKerning = 0.0f;
+    bool limitReached = false;
+    Point kerning = {0.0f, 0.0f};
+    auto lglyph = INVALID_GLYPH;
+
+    size_t idx = 0;
+    while (code[idx] && idx < n) {
+        auto rglyph = reader.glyph(code[idx], gmetrics);
+        nextOffset = offset.x + gmetrics.advanceWidth;
+        lastKerning = kerning.x;
+        if (rglyph != INVALID_GLYPH) {
+            if (lglyph != INVALID_GLYPH) {
+                reader.kerning(lglyph, rglyph, kerning);
+            }
+            nextOffset += kerning.x;
+        }
+        if (widthLimit > 0 && widthLimit < nextOffset || indexLimit >= 0 && indexLimit <= idx) {
+            limitReached = true;
+            break;
+        }
+        offset.x = nextOffset;
+        lglyph = rglyph;
+        ++idx;
+    }
+
+    switch(roundMethod) {
+        case 3: // CEIL
+            if(limitReached) {
+                if(width) *width = nextOffset * scale;
+                if(index) *index = idx + 1;
+                break;
+            }
+        case 2: // NEAREST
+            if(limitReached) {
+                if(widthLimit - offset.x > nextOffset - widthLimit) {
+                    if(width) *width = nextOffset * scale;
+                    if(index) *index = idx + 1;
+                    break;
+                }
+            }
+        case 1: // FLOOR
+            if(width) *width = (offset.x + kerning.x / 2) * scale;
+            if(index) *index = idx;
     }
 
     free(code);
