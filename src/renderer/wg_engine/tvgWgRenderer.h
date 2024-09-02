@@ -38,7 +38,7 @@ public:
     RenderRegion region(RenderData data) override;
     RenderRegion viewport() override;
     bool viewport(const RenderRegion& vp) override;
-    bool blend(BlendMethod method) override;
+    bool blend(BlendMethod method, bool direct) override;
     ColorSpace colorSpace() override;
     const Surface* mainSurface() override;
 
@@ -75,11 +75,6 @@ private:
     WgPipelines mPipelines;
     WgCompositor mCompositor;
     
-    // screen buffer
-    WGPUTexture mTexScreen{};
-    WGPUTextureView mTexViewScreen{};
-    WGPUBindGroup mBindGroupScreen{};
-
     Surface mTargetSurface;
     BlendMethod mBlendMethod{};
     RenderRegion mViewport{};

@@ -141,7 +141,9 @@ void LottieImage::prepare()
 void LottieTrimpath::segment(float frameNo, float& start, float& end, LottieExpressions* exps)
 {
     start = this->start(frameNo, exps) * 0.01f;
+    tvg::clamp(start, 0.0f, 1.0f);
     end = this->end(frameNo, exps) * 0.01f;
+    tvg::clamp(end, 0.0f, 1.0f);
 
     auto o = fmodf(this->offset(frameNo, exps), 360.0f) / 360.0f;  //0 ~ 1
 
@@ -157,6 +159,7 @@ void LottieTrimpath::segment(float frameNo, float& start, float& end, LottieExpr
         return;
     }
 
+    if (start > end) std::swap(start, end);
     start += o;
     end += o;
 }
