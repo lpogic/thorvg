@@ -102,7 +102,7 @@ struct FontLoader : LoadModule
     FontLoader(FileType type) : LoadModule(type) {}
 
     virtual bool request(Shape* shape, const char* text, float fontSize, bool italic = false) = 0;
-    virtual bool transform(Paint* paint, float fontSize, bool italic) = 0;
+    virtual bool transform(Paint* paint) = 0;
     virtual bool metrics(int roundMethod, float widthLimit, int indexLimit, float* width, int* index) = 0;
 };
 

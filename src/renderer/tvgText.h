@@ -103,7 +103,7 @@ struct Text::Impl
             loader->read();
             changed = false;
         }
-        return loader->transform(shape, fontSize, italic);
+        return loader->transform(shape);
     }
 
     RenderData update(RenderMethod* renderer, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag pFlag, TVG_UNUSED bool clipper)

@@ -209,7 +209,7 @@ void TtfLoader::clear()
 /************************************************************************/
 
 
-bool TtfLoader::transform(Paint* paint, float fontSize, bool italic)
+bool TtfLoader::transform(Paint* paint)
 {
     if (!paint) return false;
     auto shift = 0.0f;
@@ -260,6 +260,7 @@ bool TtfLoader::request(Shape* shape, const char* text, float fontSize, bool ita
 {
     this->shape = shape;
     this->text = text;
+    this->italic = italic;
 
     scale = fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
     return true;

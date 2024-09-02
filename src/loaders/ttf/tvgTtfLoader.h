@@ -38,6 +38,7 @@ struct TtfLoader : public FontLoader
     Shape* shape = nullptr;
     bool nomap = false;
     bool freeData = false;
+    bool italic = false;
 
     TtfLoader();
     ~TtfLoader();
@@ -45,7 +46,7 @@ struct TtfLoader : public FontLoader
     using FontLoader::open;
     bool open(const string& path) override;
     bool open(const char *data, uint32_t size, const string& rpath, bool copy) override;
-    bool transform(Paint* paint, float w, float h) override;
+    bool transform(Paint* paint) override;
     bool request(Shape* shape, const char* text, float fontSize, bool italic = false) override;
     bool read() override;
     bool metrics(int roundMethod, float widthLimit, int indexLimit, float* width, int* index) override;
