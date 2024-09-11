@@ -437,6 +437,10 @@ public:
      */
     TVG_DEPRECATED uint32_t identifier() const noexcept;
 
+    // THORVG_GUI_PATH
+
+    Result markTransformed() noexcept;
+
     _TVG_DECLARE_PRIVATE(Paint);
 };
 
@@ -1586,7 +1590,7 @@ public:
      */
     Type type() const noexcept override;
 
-    // THORVG_GUI
+    // THORVG_GUI_PATH
 
     Result textMetrics(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) noexcept;
 

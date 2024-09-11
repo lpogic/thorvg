@@ -404,6 +404,11 @@ Result Paint::translate(float x, float y) noexcept
     return Result::InsufficientCondition;
 }
 
+Result Paint::markTransformed() noexcept
+{
+    pImpl->renderFlag |= RenderUpdateFlag::Transform;
+    return Result::Success;
+}
 
 Result Paint::transform(const Matrix& m) noexcept
 {

@@ -319,6 +319,7 @@ bool TtfLoader::metrics(int roundMethod, float widthLimit, int indexLimit, float
     auto code = _codepoints(text, n);
 
     widthLimit = widthLimit / scale;
+    if (indexLimit >= n) indexLimit = -1;
     
     TtfGlyphMetrics gmetrics;
     Point offset = {0.0f, reader.metrics.hhea.ascent};
@@ -364,8 +365,13 @@ bool TtfLoader::metrics(int roundMethod, float widthLimit, int indexLimit, float
                 }
             }
         case 1: // FLOOR
-            if(width) *width = (offset.x + kerning.x / 2) * scale;
-            if(index) *index = idx;
+            if(limitReached) {
+                if(width) *width = (offset.x + kerning.x / 2) * scale;
+                if(index) *index = idx;
+            } else {
+                if(width) *width = offset.x * scale;
+                if(index) *index = idx;
+            }
     }
 
     free(code);
