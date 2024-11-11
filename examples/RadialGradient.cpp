@@ -38,7 +38,7 @@ struct UserExample : tvgexam::Example
 
         //RadialGradient
         auto fill = tvg::RadialGradient::gen();
-        fill->radial(200, 200, 200);
+        fill->radial(200, 200, 200, 200, 200, 0);   //cx, cy, r, fx, fy, fr
 
         //Gradient Color Stops
         tvg::Fill::ColorStop colorStops[2];
@@ -47,8 +47,8 @@ struct UserExample : tvgexam::Example
 
         fill->colorStops(colorStops, 2);
 
-        shape1->fill(std::move(fill));
-        canvas->push(std::move(shape1));
+        shape1->fill(fill);
+        canvas->push(shape1);
 
         //Prepare Circle
         auto shape2 = tvg::Shape::gen();
@@ -56,7 +56,7 @@ struct UserExample : tvgexam::Example
 
         //RadialGradient
         auto fill2 = tvg::RadialGradient::gen();
-        fill2->radial(400, 400, 200);
+        fill2->radial(400, 400, 200, 400, 400, 0);   //cx, cy, r, fx, fy, fr
 
         //Gradient Color Stops
         tvg::Fill::ColorStop colorStops2[3];
@@ -66,8 +66,8 @@ struct UserExample : tvgexam::Example
 
         fill2->colorStops(colorStops2, 3);
 
-        shape2->fill(std::move(fill2));
-        canvas->push(std::move(shape2));
+        shape2->fill(fill2);
+        canvas->push(shape2);
 
         //Prepare Ellipse
         auto shape3 = tvg::Shape::gen();
@@ -75,7 +75,7 @@ struct UserExample : tvgexam::Example
 
         //RadialGradient
         auto fill3 = tvg::RadialGradient::gen();
-        fill3->radial(600, 600, 150);
+        fill3->radial(600, 600, 150, 700, 600, 20);   //cx, cy, r, fx, fy, fr
 
         //Gradient Color Stops
         tvg::Fill::ColorStop colorStops3[4];
@@ -86,8 +86,8 @@ struct UserExample : tvgexam::Example
 
         fill3->colorStops(colorStops3, 4);
 
-        shape3->fill(std::move(fill3));
-        canvas->push(std::move(shape3));
+        shape3->fill(fill3);
+        canvas->push(shape3);
 
         return true;
     }

@@ -62,11 +62,11 @@ void contents()
     Tvg_Gradient* grad1_stroke = tvg_gradient_duplicate(grad1);
 
     //Set a gradient fill
-    tvg_shape_set_linear_gradient(shape1, grad1);
+    tvg_shape_set_gradient(shape1, grad1);
 
     //Set a gradient stroke
     tvg_shape_set_stroke_width(shape1, 20.0f);
-    tvg_shape_set_stroke_linear_gradient(shape1, grad1_stroke);
+    tvg_shape_set_stroke_gradient(shape1, grad1_stroke);
     tvg_shape_set_stroke_join(shape1, TVG_STROKE_JOIN_ROUND);
 
 
@@ -103,7 +103,7 @@ void contents()
 
     //Prepare a radial gradient for the fill
     Tvg_Gradient* grad2 = tvg_radial_gradient_new();
-    tvg_radial_gradient_set(grad2, 600.0f, 180.0f, 50.0f);
+    tvg_radial_gradient_set(grad2, 600.0f, 180.0f, 50.0f, 640.0f, 180.0f, 0.0f);
     Tvg_Color_Stop color_stops2[3] =
     {
         {0.0f, 255,   0, 255, 255},
@@ -114,24 +114,24 @@ void contents()
     tvg_gradient_set_spread(grad2, TVG_STROKE_FILL_PAD);
 
     //Set a gradient fill
-    tvg_shape_set_radial_gradient(shape3, grad2);
+    tvg_shape_set_gradient(shape3, grad2);
 
     //Prepare a radial gradient for the stroke
     uint32_t cnt;
     const Tvg_Color_Stop* color_stops2_get;
     tvg_gradient_get_color_stops(grad2, &color_stops2_get, &cnt);
 
-    float cx, cy, radius;
-    tvg_radial_gradient_get(grad2, &cx, &cy, &radius);
+    float cx, cy, r, fx, fy, fr;
+    tvg_radial_gradient_get(grad2, &cx, &cy, &r, &fx, &fy, &fr);
 
     Tvg_Gradient* grad2_stroke = tvg_radial_gradient_new();
-    tvg_radial_gradient_set(grad2_stroke, cx, cy, radius);
+    tvg_radial_gradient_set(grad2_stroke, cx, cy, r, fx, fy, fr);
     tvg_gradient_set_color_stops(grad2_stroke, color_stops2_get, cnt);
     tvg_gradient_set_spread(grad2_stroke, TVG_STROKE_FILL_REPEAT);
 
     //Set a gradient stroke
     tvg_shape_set_stroke_width(shape3, 30.0f);
-    tvg_shape_set_stroke_radial_gradient(shape3, grad2_stroke);
+    tvg_shape_set_stroke_gradient(shape3, grad2_stroke);
 
     tvg_paint_set_opacity(shape3, 200);
 
@@ -194,7 +194,7 @@ void contents()
         Tvg_Paint* comp = tvg_shape_new();
         tvg_shape_append_circle(comp, 600.0f, 600.0f, 100.0f, 100.0f);
         tvg_shape_set_fill_color(comp, 0, 0, 0, 200);
-        tvg_paint_set_composite_method(pict, comp, TVG_COMPOSITE_METHOD_INVERSE_ALPHA_MASK);
+        tvg_paint_set_mask_method(pict, comp, TVG_MASK_METHOD_INVERSE_ALPHA);
 
         //Push the scene into the canvas
         tvg_canvas_push(canvas, pict);
@@ -261,7 +261,7 @@ void contents()
     } else {
         //Radial gradient
         Tvg_Gradient* grad = tvg_radial_gradient_new();
-        tvg_radial_gradient_set(grad, 200.0f, 200.0f, 20.0f);
+        tvg_radial_gradient_set(grad, 200.0f, 200.0f, 20.0f, 200.0f, 200.0f, 0.0f);
         Tvg_Color_Stop color_stops[2] =
                 {
                         {0.0f, 255,   0, 255, 255},
@@ -272,7 +272,7 @@ void contents()
 
         Tvg_Paint *text = tvg_text_new();
         tvg_text_set_font(text, "Arial", 20.0f, "italic");
-        tvg_text_set_linear_gradient(text, grad);
+        tvg_text_set_gradient(text, grad);
         tvg_text_set_text(text, "ThorVG is the best");
         tvg_paint_translate(text, 70.0f, 420.0f);
         tvg_canvas_push(canvas, text);

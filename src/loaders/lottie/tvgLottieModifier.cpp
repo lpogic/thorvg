@@ -79,7 +79,20 @@ static bool _intersect(const Line& line1, const Line& line2, Point& intersection
 static Line _offset(const Point& p1, const Point& p2, float offset)
 {
     auto scaledNormal = normal(p1, p2) * offset;
-    return {p1 - scaledNormal, p2 - scaledNormal};
+    return {p1 + scaledNormal, p2 + scaledNormal};
+}
+
+
+static bool _clockwise(const Point* pts, uint32_t n)
+{
+    auto area = 0.0f;
+
+    for (uint32_t i = 0; i < n - 1; i++) {
+        area += cross(pts[i], pts[i + 1]);
+    }
+    area += cross(pts[n - 1], pts[0]);;
+
+    return area < 0.0f;
 }
 
 
@@ -112,6 +125,7 @@ void LottieOffsetModifier::corner(const Line& line, const Line& nextLine, uint32
         }
     } else outPts.push(line.pt2);
 }
+
 
 void LottieOffsetModifier::line(const PathCommand* inCmds, uint32_t inCmdsCnt, const Point* inPts, uint32_t& currentPt, uint32_t currentCmd, State& state, bool degenerated, Array<PathCommand>& outCmds, Array<Point>& outPts, float offset) const
 {
@@ -288,13 +302,15 @@ bool LottieRoundnessModifier::modifyRect(const Point& size, float& r) const
 }
 
 
-bool LottieOffsetModifier::modifyPath(const PathCommand* inCmds, uint32_t inCmdsCnt, const Point* inPts, uint32_t inPtsCnt, Array<PathCommand>& outCmds, Array<Point>& outPts, bool clockwise) const
+bool LottieOffsetModifier::modifyPath(const PathCommand* inCmds, uint32_t inCmdsCnt, const Point* inPts, uint32_t inPtsCnt, Array<PathCommand>& outCmds, Array<Point>& outPts) const
 {
     outCmds.reserve(inCmdsCnt * 2);
     outPts.reserve(inPtsCnt * (join == StrokeJoin::Round ? 4 : 2));
 
+    Array<Bezier> stack{5};
     State state;
-    auto offset = clockwise ? this->offset : -this->offset;
+    auto offset = _clockwise(inPts, inPtsCnt) ? this->offset : -this->offset;
+    auto threshold = 1.0f / fabsf(offset) + 1.0f;
 
     for (uint32_t iCmd = 0, iPt = 0; iCmd < inCmdsCnt; ++iCmd) {
         if (inCmds[iCmd] == PathCommand::MoveTo) {
@@ -311,26 +327,40 @@ bool LottieOffsetModifier::modifyPath(const PathCommand* inCmds, uint32_t inCmds
                 continue;
             }
 
-            auto line1 = _offset(inPts[iPt - 1], inPts[iPt], offset);
-            auto line2 = _offset(inPts[iPt], inPts[iPt + 1], offset);
-            auto line3 = _offset(inPts[iPt + 1], inPts[iPt + 2], offset);
+            stack.push({inPts[iPt - 1], inPts[iPt], inPts[iPt + 1], inPts[iPt + 2]});
+            while (!stack.empty()) {
+                auto& bezier = stack.last();
+                auto len = tvg::length(bezier.start - bezier.ctrl1) + tvg::length(bezier.ctrl1 - bezier.ctrl2) + tvg::length(bezier.ctrl2 - bezier.end);
 
-            if (state.moveto) {
-                outCmds.push(PathCommand::MoveTo);
-                state.movetoOutIndex = outPts.count;
-                outPts.push(line1.pt1);
-                state.firstLine = line1;
-                state.moveto = false;
+                if (len >  threshold * bezier.length()) {
+                    Bezier next;
+                    bezier.split(0.5f, next);
+                    stack.push(next);
+                    continue;
+                }
+                stack.pop();
+
+                auto line1 = _offset(bezier.start, bezier.ctrl1, offset);
+                auto line2 = _offset(bezier.ctrl1, bezier.ctrl2, offset);
+                auto line3 = _offset(bezier.ctrl2, bezier.end, offset);
+
+                if (state.moveto) {
+                    outCmds.push(PathCommand::MoveTo);
+                    state.movetoOutIndex = outPts.count;
+                    outPts.push(line1.pt1);
+                    state.firstLine = line1;
+                    state.moveto = false;
+                }
+
+                bool inside{};
+                Point intersect{};
+                _intersect(line1, line2, intersect, inside);
+                outPts.push(intersect);
+                _intersect(line2, line3, intersect, inside);
+                outPts.push(intersect);
+                outPts.push(line3.pt2);
+                outCmds.push(PathCommand::CubicTo);
             }
-
-            bool inside{};
-            Point intersect{};
-            _intersect(line1, line2, intersect, inside);
-            outPts.push(intersect);
-            _intersect(line2, line3, intersect, inside);
-            outPts.push(intersect);
-            outPts.push(line3.pt2);
-            outCmds.push(PathCommand::CubicTo);
 
             iPt += 3;
         }
@@ -346,14 +376,14 @@ bool LottieOffsetModifier::modifyPath(const PathCommand* inCmds, uint32_t inCmds
 }
 
 
-bool LottieOffsetModifier::modifyPolystar(const Array<PathCommand>& inCmds, const Array<Point>& inPts, Array<PathCommand>& outCmds, Array<Point>& outPts, bool clockwise) const {
-    return modifyPath(inCmds.data, inCmds.count, inPts.data, inPts.count, outCmds, outPts, clockwise);
+bool LottieOffsetModifier::modifyPolystar(const Array<PathCommand>& inCmds, const Array<Point>& inPts, Array<PathCommand>& outCmds, Array<Point>& outPts) const {
+    return modifyPath(inCmds.data, inCmds.count, inPts.data, inPts.count, outCmds, outPts);
 }
 
 
-bool LottieOffsetModifier::modifyRect(const PathCommand* inCmds, uint32_t inCmdsCnt, const Point* inPts, uint32_t inPtsCnt, Array<PathCommand>& outCmds, Array<Point>& outPts, bool clockwise) const
+bool LottieOffsetModifier::modifyRect(const PathCommand* inCmds, uint32_t inCmdsCnt, const Point* inPts, uint32_t inPtsCnt, Array<PathCommand>& outCmds, Array<Point>& outPts) const
 {
-    return modifyPath(inCmds, inCmdsCnt, inPts, inPtsCnt, outCmds, outPts, clockwise);
+    return modifyPath(inCmds, inCmdsCnt, inPts, inPtsCnt, outCmds, outPts);
 }
 
 

@@ -20,6 +20,7 @@
  * SOFTWARE.
  */
 
+#include "tvgPaint.h"
 #include "tvgPicture.h"
 
 /************************************************************************/
@@ -62,10 +63,8 @@ bool Picture::Impl::needComposition(uint8_t opacity)
 
     //Composition test
     const Paint* target;
-    auto method = picture->composite(&target);
-    if (!target || method == tvg::CompositeMethod::ClipPath) return false;
-    if (target->pImpl->opacity == 255 || target->pImpl->opacity == 0) return false;
-
+    picture->mask(&target);
+    if (!target || target->pImpl->opacity == 255 || target->pImpl->opacity == 0) return false;
     return true;
 }
 
@@ -73,14 +72,14 @@ bool Picture::Impl::needComposition(uint8_t opacity)
 bool Picture::Impl::render(RenderMethod* renderer)
 {
     bool ret = false;
-    renderer->blend(picture->blend(), true);
+    renderer->blend(PP(picture)->blendMethod);
 
     if (surface) return renderer->renderImage(rd);
     else if (paint) {
-        Compositor* cmp = nullptr;
+        RenderCompositor* cmp = nullptr;
         if (needComp) {
             cmp = renderer->target(bounds(renderer), renderer->colorSpace());
-            renderer->beginComposite(cmp, CompositeMethod::None, 255);
+            renderer->beginComposite(cmp, MaskMethod::None, 255);
         }
         ret = paint->pImpl->render(renderer);
         if (cmp) renderer->endComposite(cmp);
@@ -143,15 +142,9 @@ Picture::~Picture()
 }
 
 
-unique_ptr<Picture> Picture::gen() noexcept
+Picture* Picture::gen() noexcept
 {
-    return unique_ptr<Picture>(new Picture);
-}
-
-
-TVG_DEPRECATED uint32_t Picture::identifier() noexcept
-{
-    return (uint32_t) Type::Picture;
+    return new Picture;
 }
 
 
@@ -161,15 +154,15 @@ Type Picture::type() const noexcept
 }
 
 
-Result Picture::load(const std::string& path) noexcept
+Result Picture::load(const char* filename) noexcept
 {
-    if (path.empty()) return Result::InvalidArguments;
+    if (!filename) return Result::InvalidArguments;
 
-    return pImpl->load(path);
+    return pImpl->load(filename);
 }
 
 
-Result Picture::load(const char* data, uint32_t size, const string& mimeType, const string& rpath, bool copy) noexcept
+Result Picture::load(const char* data, uint32_t size, const char* mimeType, const char* rpath, bool copy) noexcept
 {
     if (!data || size <= 0) return Result::InvalidArguments;
 
@@ -177,11 +170,11 @@ Result Picture::load(const char* data, uint32_t size, const string& mimeType, co
 }
 
 
-Result Picture::load(uint32_t* data, uint32_t w, uint32_t h, bool premultiplied, bool copy) noexcept
+Result Picture::load(uint32_t* data, uint32_t w, uint32_t h, ColorSpace cs, bool copy) noexcept
 {
-    if (!data || w <= 0 || h <= 0) return Result::InvalidArguments;
+    if (!data || w <= 0 || h <= 0 || cs == ColorSpace::Unknown)  return Result::InvalidArguments;
 
-    return pImpl->load(data, w, h, premultiplied, copy);
+    return pImpl->load(data, w, h, cs, copy);
 }
 
 
@@ -219,6 +212,9 @@ const Paint* Picture::paint(uint32_t id) noexcept
         return true;
     };
 
-    tvg::Accessor::gen()->set(this, cb, &value);
+    auto accessor = tvg::Accessor::gen();
+    accessor->set(this, cb, &value);
+    delete(accessor);
+
     return value.ret;
 }

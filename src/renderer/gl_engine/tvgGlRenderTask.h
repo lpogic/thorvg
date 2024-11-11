@@ -53,20 +53,20 @@ struct GlBindingResource
      * Can be a uniform location for a texture
      * Can be a uniform buffer binding index for a uniform block
      */
-    uint32_t        bindPoint = {};
-    uint32_t        location = {};
-    GLuint          gBufferId = {};
-    uint32_t        bufferOffset = {};
-    uint32_t        bufferRange = {};
+    uint32_t        bindPoint = 0;
+    GLint           location = 0;
+    GLuint          gBufferId = 0;
+    uint32_t        bufferOffset = 0;
+    uint32_t        bufferRange = 0;
 
     GlBindingResource() = default;
 
-    GlBindingResource(uint32_t index, uint32_t location, uint32_t bufferId, uint32_t offset, uint32_t range)
+    GlBindingResource(uint32_t index, GLint location, GLuint bufferId, uint32_t offset, uint32_t range)
         : type(GlBindingType::kUniformBuffer), bindPoint(index), location(location), gBufferId(bufferId), bufferOffset(offset), bufferRange(range)
     {
     }
 
-    GlBindingResource(uint32_t bindPoint, uint32_t texId, uint32_t location)
+    GlBindingResource(uint32_t bindPoint, GLuint texId, GLint location)
         : type(GlBindingType::kTexture), bindPoint(bindPoint), location(location), gBufferId(texId)
     {
     }
@@ -91,6 +91,7 @@ public:
 
     GlProgram* getProgram() { return mProgram; }
     const RenderRegion& getViewport() const { return mViewport; }
+    float getDrawDepth() const { return mDrawDepth; }
 private:
     GlProgram* mProgram;
     RenderRegion mViewport = {};
@@ -192,6 +193,33 @@ public:
 private:
     GlRenderTask* mClipTask;
     GlRenderTask* mMaskTask;
+};
+
+class GlSimpleBlendTask : public GlRenderTask
+{
+public:
+    GlSimpleBlendTask(BlendMethod method, GlProgram* program);
+    ~GlSimpleBlendTask() override = default;
+
+    void run() override;
+private:
+    BlendMethod mBlendMethod;
+};
+
+class GlComplexBlendTask: public GlRenderTask
+{
+public:
+    GlComplexBlendTask(GlProgram* program, GlRenderTarget* dstFbo, GlRenderTarget* dstCopyFbo, GlRenderTask* stencilTask, GlComposeTask* composeTask);
+    ~GlComplexBlendTask() override;
+
+    void run() override;
+
+    void normalizeDrawDepth(int32_t maxDepth) override;
+private:
+    GlRenderTarget* mDstFbo;
+    GlRenderTarget* mDstCopyFbo;
+    GlRenderTask* mStencilTask;
+    GlComposeTask* mComposeTask;
 };
 
 #endif /* _TVG_GL_RENDER_TASK_H_ */

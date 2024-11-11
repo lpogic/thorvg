@@ -41,20 +41,23 @@ TEST_CASE("Set gradient center point and radius", "[capiRadialGradient]")
 {
     Tvg_Gradient *gradient = tvg_radial_gradient_new();
     REQUIRE(gradient);
-    REQUIRE(tvg_radial_gradient_set(gradient, 10.0, 15.0, 30.0) == TVG_RESULT_SUCCESS);
+    REQUIRE(tvg_radial_gradient_set(gradient, 10.0, 15.0, 30.0, 11.0, 16.0, 1.0) == TVG_RESULT_SUCCESS);
 
-    float cx, cy, radius;
-    REQUIRE(tvg_radial_gradient_get(gradient, &cx, &cy, &radius) == TVG_RESULT_SUCCESS);
+    float cx, cy, r, fx, fy, fr;
+    REQUIRE(tvg_radial_gradient_get(gradient, &cx, &cy, &r, &fx, &fy, &fr) == TVG_RESULT_SUCCESS);
     REQUIRE(cx == Approx(10.0).margin(0.000001));
     REQUIRE(cy == Approx(15.0).margin(0.000001));
-    REQUIRE(radius == Approx(30.0).margin(0.000001));
+    REQUIRE(r == Approx(30.0).margin(0.000001));
+    REQUIRE(fx == Approx(11.0).margin(0.000001));
+    REQUIRE(fy == Approx(16.0).margin(0.000001));
+    REQUIRE(fr == Approx(1.0).margin(0.000001));
 
     REQUIRE(tvg_gradient_del(gradient) == TVG_RESULT_SUCCESS);
 }
 
 TEST_CASE("Set gradient in shape", "[capiRadialGradient]")
 {
-    REQUIRE(tvg_shape_set_radial_gradient(NULL, NULL) == TVG_RESULT_INVALID_ARGUMENT);
+    REQUIRE(tvg_shape_set_gradient(NULL, NULL) == TVG_RESULT_INVALID_ARGUMENT);
 
     Tvg_Gradient *gradient = tvg_radial_gradient_new();
     REQUIRE(gradient);
@@ -62,14 +65,14 @@ TEST_CASE("Set gradient in shape", "[capiRadialGradient]")
     Tvg_Paint *shape = tvg_shape_new();
     REQUIRE(shape);
 
-    REQUIRE(tvg_shape_set_radial_gradient(NULL, gradient) == TVG_RESULT_INVALID_ARGUMENT);
-    REQUIRE(tvg_shape_set_radial_gradient(shape, gradient) == TVG_RESULT_SUCCESS);
+    REQUIRE(tvg_shape_set_gradient(NULL, gradient) == TVG_RESULT_INVALID_ARGUMENT);
+    REQUIRE(tvg_shape_set_gradient(shape, gradient) == TVG_RESULT_SUCCESS);
 
     Tvg_Gradient *gradient_ret = NULL;
     REQUIRE(tvg_shape_get_gradient(shape, &gradient_ret) == TVG_RESULT_SUCCESS);
     REQUIRE(gradient_ret);
 
-    REQUIRE(tvg_shape_set_radial_gradient(shape, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
+    REQUIRE(tvg_shape_set_gradient(shape, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
     REQUIRE(tvg_paint_del(shape) == TVG_RESULT_SUCCESS);
 }
 
@@ -194,7 +197,7 @@ TEST_CASE("Stroke Radial Gradient", "[capiRadialGradient]")
     Tvg_Gradient *gradient = tvg_radial_gradient_new();
     REQUIRE(gradient);
 
-    REQUIRE(tvg_radial_gradient_set(gradient, 10.0, 15.0, 30.0) == TVG_RESULT_SUCCESS);
+    REQUIRE(tvg_radial_gradient_set(gradient, 10.0, 15.0, 30.0, 11.0, 16.0, 0.0) == TVG_RESULT_SUCCESS);
 
     Tvg_Color_Stop color_stops[2] = {
         {0.0, 0, 0,   0, 255},
@@ -207,9 +210,9 @@ TEST_CASE("Stroke Radial Gradient", "[capiRadialGradient]")
 
     REQUIRE(tvg_gradient_set_color_stops(gradient, color_stops, 2) == TVG_RESULT_SUCCESS);
 
-    REQUIRE(tvg_shape_set_stroke_radial_gradient(NULL, NULL) == TVG_RESULT_INVALID_ARGUMENT);
-    REQUIRE(tvg_shape_set_stroke_radial_gradient(NULL, gradient) == TVG_RESULT_INVALID_ARGUMENT);
-    REQUIRE(tvg_shape_set_stroke_radial_gradient(shape, gradient) == TVG_RESULT_SUCCESS);
+    REQUIRE(tvg_shape_set_stroke_gradient(NULL, NULL) == TVG_RESULT_INVALID_ARGUMENT);
+    REQUIRE(tvg_shape_set_stroke_gradient(NULL, gradient) == TVG_RESULT_INVALID_ARGUMENT);
+    REQUIRE(tvg_shape_set_stroke_gradient(shape, gradient) == TVG_RESULT_SUCCESS);
 
     REQUIRE(tvg_shape_get_stroke_gradient(shape, &gradient_ret) == TVG_RESULT_SUCCESS);
     REQUIRE(gradient_ret);
@@ -218,11 +221,14 @@ TEST_CASE("Stroke Radial Gradient", "[capiRadialGradient]")
     REQUIRE(color_stops_ret);
     REQUIRE(color_stops_count_ret == 2);
 
-    float cx, cy, radius;
-    REQUIRE(tvg_radial_gradient_get(gradient_ret, &cx, &cy, &radius) == TVG_RESULT_SUCCESS);
+    float cx, cy, r, fx, fy, fr;
+    REQUIRE(tvg_radial_gradient_get(gradient_ret, &cx, &cy, &r, &fx, &fy, &fr) == TVG_RESULT_SUCCESS);
     REQUIRE(cx == Approx(10.0).margin(0.000001));
     REQUIRE(cy == Approx(15.0).margin(0.000001));
-    REQUIRE(radius == Approx(30.0).margin(0.000001));
+    REQUIRE(r == Approx(30.0).margin(0.000001));
+    REQUIRE(fx == Approx(11.0).margin(0.000001));
+    REQUIRE(fy == Approx(16.0).margin(0.000001));
+    REQUIRE(fr == Approx(0.0).margin(0.000001));
 
     REQUIRE(tvg_paint_del(shape) == TVG_RESULT_SUCCESS);
 }

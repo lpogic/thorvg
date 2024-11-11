@@ -22,6 +22,7 @@
  */
 
 #include <algorithm>
+#include "tvgMath.h"
 #include "tvgWgRenderData.h"
 #include "tvgWgShaderTypes.h"
 
@@ -54,35 +55,36 @@ void WgMeshData::drawImage(WgContext& context, WGPURenderPassEncoder renderPassE
 };
 
 
-void WgMeshData::update(WgContext& context, const WgPolyline* polyline)
+void WgMeshData::update(WgContext& context, const WgVertexBuffer& vertexBuffer)
 {
-    assert(polyline);
-    assert(polyline->pts.count > 2);
-    vertexCount = polyline->pts.count;
-    indexCount = (polyline->pts.count - 2) * 3;
-    context.allocateBufferVertex(bufferPosition, (float *)&polyline->pts[0], vertexCount * sizeof(float) * 2);
+    assert(vertexBuffer.vcount > 2);
+    vertexCount = vertexBuffer.vcount;
+    indexCount = (vertexBuffer.vcount - 2) * 3;
+    // buffer position data create and write
+    context.allocateBufferVertex(bufferPosition, (float *)&vertexBuffer.vbuff, vertexCount * sizeof(float) * 2);
+    // buffer index data create and write
     context.allocateBufferIndexFan(vertexCount);
 }
 
 
-void WgMeshData::update(WgContext& context, const WgGeometryData* geometryData)
+void WgMeshData::update(WgContext& context, const WgVertexBufferInd& vertexBufferInd)
 {
-    assert(geometryData);
-    vertexCount = geometryData->positions.pts.count;
-    indexCount = geometryData->indexes.count;
+    assert(vertexBufferInd.vcount > 2);
+    vertexCount = vertexBufferInd.vcount;
+    indexCount = vertexBufferInd.icount;
     // buffer position data create and write
-    if (geometryData->positions.pts.count > 0)
-        context.allocateBufferVertex(bufferPosition, (float *)&geometryData->positions.pts[0], vertexCount * sizeof(float) * 2);
+    if (vertexCount > 0)
+        context.allocateBufferVertex(bufferPosition, (float *)&vertexBufferInd.vbuff, vertexCount * sizeof(float) * 2);
     // buffer tex coords data create and write
-    if (geometryData->texCoords.count > 0)
-        context.allocateBufferVertex(bufferTexCoord, (float *)&geometryData->texCoords[0], vertexCount * sizeof(float) * 2);
+    if (vertexCount > 0)
+        context.allocateBufferVertex(bufferTexCoord, (float *)&vertexBufferInd.tbuff, vertexCount * sizeof(float) * 2);
     // buffer index data create and write
-    if (geometryData->indexes.count > 0)
-        context.allocateBufferIndex(bufferIndex, &geometryData->indexes[0], indexCount * sizeof(uint32_t));
+    if (indexCount > 0)
+        context.allocateBufferIndex(bufferIndex, vertexBufferInd.ibuff, indexCount * sizeof(uint32_t));
 };
 
 
-void WgMeshData::update(WgContext& context, const WgPoint pmin, const WgPoint pmax)
+void WgMeshData::bbox(WgContext& context, const Point pmin, const Point pmax)
 {
     vertexCount = 4;
     indexCount = 6;
@@ -92,6 +94,32 @@ void WgMeshData::update(WgContext& context, const WgPoint pmin, const WgPoint pm
     };
     context.allocateBufferVertex(bufferPosition, data, sizeof(data));
     context.allocateBufferIndexFan(vertexCount);
+}
+
+
+void WgMeshData::imageBox(WgContext& context, float w, float h)
+{
+    vertexCount = 4;
+    indexCount = 6;
+    const float vdata[] = { 0.0f, 0.0f,    w, 0.0f,   w,    h,  0.0f, h    };
+    const float tdata[] = { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f };
+    const uint32_t idata[] = { 0, 1, 2, 0, 2, 3 };
+    context.allocateBufferVertex(bufferPosition, vdata, sizeof(vdata));
+    context.allocateBufferVertex(bufferTexCoord, tdata, sizeof(tdata));
+    context.allocateBufferIndex(bufferIndex, idata, sizeof(idata));
+}
+
+
+void WgMeshData::blitBox(WgContext& context)
+{
+    vertexCount = 4;
+    indexCount = 6;
+    const float vdata[] = { -1.0f, +1.0f, +1.0f, +1.0f, +1.0f, -1.0f, -1.0f, -1.0f };
+    const float tdata[] = { +0.0f, +0.0f, +1.0f, +0.0f, +1.0f, +1.0f, +0.0f, +1.0f };
+    const uint32_t idata[] = { 0, 1, 2, 0, 2, 3 };
+    context.allocateBufferVertex(bufferPosition, vdata, sizeof(vdata));
+    context.allocateBufferVertex(bufferTexCoord, tdata, sizeof(tdata));
+    context.allocateBufferIndex(bufferIndex, idata, sizeof(idata));
 }
 
 
@@ -143,28 +171,26 @@ WgMeshDataPool* WgMeshDataGroup::gMeshDataPool = nullptr;
 // WgMeshDataGroup
 //***********************************************************************
 
-void WgMeshDataGroup::append(WgContext& context, const WgPolyline* polyline)
+void WgMeshDataGroup::append(WgContext& context, const WgVertexBuffer& vertexBuffer)
 {
-    assert(polyline);
-    assert(polyline->pts.count >= 3);
+    assert(vertexBuffer.vcount >= 3);
     meshes.push(gMeshDataPool->allocate(context));
-    meshes.last()->update(context, polyline);
+    meshes.last()->update(context, vertexBuffer);
 }
 
 
-void WgMeshDataGroup::append(WgContext& context, const WgGeometryData* geometryData)
+void WgMeshDataGroup::append(WgContext& context, const WgVertexBufferInd& vertexBufferInd)
 {
-    assert(geometryData);
-    assert(geometryData->positions.pts.count >= 3);
+    assert(vertexBufferInd.vcount >= 3);
     meshes.push(gMeshDataPool->allocate(context));
-    meshes.last()->update(context, geometryData);
+    meshes.last()->update(context, vertexBufferInd);
 }
 
 
-void WgMeshDataGroup::append(WgContext& context, const WgPoint pmin, const WgPoint pmax)
+void WgMeshDataGroup::append(WgContext& context, const Point pmin, const Point pmax)
 {
     meshes.push(gMeshDataPool->allocate(context));
-    meshes.last()->update(context, pmin, pmax);
+    meshes.last()->bbox(context, pmin, pmax);
 }
 
 
@@ -180,7 +206,7 @@ void WgMeshDataGroup::release(WgContext& context)
 // WgImageData
 //***********************************************************************
 
-void WgImageData::update(WgContext& context, Surface* surface)
+void WgImageData::update(WgContext& context, RenderSurface* surface)
 {
     release(context);
     assert(surface);
@@ -212,6 +238,12 @@ void WgRenderSettings::update(WgContext& context, const Fill* fill, const uint8_
     // setup fill properties
     if ((flags & (RenderUpdateFlag::Gradient)) && fill) {
         rasterType = WgRenderRasterType::Gradient;
+        // get gradient transfrom matrix
+        Matrix invFillTransform;
+        WgShaderTypeMat4x4f gradientTrans; // identity by default
+        if (inverse(&fill->transform(), &invFillTransform))
+            gradientTrans.update(invFillTransform);
+        // get gradient rasterisation settings
         WgShaderTypeGradient gradient;
         if (fill->type() == Type::LinearGradient) {
             gradient.update((LinearGradient*)fill);
@@ -222,8 +254,9 @@ void WgRenderSettings::update(WgContext& context, const Fill* fill, const uint8_
         }
         // update gpu assets
         bool bufferGradientSettingsChanged = context.allocateBufferUniform(bufferGroupGradient, &gradient.settings, sizeof(gradient.settings));
+        bool bufferGradientTransformChanged = context.allocateBufferUniform(bufferGroupTransfromGrad, &gradientTrans.mat, sizeof(gradientTrans.mat));
         bool textureGradientChanged = context.allocateTexture(texGradient, WG_TEXTURE_GRADIENT_SIZE, 1, WGPUTextureFormat_RGBA8Unorm, gradient.texData);
-        if (bufferGradientSettingsChanged || textureGradientChanged) {
+        if (bufferGradientSettingsChanged || textureGradientChanged || bufferGradientTransformChanged) {
             // update texture view
             context.releaseTextureView(texViewGradient);
             texViewGradient = context.createTextureView(texGradient);
@@ -233,8 +266,8 @@ void WgRenderSettings::update(WgContext& context, const Fill* fill, const uint8_
             if (fill->spread() == FillSpread::Repeat) sampler = context.samplerLinearRepeat;
             // update bind group
             context.pipelines->layouts.releaseBindGroup(bindGroupGradient);
-            bindGroupGradient = context.pipelines->layouts.createBindGroupTexSampledBuff1Un(
-                sampler, texViewGradient, bufferGroupGradient);
+            bindGroupGradient = context.pipelines->layouts.createBindGroupTexSampledBuff2Un(
+                sampler, texViewGradient, bufferGroupGradient, bufferGroupTransfromGrad);
         }
         skip = false;
     } else if ((flags & (RenderUpdateFlag::Color)) && !fill) {
@@ -256,6 +289,7 @@ void WgRenderSettings::release(WgContext& context)
     context.pipelines->layouts.releaseBindGroup(bindGroupGradient);
     context.releaseBuffer(bufferGroupSolid);
     context.releaseBuffer(bufferGroupGradient);
+    context.releaseBuffer(bufferGroupTransfromGrad);
     context.releaseTexture(texGradient);
     context.releaseTextureView(texViewGradient);
 };
@@ -263,6 +297,8 @@ void WgRenderSettings::release(WgContext& context)
 //***********************************************************************
 // WgRenderDataPaint
 //***********************************************************************
+
+WgVertexBufferInd* WgRenderDataPaint::gStrokesGenerator = nullptr;
 
 void WgRenderDataPaint::release(WgContext& context)
 {
@@ -297,7 +333,29 @@ void WgRenderDataPaint::updateClips(tvg::Array<tvg::RenderData> &clips) {
 // WgRenderDataShape
 //***********************************************************************
 
-void WgRenderDataShape::updateBBox(WgPoint pmin, WgPoint pmax)
+void WgRenderDataShape::appendShape(WgContext context, const WgVertexBuffer& vertexBuffer)
+{
+    if (vertexBuffer.vcount < 3) return;
+    Point pmin{}, pmax{};
+    vertexBuffer.getMinMax(pmin, pmax);
+    meshGroupShapes.append(context, vertexBuffer);
+    meshGroupShapesBBox.append(context, pmin, pmax);
+    updateBBox(pmin, pmax);
+}
+
+
+void WgRenderDataShape::appendStroke(WgContext context, const WgVertexBufferInd& vertexBufferInd)
+{
+    if (vertexBufferInd.vcount < 3) return;
+    Point pmin{}, pmax{};
+    vertexBufferInd.getMinMax(pmin, pmax);
+    meshGroupStrokes.append(context, vertexBufferInd);
+    meshGroupStrokesBBox.append(context, pmin, pmax);
+    updateBBox(pmin, pmax);
+}
+
+
+void WgRenderDataShape::updateBBox(Point pmin, Point pmax)
 {
     pMin.x = std::min(pMin.x, pmin.x);
     pMin.y = std::min(pMin.y, pmin.y);
@@ -306,11 +364,11 @@ void WgRenderDataShape::updateBBox(WgPoint pmin, WgPoint pmax)
 }
 
 
-void WgRenderDataShape::updateAABB(const Matrix& rt) {
-    WgPoint p0 = WgPoint(pMin.x, pMin.y).trans(rt);
-    WgPoint p1 = WgPoint(pMax.x, pMin.y).trans(rt);
-    WgPoint p2 = WgPoint(pMin.x, pMax.y).trans(rt);
-    WgPoint p3 = WgPoint(pMax.x, pMax.y).trans(rt);
+void WgRenderDataShape::updateAABB(const Matrix& tr) {
+    Point p0 = Point{pMin.x, pMin.y} * tr;
+    Point p1 = Point{pMax.x, pMin.y} * tr;
+    Point p2 = Point{pMin.x, pMax.y} * tr;
+    Point p3 = Point{pMax.x, pMax.y} * tr;
     aabb.x = std::min({p0.x, p1.x, p2.x, p3.x});
     aabb.y = std::min({p0.y, p1.y, p2.y, p3.y});
     aabb.w = std::max({p0.x, p1.x, p2.x, p3.x}) - aabb.x;
@@ -318,147 +376,105 @@ void WgRenderDataShape::updateAABB(const Matrix& rt) {
 }
 
 
-void WgRenderDataShape::updateMeshes(WgContext &context, const RenderShape &rshape, const Matrix& rt)
+void WgRenderDataShape::updateMeshes(WgContext &context, const RenderShape &rshape, const Matrix& tr)
 {
     releaseMeshes(context);
     strokeFirst = rshape.stroke ? rshape.stroke->strokeFirst : false;
 
-    Array<WgPolyline*> polylines{};
-    // decode path
-    size_t pntIndex = 0;
-    for (uint32_t cmdIndex = 0; cmdIndex < rshape.path.cmds.count; cmdIndex++) {
-        PathCommand cmd = rshape.path.cmds[cmdIndex];
-        if (cmd == PathCommand::MoveTo) {
-            // proceed current polyline
-            polylines.push(new WgPolyline);
-            polylines.last()->appendPoint(rshape.path.pts[pntIndex]);
-            pntIndex++;
-        } else if (cmd == PathCommand::LineTo) {
-            polylines.last()->appendPoint(rshape.path.pts[pntIndex]);
-            pntIndex++;
-        } else if (cmd == PathCommand::Close) {
-            polylines.last()->close();
-        } else if (cmd == PathCommand::CubicTo) {
-            assert(polylines.last()->pts.count > 0);
-            WgPoint pt0 = polylines.last()->pts.last().trans(rt);
-            WgPoint pt1 = WgPoint(rshape.path.pts[pntIndex + 0]).trans(rt);
-            WgPoint pt2 = WgPoint(rshape.path.pts[pntIndex + 1]).trans(rt);
-            WgPoint pt3 = WgPoint(rshape.path.pts[pntIndex + 2]).trans(rt);
-            uint32_t nsegs = (uint32_t)(pt0.dist(pt1) + pt1.dist(pt2) + pt2.dist(pt3));
-            polylines.last()->appendCubic(
-                rshape.path.pts[pntIndex + 0],
-                rshape.path.pts[pntIndex + 1],
-                rshape.path.pts[pntIndex + 2],
-                nsegs / 2);
-            pntIndex += 3;
-        }
-    }
-    // proceed shapes
-    float totalLen{};
-    for (uint32_t i = 0; i < polylines.count; i++) {
-        totalLen += polylines[i]->len;
-        updateShapes(context, polylines[i]);
-    }
-    // proceed strokes
-    if (rshape.stroke) {
-        float trimBegin{};
-        float trimEnd{};
-        if (!rshape.stroke->strokeTrim(trimBegin, trimEnd)) { trimBegin = 0.0f; trimEnd = 1.0f; }
-        if (rshape.stroke->trim.simultaneous) {
-            for (uint32_t i = 0; i < polylines.count; i++)
-                updateStrokes(context, polylines[i], rshape.stroke, trimBegin, trimEnd);
+    // get object scale
+    float scale = std::max(std::min(length(Point{tr.e11 + tr.e12,tr.e21 + tr.e22}), 8.0f), 1.0f);
+
+    // path decoded vertex buffer
+    WgVertexBuffer pbuff;
+    pbuff.reset(scale);
+    // append shape without strokes
+    if (!rshape.stroke) {
+        pbuff.decodePath(rshape, false, [&](const WgVertexBuffer& path_buff) {
+            appendShape(context, path_buff);
+        });
+    // append shape with strokes
+    } else {
+        float tbeg{}, tend{};
+        if (!rshape.stroke->strokeTrim(tbeg, tend)) { tbeg = 0.0f; tend = 1.0f; }
+        bool loop = tbeg > tend;
+        if (tbeg == tend) {
+            pbuff.decodePath(rshape, false, [&](const WgVertexBuffer& path_buff) {
+                appendShape(context, path_buff);
+            });
+        } else if (rshape.stroke->trim.simultaneous) {
+            pbuff.decodePath(rshape, true, [&](const WgVertexBuffer& path_buff) {
+                appendShape(context, path_buff);
+                if (loop) {
+                    proceedStrokes(context, rshape.stroke, tbeg, 1.0f, path_buff);
+                    proceedStrokes(context, rshape.stroke, 0.0f, tend, path_buff);
+                } else {
+                    proceedStrokes(context, rshape.stroke, tbeg, tend, path_buff);
+                }
+            });
         } else {
-            if (trimBegin <= trimEnd) {
-                updateStrokesList(context, polylines, rshape.stroke, totalLen, trimBegin, trimEnd);
-            } else {
-                updateStrokesList(context, polylines, rshape.stroke, totalLen, 0.0f, trimEnd);
-                updateStrokesList(context, polylines, rshape.stroke, totalLen, trimBegin, 1.0f);
-            }
+            float totalLen = 0.0f;
+            pbuff.decodePath(rshape, true, [&](const WgVertexBuffer& path_buff) {
+                appendShape(context, path_buff);
+                totalLen += path_buff.total();
+            });
+            float len_beg = totalLen * tbeg; // trim length begin
+            float len_end = totalLen * tend; // trim length end
+            float len_acc = 0.0; // accumulated length
+            // append strokes
+            pbuff.decodePath(rshape, true, [&](const WgVertexBuffer& path_buff) {
+                float len_path = path_buff.total(); // current path length
+                if (loop) {
+                    if (len_acc + len_path >= len_beg) {
+                        auto tbeg = len_acc <= len_beg ? (len_beg - len_acc) / len_path : 0.0f;
+                        proceedStrokes(context, rshape.stroke, tbeg, 1.0f, path_buff);
+                    }
+                    if (len_acc < len_end) {
+                        auto tend = len_acc + len_path >= len_end ? (len_end - len_acc) / len_path : 1.0f;
+                        proceedStrokes(context, rshape.stroke, 0.0f, tend, path_buff);
+                    }
+                } else {
+                    if (len_acc + len_path >= len_beg && len_acc <= len_end) {
+                        auto tbeg = len_acc <= len_beg ? (len_beg - len_acc) / len_path : 0.0f;
+                        auto tend = len_acc + len_path >= len_end ? (len_end - len_acc) / len_path : 1.0f;
+                        proceedStrokes(context, rshape.stroke, tbeg, tend, path_buff);
+                    }
+                }
+                len_acc += len_path;
+            });
         }
-    }
-    // delete polylines
-    for (uint32_t i = 0; i < polylines.count; i++)
-        delete polylines[i];
-    // update shapes bbox
-    updateAABB(rt);
-    meshDataBBox.update(context, pMin, pMax);
+    } 
+    // update shapes bbox (with empty path handling)
+    if ((this->meshGroupShapesBBox.meshes.count > 0 ) ||
+        (this->meshGroupStrokesBBox.meshes.count > 0)) {
+        updateAABB(tr);
+        meshDataBBox.bbox(context, pMin, pMax);
+    } else aabb = {0, 0, 0, 0};
 }
 
 
-void WgRenderDataShape::updateShapes(WgContext& context, const WgPolyline* polyline)
+void WgRenderDataShape::proceedStrokes(WgContext context, const RenderStroke* rstroke, float tbeg, float tend, const WgVertexBuffer& buff)
 {
-    assert(polyline);
-    // generate fill geometry
-    if (polyline->pts.count >= 3) {
-        WgPoint pmin{}, pmax{};
-        polyline->getBBox(pmin, pmax);
-        meshGroupShapes.append(context, polyline);
-        meshGroupShapesBBox.append(context, pmin, pmax);
-        updateBBox(pmin, pmax);
-    }
-}
-
-void WgRenderDataShape::updateStrokesList(WgContext& context, Array<WgPolyline*> polylines, const RenderStroke* rstroke, float totalLen, float trimBegin, float trimEnd)
-{
-    float tp1 = totalLen * trimBegin; // trim point begin
-    float tp2 = totalLen * trimEnd; // trim point end
-    float pc = 0; // point current
-    for (uint32_t i = 0; i < polylines.count; i++) {
-        float pl = polylines[i]->len; // current polyline length
-        float trimBegin = ((pc <= tp1) && (pc + pl > tp1)) ? (tp1 - pc) / pl : 0.0f;
-        float trimEnd   = ((pc <= tp2) && (pc + pl > tp2)) ? (tp2 - pc) / pl : 1.0f;
-        if ((pc + pl >= tp1) && (pc <= tp2))
-            updateStrokes(context, polylines[i], rstroke, trimBegin, trimEnd);
-        pc += pl;
-        // break if reached the tail
-        if (pc > tp2) break;
-    }
-}
-
-
-void WgRenderDataShape::updateStrokes(WgContext& context, const WgPolyline* polyline, const RenderStroke* rstroke, float trimBegin, float trimEnd)
-{
-    assert(polyline);
-    // generate strokes geometry
-    if ((polyline->pts.count >= 1) && rstroke && (rstroke->width > 0.0f)) {
-        static WgGeometryData geometryData; geometryData.clear();
-        static WgPolyline trimmed;
-        // trim -> split -> stroke
-        if (trimBegin == trimEnd) return;
-        if ((rstroke->dashPattern) && ((trimBegin != 0.0f) || (trimEnd != 1.0f))) {
-            trimmed.clear();
-            if (trimBegin < trimEnd)
-                polyline->trim(&trimmed, trimBegin, trimEnd);
-            else {
-                polyline->trim(&trimmed, trimBegin, 1.0f);
-                polyline->trim(&trimmed, 0.0f, trimEnd);
-            }
-            geometryData.appendStrokeDashed(&trimmed, rstroke);
-        } else // trim -> stroke
-        if ((trimBegin != 0.0f) || (trimEnd != 1.0f)) {
-            trimmed.clear();
-            if (trimBegin < trimEnd)
-                polyline->trim(&trimmed, trimBegin, trimEnd);
-            else {
-                polyline->trim(&trimmed, trimBegin, 1.0f);
-                polyline->trim(&trimmed, 0.0f, trimEnd);
-            }
-            geometryData.appendStroke(&trimmed, rstroke);
-        } else // split -> stroke
-        if (rstroke->dashPattern) {
-            geometryData.appendStrokeDashed(polyline, rstroke);
-        } else { // stroke
-            geometryData.appendStroke(polyline, rstroke);
-        }
-        // append render meshes and bboxes
-        if(geometryData.positions.pts.count >= 3) {
-            WgPoint pmin{}, pmax{};
-            geometryData.positions.getBBox(pmin, pmax);
-            meshGroupStrokes.append(context, &geometryData);
-            meshGroupStrokesBBox.append(context, pmin, pmax);
-            updateBBox(pmin, pmax);
-        }
-    }
+    assert(rstroke);
+    gStrokesGenerator->reset(buff.tscale);
+    // trim -> dash -> stroke
+    if ((tbeg != 0.0f) || (tend != 1.0f)) {
+        if (tbeg == tend) return;
+        WgVertexBuffer trimed_buff;
+        trimed_buff.reset(buff.tscale);
+        trimed_buff.trim(buff, tbeg, tend);
+        trimed_buff.updateDistances();
+        // trim ->dash -> stroke
+        if (rstroke->dashPattern) gStrokesGenerator->appendStrokesDashed(trimed_buff, rstroke);
+        // trim -> stroke
+        else gStrokesGenerator->appendStrokes(trimed_buff, rstroke);
+    } else
+    // dash -> stroke
+    if (rstroke->dashPattern) {
+        gStrokesGenerator->appendStrokesDashed(buff, rstroke);
+    // stroke
+    } else
+        gStrokesGenerator->appendStrokes(buff, rstroke);
+    appendStroke(context, *gStrokesGenerator);
 }
 
 
@@ -470,6 +486,7 @@ void WgRenderDataShape::releaseMeshes(WgContext &context)
     meshGroupShapes.release(context);
     pMin = {FLT_MAX, FLT_MAX};
     pMax = {0.0f, 0.0f};
+    aabb = {0, 0, 0, 0};
     clips.clear();
 }
 
@@ -528,6 +545,7 @@ void WgRenderDataShapePool::release(WgContext& context)
 
 void WgRenderDataPicture::release(WgContext& context)
 {
+    meshData.release(context);
     imageData.release(context);
     context.pipelines->layouts.releaseBindGroup(bindGroupPicture);
     WgRenderDataPaint::release(context);

@@ -64,7 +64,19 @@ TVG_API Tvg_Result tvg_engine_version(uint32_t* major, uint32_t* minor, uint32_t
 
 TVG_API Tvg_Canvas* tvg_swcanvas_create()
 {
-    return (Tvg_Canvas*) SwCanvas::gen().release();
+    return (Tvg_Canvas*) SwCanvas::gen();
+}
+
+
+TVG_API Tvg_Canvas* tvg_glcanvas_create()
+{
+    return (Tvg_Canvas*) GlCanvas::gen();
+}
+
+
+TVG_API Tvg_Canvas* tvg_wgcanvas_create()
+{
+    return (Tvg_Canvas*) WgCanvas::gen();
 }
 
 
@@ -86,20 +98,28 @@ TVG_API Tvg_Result tvg_swcanvas_set_mempool(Tvg_Canvas* canvas, Tvg_Mempool_Poli
 TVG_API Tvg_Result tvg_swcanvas_set_target(Tvg_Canvas* canvas, uint32_t* buffer, uint32_t stride, uint32_t w, uint32_t h, Tvg_Colorspace cs)
 {
     if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<SwCanvas*>(canvas)->target(buffer, stride, w, h, static_cast<SwCanvas::Colorspace>(cs));
+    return (Tvg_Result) reinterpret_cast<SwCanvas*>(canvas)->target(buffer, stride, w, h, static_cast<ColorSpace>(cs));
+}
+
+
+TVG_API Tvg_Result tvg_glcanvas_set_target(Tvg_Canvas* canvas, int32_t id, uint32_t w, uint32_t h)
+{
+    if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<GlCanvas*>(canvas)->target(id, w, h);
+}
+
+
+TVG_API Tvg_Result tvg_wgcanvas_set_target(Tvg_Canvas* canvas, void* instance, void* surface, uint32_t w, uint32_t h, void* device)
+{
+    if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<WgCanvas*>(canvas)->target(instance, surface, w, h, device);
 }
 
 
 TVG_API Tvg_Result tvg_canvas_push(Tvg_Canvas* canvas, Tvg_Paint* paint)
 {
     if (!canvas || !paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->push(unique_ptr<Paint>((Paint*)paint));
-}
-
-
-TVG_API Tvg_Result tvg_canvas_reserve(Tvg_Canvas* canvas, uint32_t n)
-{
-    return TVG_RESULT_NOT_SUPPORTED;
+    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->push((Paint*)paint);
 }
 
 
@@ -222,17 +242,17 @@ TVG_API Tvg_Result tvg_paint_get_bounds(const Tvg_Paint* paint, float* x, float*
 }
 
 
-TVG_API Tvg_Result tvg_paint_set_composite_method(Tvg_Paint* paint, Tvg_Paint* target, Tvg_Composite_Method method)
+TVG_API Tvg_Result tvg_paint_set_mask_method(Tvg_Paint* paint, Tvg_Paint* target, Tvg_Mask_Method method)
 {
    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-   return (Tvg_Result) reinterpret_cast<Paint*>(paint)->composite(unique_ptr<Paint>((Paint*)(target)), (CompositeMethod)method);
+   return (Tvg_Result) reinterpret_cast<Paint*>(paint)->mask((Paint*)target, (MaskMethod)method);
 }
 
 
-TVG_API Tvg_Result tvg_paint_get_composite_method(const Tvg_Paint* paint, const Tvg_Paint** target, Tvg_Composite_Method* method)
+TVG_API Tvg_Result tvg_paint_get_mask_method(const Tvg_Paint* paint, const Tvg_Paint** target, Tvg_Mask_Method* method)
 {
    if (!paint || !target || !method) return TVG_RESULT_INVALID_ARGUMENT;
-   *reinterpret_cast<CompositeMethod*>(method) = reinterpret_cast<const Paint*>(paint)->composite(reinterpret_cast<const Paint**>(target));
+   *reinterpret_cast<MaskMethod*>(method) = reinterpret_cast<const Paint*>(paint)->mask(reinterpret_cast<const Paint**>(target));
    return TVG_RESULT_SUCCESS;
 }
 
@@ -244,14 +264,6 @@ TVG_API Tvg_Result tvg_paint_set_blend_method(Tvg_Paint* paint, Tvg_Blend_Method
 }
 
 
-TVG_API Tvg_Result tvg_paint_get_blend_method(const Tvg_Paint* paint, Tvg_Blend_Method* method)
-{
-    if (!paint || !method) return TVG_RESULT_INVALID_ARGUMENT;
-    *method = static_cast<Tvg_Blend_Method>(reinterpret_cast<const Paint*>(paint)->blend());
-    return TVG_RESULT_SUCCESS;
-}
-
-
 TVG_API Tvg_Result tvg_paint_get_type(const Tvg_Paint* paint, Tvg_Type* type)
 {
     if (!paint || !type) return TVG_RESULT_INVALID_ARGUMENT;
@@ -260,10 +272,12 @@ TVG_API Tvg_Result tvg_paint_get_type(const Tvg_Paint* paint, Tvg_Type* type)
 }
 
 
-TVG_DEPRECATED TVG_API Tvg_Result tvg_paint_get_identifier(const Tvg_Paint* paint, Tvg_Identifier* identifier)
+TVG_API Tvg_Result tvg_paint_set_clip(Tvg_Paint* paint, Tvg_Paint* clipper)
 {
-    return tvg_paint_get_type(paint, (Tvg_Type*) identifier);
+   if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
+   return (Tvg_Result) reinterpret_cast<Paint*>(paint)->clip((Paint*)(clipper));
 }
+
 
 /************************************************************************/
 /* Shape API                                                            */
@@ -271,7 +285,7 @@ TVG_DEPRECATED TVG_API Tvg_Result tvg_paint_get_identifier(const Tvg_Paint* pain
 
 TVG_API Tvg_Paint* tvg_shape_new()
 {
-    return (Tvg_Paint*) Shape::gen().release();
+    return (Tvg_Paint*) Shape::gen();
 }
 
 
@@ -314,13 +328,6 @@ TVG_API Tvg_Result tvg_shape_append_rect(Tvg_Paint* paint, float x, float y, flo
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
     return (Tvg_Result) reinterpret_cast<Shape*>(paint)->appendRect(x, y, w, h, rx, ry);
-}
-
-
-TVG_DEPRECATED TVG_API Tvg_Result tvg_shape_append_arc(Tvg_Paint* paint, float cx, float cy, float radius, float startAngle, float sweep, uint8_t pie)
-{
-    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Shape*>(paint)->appendArc(cx, cy, radius, startAngle, sweep, pie);
 }
 
 
@@ -383,17 +390,10 @@ TVG_API Tvg_Result tvg_shape_get_stroke_color(const Tvg_Paint* paint, uint8_t* r
 }
 
 
-TVG_API Tvg_Result tvg_shape_set_stroke_linear_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
+TVG_API Tvg_Result tvg_shape_set_stroke_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Shape*>(paint)->strokeFill(unique_ptr<LinearGradient>((LinearGradient*)(gradient)));
-}
-
-
-TVG_API Tvg_Result tvg_shape_set_stroke_radial_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
-{
-    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Shape*>(paint)->strokeFill(unique_ptr<RadialGradient>((RadialGradient*)(gradient)));
+    return (Tvg_Result) reinterpret_cast<Shape*>(paint)->strokeFill((Fill*)(gradient));
 }
 
 
@@ -472,14 +472,6 @@ TVG_API Tvg_Result tvg_shape_set_stroke_trim(Tvg_Paint* paint, float begin, floa
 }
 
 
-TVG_API Tvg_Result tvg_shape_get_stroke_trim(Tvg_Paint* paint, float* begin, float* end, bool* simultaneous)
-{
-    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    if (simultaneous) *simultaneous = reinterpret_cast<Shape*>(paint)->strokeTrim(begin, end);
-    return TVG_RESULT_SUCCESS;
-}
-
-
 TVG_API Tvg_Result tvg_shape_set_fill_color(Tvg_Paint* paint, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
@@ -516,17 +508,10 @@ TVG_API Tvg_Result tvg_shape_set_paint_order(Tvg_Paint* paint, bool strokeFirst)
 }
 
 
-TVG_API Tvg_Result tvg_shape_set_linear_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
+TVG_API Tvg_Result tvg_shape_set_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Shape*>(paint)->fill(unique_ptr<LinearGradient>((LinearGradient*)(gradient)));
-}
-
-
-TVG_API Tvg_Result tvg_shape_set_radial_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
-{
-    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Shape*>(paint)->fill(unique_ptr<RadialGradient>((RadialGradient*)(gradient)));
+    return (Tvg_Result) reinterpret_cast<Shape*>(paint)->fill((Fill*)gradient);
 }
 
 
@@ -543,7 +528,7 @@ TVG_API Tvg_Result tvg_shape_get_gradient(const Tvg_Paint* paint, Tvg_Gradient**
 
 TVG_API Tvg_Paint* tvg_picture_new()
 {
-    return (Tvg_Paint*) Picture::gen().release();
+    return (Tvg_Paint*) Picture::gen();
 }
 
 
@@ -554,10 +539,10 @@ TVG_API Tvg_Result tvg_picture_load(Tvg_Paint* paint, const char* path)
 }
 
 
-TVG_API Tvg_Result tvg_picture_load_raw(Tvg_Paint* paint, uint32_t *data, uint32_t w, uint32_t h, bool premultiplied, bool copy)
+TVG_API Tvg_Result tvg_picture_load_raw(Tvg_Paint* paint, uint32_t *data, uint32_t w, uint32_t h, Tvg_Colorspace cs, bool copy)
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Picture*>(paint)->load(data, w, h, premultiplied, copy);
+    return (Tvg_Result) reinterpret_cast<Picture*>(paint)->load(data, w, h, static_cast<ColorSpace>(cs), copy);
 }
 
 
@@ -595,13 +580,13 @@ TVG_API const Tvg_Paint* tvg_picture_get_paint(Tvg_Paint* paint, uint32_t id)
 
 TVG_API Tvg_Gradient* tvg_linear_gradient_new()
 {
-    return (Tvg_Gradient*)LinearGradient::gen().release();
+    return (Tvg_Gradient*)LinearGradient::gen();
 }
 
 
 TVG_API Tvg_Gradient* tvg_radial_gradient_new()
 {
-    return (Tvg_Gradient*)RadialGradient::gen().release();
+    return (Tvg_Gradient*)RadialGradient::gen();
 }
 
 
@@ -634,17 +619,17 @@ TVG_API Tvg_Result tvg_linear_gradient_get(Tvg_Gradient* grad, float* x1, float*
 }
 
 
-TVG_API Tvg_Result tvg_radial_gradient_set(Tvg_Gradient* grad, float cx, float cy, float radius)
+TVG_API Tvg_Result tvg_radial_gradient_set(Tvg_Gradient* grad, float cx, float cy, float r, float fx, float fy, float fr)
 {
     if (!grad) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<RadialGradient*>(grad)->radial(cx, cy, radius);
+    return (Tvg_Result) reinterpret_cast<RadialGradient*>(grad)->radial(cx, cy, r, fx, fy, fr);
 }
 
 
-TVG_API Tvg_Result tvg_radial_gradient_get(Tvg_Gradient* grad, float* cx, float* cy, float* radius)
+TVG_API Tvg_Result tvg_radial_gradient_get(Tvg_Gradient* grad, float* cx, float* cy, float* r, float* fx, float* fy, float* fr)
 {
     if (!grad) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<RadialGradient*>(grad)->radial(cx, cy, radius);
+    return (Tvg_Result) reinterpret_cast<RadialGradient*>(grad)->radial(cx, cy, r, fx, fy, fr);
 }
 
 
@@ -701,31 +686,20 @@ TVG_API Tvg_Result tvg_gradient_get_type(const Tvg_Gradient* grad, Tvg_Type* typ
 }
 
 
-TVG_DEPRECATED TVG_API Tvg_Result tvg_gradient_get_identifier(const Tvg_Gradient* grad, Tvg_Identifier* identifier)
-{
-    return tvg_gradient_get_type(grad, (Tvg_Type*) identifier);
-}
-
 /************************************************************************/
 /* Scene API                                                            */
 /************************************************************************/
 
 TVG_API Tvg_Paint* tvg_scene_new()
 {
-    return (Tvg_Paint*) Scene::gen().release();
-}
-
-
-TVG_API Tvg_Result tvg_scene_reserve(Tvg_Paint* scene, uint32_t size)
-{
-    return TVG_RESULT_NOT_SUPPORTED;
+    return (Tvg_Paint*) Scene::gen();
 }
 
 
 TVG_API Tvg_Result tvg_scene_push(Tvg_Paint* scene, Tvg_Paint* paint)
 {
     if (!scene || !paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(unique_ptr<Paint>((Paint*)paint));
+    return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push((Paint*)paint);
 }
 
 
@@ -742,7 +716,7 @@ TVG_API Tvg_Result tvg_scene_clear(Tvg_Paint* scene, bool free)
 
 TVG_API Tvg_Paint* tvg_text_new()
 {
-    return (Tvg_Paint*)Text::gen().release();
+    return (Tvg_Paint*)Text::gen();
 }
 
 
@@ -767,17 +741,10 @@ TVG_API Tvg_Result tvg_text_set_fill_color(Tvg_Paint* paint, uint8_t r, uint8_t 
 }
 
 
-TVG_API Tvg_Result tvg_text_set_linear_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
+TVG_API Tvg_Result tvg_text_set_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Text*>(paint)->fill(unique_ptr<LinearGradient>((LinearGradient*)(gradient)));
-}
-
-
-TVG_API Tvg_Result tvg_text_set_radial_gradient(Tvg_Paint* paint, Tvg_Gradient* gradient)
-{
-    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Text*>(paint)->fill(unique_ptr<RadialGradient>((RadialGradient*)(gradient)));
+    return (Tvg_Result) reinterpret_cast<Text*>(paint)->fill((Fill*)(gradient));
 }
 
 
@@ -805,14 +772,14 @@ TVG_API Tvg_Result tvg_font_unload(const char* path)
 
 TVG_API Tvg_Saver* tvg_saver_new()
 {
-    return (Tvg_Saver*) Saver::gen().release();
+    return (Tvg_Saver*) Saver::gen();
 }
 
 
 TVG_API Tvg_Result tvg_saver_save(Tvg_Saver* saver, Tvg_Paint* paint, const char* path, uint32_t quality)
 {
     if (!saver || !paint || !path) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Saver*>(saver)->save(unique_ptr<Paint>((Paint*)paint), path, quality);
+    return (Tvg_Result) reinterpret_cast<Saver*>(saver)->save((Paint*)paint, path, quality);
 }
 
 
@@ -837,7 +804,7 @@ TVG_API Tvg_Result tvg_saver_del(Tvg_Saver* saver)
 
 TVG_API Tvg_Animation* tvg_animation_new()
 {
-    return (Tvg_Animation*) Animation::gen().release();
+    return (Tvg_Animation*) Animation::gen();
 }
 
 
@@ -918,7 +885,7 @@ TVG_API uint32_t tvg_accessor_generate_id(const char* name)
 TVG_API Tvg_Animation* tvg_lottie_animation_new()
 {
 #ifdef THORVG_LOTTIE_LOADER_SUPPORT
-    return (Tvg_Animation*) LottieAnimation::gen().release();
+    return (Tvg_Animation*) LottieAnimation::gen();
 #endif
     return nullptr;
 }

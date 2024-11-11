@@ -31,7 +31,7 @@
 
 void GifSaver::run(unsigned tid)
 {
-    auto canvas = tvg::SwCanvas::gen();
+    auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
     if (!canvas) return;
 
     //Do not share the memory pool since this canvas could be running on a thread.
@@ -41,11 +41,11 @@ void GifSaver::run(unsigned tid)
     auto h = static_cast<uint32_t>(vsize[1]);
 
     buffer = (uint32_t*)realloc(buffer, sizeof(uint32_t) * w * h);
-    canvas->target(buffer, w, w, h, tvg::SwCanvas::ABGR8888S);
-    canvas->push(cast(bg));
+    canvas->target(buffer, w, w, h, ColorSpace::ABGR8888S);
+    canvas->push(bg);
     bg = nullptr;
 
-    canvas->push(cast(animation->picture()));
+    canvas->push(animation->picture());
 
     //use the default fps
     if (fps > 60.0f) fps = 60.0f;   // just in case
@@ -113,14 +113,14 @@ bool GifSaver::close()
 }
 
 
-bool GifSaver::save(TVG_UNUSED Paint* paint, TVG_UNUSED Paint* bg, TVG_UNUSED const string& path, TVG_UNUSED uint32_t quality)
+bool GifSaver::save(TVG_UNUSED Paint* paint, TVG_UNUSED Paint* bg, TVG_UNUSED const char* filename, TVG_UNUSED uint32_t quality)
 {
     TVGLOG("GIF_SAVER", "Paint is not supported.");
     return false;
 }
 
 
-bool GifSaver::save(Animation* animation, Paint* bg, const string& path, TVG_UNUSED uint32_t quality, uint32_t fps)
+bool GifSaver::save(Animation* animation, Paint* bg, const char* filename, TVG_UNUSED uint32_t quality, uint32_t fps)
 {
     close();
 
@@ -138,10 +138,11 @@ bool GifSaver::save(Animation* animation, Paint* bg, const string& path, TVG_UNU
         return false;
     }
 
-    this->path = strdup(path.c_str());
-    if (!this->path) return false;
+    if (!filename) return false;
+    this->path = strdup(filename);
 
     this->animation = animation;
+
     if (bg) this->bg = bg->duplicate();
     this->fps = static_cast<float>(fps);
 

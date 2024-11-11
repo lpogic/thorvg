@@ -23,8 +23,6 @@
 #ifndef _TVG_GL_GPU_BUFFER_H_
 #define _TVG_GL_GPU_BUFFER_H_
 
-#include <memory>
-
 #include "tvgGlCommon.h"
 
 class GlGpuBuffer
@@ -56,7 +54,9 @@ public:
 
     uint32_t push(void* data, uint32_t size, bool alignGpuOffset = false);
 
-    void flushToGPU();
+    uint32_t pushIndex(void* data, uint32_t size);
+
+    bool flushToGPU();
 
     void bind();
 
@@ -67,8 +67,10 @@ private:
     void alignOffset(uint32_t size);
 private:
     GLuint mVao = 0;
-    unique_ptr<GlGpuBuffer> mGpuBuffer = {};
+    GlGpuBuffer mGpuBuffer = {};
+    GlGpuBuffer mGpuIndexBuffer = {};
     Array<uint8_t> mStageBuffer = {};
+    Array<uint8_t> mIndexBuffer = {};
 };
 
 #endif /* _TVG_GL_GPU_BUFFER_H_ */

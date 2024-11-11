@@ -24,8 +24,6 @@
 
 WgRenderer::WgRenderer()
 {
-    WgGeometryData::gMath = new WgMath();
-    WgGeometryData::gMath->initialize();
 }
 
 
@@ -33,8 +31,6 @@ WgRenderer::~WgRenderer()
 {
     release();
     mContext.release();
-    WgGeometryData::gMath->release();
-    delete WgGeometryData::gMath;
 }
 
 
@@ -42,6 +38,7 @@ void WgRenderer::initialize()
 {
     mPipelines.initialize(mContext);
     WgMeshDataGroup::gMeshDataPool = new WgMeshDataPool();
+    WgRenderDataShape::gStrokesGenerator = new WgVertexBufferInd();
 }
 
 
@@ -51,11 +48,20 @@ void WgRenderer::release()
     mStorageRoot.release(mContext);
     mRenderStoragePool.release(mContext);
     mRenderDataShapePool.release(mContext);
+    delete WgRenderDataShape::gStrokesGenerator;
     WgMeshDataGroup::gMeshDataPool->release(mContext);
     delete WgMeshDataGroup::gMeshDataPool;
     mCompositorStack.clear();
     mRenderStorageStack.clear();
     mPipelines.release(mContext);
+    if (gpuOwner) {
+        if (device) wgpuDeviceRelease(device);
+        device = nullptr;
+        if (adapter) wgpuAdapterRelease(adapter);
+        adapter = nullptr;
+        gpuOwner = false;
+    }
+    releaseSurfaceTexture();
 }
 
 
@@ -69,6 +75,7 @@ void WgRenderer::disposeObjects()
             mRenderDataShapePool.free(mContext, (WgRenderDataShape*)renderData);
         } else {
             renderData->release(mContext);
+            delete renderData;
         }
     }
     mDisposeRenderDatas.clear();
@@ -107,7 +114,7 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
 }
 
 
-RenderData WgRenderer::prepare(Surface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags)
+RenderData WgRenderer::prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags)
 {
     // get or create render data shape
     auto renderDataPicture = (WgRenderDataPicture*)data;
@@ -123,11 +130,9 @@ RenderData WgRenderer::prepare(Surface* surface, RenderData data, const Matrix& 
 
     // update image data
     if (flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Image)) {
-        WgGeometryData geometryData;
-        geometryData.appendImageBox(surface->w, surface->h);
         mContext.pipelines->layouts.releaseBindGroup(renderDataPicture->bindGroupPicture);
         renderDataPicture->meshData.release(mContext);
-        renderDataPicture->meshData.update(mContext, &geometryData);
+        renderDataPicture->meshData.imageBox(mContext, surface->w, surface->h);
         renderDataPicture->imageData.update(mContext, surface);
         renderDataPicture->bindGroupPicture = mContext.pipelines->layouts.createBindGroupTexSampled(
             mContext.samplerLinearRepeat, renderDataPicture->imageData.textureView
@@ -218,20 +223,20 @@ bool WgRenderer::viewport(const RenderRegion& vp)
 }
 
 
-bool WgRenderer::blend(BlendMethod method, TVG_UNUSED bool direct)
+bool WgRenderer::blend(BlendMethod method)
 {
     mBlendMethod = method;
-    return false;
+    return true;
 }
 
 
 ColorSpace WgRenderer::colorSpace()
 {
-    return ColorSpace::Unsupported;
+    return ColorSpace::Unknown;
 }
 
 
-const Surface* WgRenderer::mainSurface()
+const RenderSurface* WgRenderer::mainSurface()
 {
     return &mTargetSurface;
 }
@@ -243,12 +248,24 @@ bool WgRenderer::clear()
 }
 
 
+void WgRenderer::releaseSurfaceTexture()
+{
+    if (surfaceTexture.texture) {
+        wgpuTextureRelease(surfaceTexture.texture);
+        surfaceTexture.texture = nullptr;
+    }
+}
+
+
 bool WgRenderer::sync()
 {
     disposeObjects();
-    // get current texture
-    WGPUSurfaceTexture surfaceTexture{};
-    wgpuSurfaceGetCurrentTexture(mContext.surface, &surfaceTexture);
+    if (!surface) return false;
+
+    releaseSurfaceTexture();
+
+    wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
+
     WGPUTextureView dstView = mContext.createTextureView(surfaceTexture.texture);
 
     // create command encoder
@@ -271,36 +288,66 @@ bool WgRenderer::sync()
 
 
 // target for native window handle
-bool WgRenderer::target(WGPUInstance instance, WGPUSurface surface, uint32_t w, uint32_t h)
+bool WgRenderer::target(WGPUInstance instance, WGPUSurface surface, uint32_t w, uint32_t h, WGPUDevice device)
 {
-    // store target surface properties
-    mTargetSurface.stride = w;
-    mTargetSurface.w = w > 0 ? w : 1;
-    mTargetSurface.h = h > 0 ? h : 1;
-    
-    mContext.initialize(instance, surface);
+    gpuOwner = false;
+    this->device = device;
+    if (!this->device) {
+        // request adapter
+        const WGPURequestAdapterOptions requestAdapterOptions { .nextInChain = nullptr, .compatibleSurface = surface, .powerPreference = WGPUPowerPreference_HighPerformance, .forceFallbackAdapter = false };
+        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) { *((WGPUAdapter*)pUserData) = adapter; };
+        wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &this->adapter);
 
-    WGPUSurfaceConfiguration surfaceConfiguration {
-        .device = mContext.device,
-        .format = mContext.preferredFormat,
-        .usage = WGPUTextureUsage_RenderAttachment,
-        .width = w, .height = h,
-        #ifdef __EMSCRIPTEN__
-        .presentMode = WGPUPresentMode_Fifo,
-        #else
-        .presentMode = WGPUPresentMode_Immediate
-        #endif
-    };
-    wgpuSurfaceConfigure(surface, &surfaceConfiguration);
+        // get adapter and surface properties
+        WGPUFeatureName featureNames[32]{};
+        size_t featuresCount = wgpuAdapterEnumerateFeatures(this->adapter, featureNames);
+
+        // request device
+        const WGPUDeviceDescriptor deviceDesc { .nextInChain = nullptr, .label = "The device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
+        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const * message, void * pUserData) { *((WGPUDevice*)pUserData) = device; };
+        wgpuAdapterRequestDevice(this->adapter, &deviceDesc, onDeviceRequestEnded, &this->device);
+        gpuOwner = true;
+    }
+
+    mContext.initialize(instance, this->device);
     initialize();
+    target(surface, w, h);
     mRenderStoragePool.initialize(mContext, w, h);
     mStorageRoot.initialize(mContext, w, h);
     mCompositor.initialize(mContext, w, h);
     return true;
 }
 
+bool WgRenderer::target(WGPUSurface surface, uint32_t w, uint32_t h) {
+    // store target surface properties
+    this->surface = surface;
+    mTargetSurface.stride = w;
+    mTargetSurface.w = w;
+    mTargetSurface.h = h;
+    if (w == 0 || h == 0) return false;
+    if (!surface) return true;
 
-Compositor* WgRenderer::target(TVG_UNUSED const RenderRegion& region, TVG_UNUSED ColorSpace cs)
+    WGPUSurfaceConfiguration surfaceConfiguration {
+        .device = mContext.device,
+        .format = mContext.preferredFormat,
+        .usage = WGPUTextureUsage_RenderAttachment,
+    #ifdef __EMSCRIPTEN__
+        .alphaMode = WGPUCompositeAlphaMode_Premultiplied,
+    #endif
+        .width = w, .height = h,
+    #ifdef __EMSCRIPTEN__
+        .presentMode = WGPUPresentMode_Fifo,
+    #else
+        .presentMode = WGPUPresentMode_Immediate
+    #endif
+    };
+    wgpuSurfaceConfigure(surface, &surfaceConfiguration);
+
+    return true;
+}
+
+
+RenderCompositor* WgRenderer::target(TVG_UNUSED const RenderRegion& region, TVG_UNUSED ColorSpace cs)
 {
     mCompositorStack.push(new WgCompose);
     mCompositorStack.last()->aabb = region;
@@ -308,7 +355,7 @@ Compositor* WgRenderer::target(TVG_UNUSED const RenderRegion& region, TVG_UNUSED
 }
 
 
-bool WgRenderer::beginComposite(Compositor* cmp, CompositeMethod method, uint8_t opacity)
+bool WgRenderer::beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity)
 {
     // save current composition settings
     WgCompose* compose = (WgCompose *)cmp;
@@ -321,36 +368,29 @@ bool WgRenderer::beginComposite(Compositor* cmp, CompositeMethod method, uint8_t
     WgRenderStorage* storage = mRenderStoragePool.allocate(mContext);
     mRenderStorageStack.push(storage);
     // begin newly added render pass
-    mCompositor.beginRenderPass(mCommandEncoder, mRenderStorageStack.last(), true);
+    WGPUColor color{};
+    if ((method == MaskMethod::None) && (opacity != 255)) color = { 1.0, 1.0, 1.0, 0.0 };
+    mCompositor.beginRenderPass(mCommandEncoder, mRenderStorageStack.last(), true, color);
     return true;
 }
 
 
-bool WgRenderer::endComposite(Compositor* cmp)
+bool WgRenderer::endComposite(RenderCompositor* cmp)
 {
     // get current composition settings
     WgCompose* comp = (WgCompose *)cmp;
     // end current render pass
     mCompositor.endRenderPass();
     // finish scene blending
-    if (comp->method == CompositeMethod::None) {
+    if (comp->method == MaskMethod::None) {
         // get source and destination render storages
         WgRenderStorage* src = mRenderStorageStack.last();
         mRenderStorageStack.pop();
         WgRenderStorage* dst = mRenderStorageStack.last();
-        // apply normal blend
-        if (comp->blend == BlendMethod::Normal) {
-            // begin previous render pass
-            mCompositor.beginRenderPass(mCommandEncoder, dst, false);
-            // apply blend
-            mCompositor.blendScene(mContext, src, comp);
-        // apply custom blend
-        } else {
-            // apply custom blend
-            mCompositor.blend(mCommandEncoder, src, dst, comp->opacity, comp->blend, WgRenderRasterType::Image);
-            // begin previous render pass
-            mCompositor.beginRenderPass(mCommandEncoder, dst, false);
-        }
+        // begin previous render pass
+        mCompositor.beginRenderPass(mCommandEncoder, dst, false);
+        // apply composition
+        mCompositor.renderScene(mContext, src, comp);
         // back render targets to the pool
         mRenderStoragePool.free(mContext, src);
     } else { // finish composition
@@ -374,6 +414,20 @@ bool WgRenderer::endComposite(Compositor* cmp)
     mCompositorStack.pop();
 
     return true;
+}
+
+
+bool WgRenderer::prepare(TVG_UNUSED RenderEffect* effect)
+{
+    //TODO: Return if the current post effect requires the region expansion
+    return false;
+}
+
+
+bool WgRenderer::effect(TVG_UNUSED RenderCompositor* cmp, TVG_UNUSED const RenderEffect* effect, TVG_UNUSED bool direct)
+{
+    TVGLOG("WG_ENGINE", "SceneEffect(%d) is not supported", (int)effect->type);
+    return false;
 }
 
 

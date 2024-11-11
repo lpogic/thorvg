@@ -34,10 +34,9 @@ class WgPipelines;
 struct WgContext {
     // external webgpu handles
     WGPUInstance instance{};
-    WGPUSurface surface{};
-    // common webgpu handles
     WGPUAdapter adapter{};
     WGPUDevice device{};
+    // common webgpu handles
     WGPUQueue queue{};
     WGPUTextureFormat preferredFormat{};
     // external handles (do not release)
@@ -49,14 +48,14 @@ struct WgContext {
     WGPUSampler samplerLinearMirror{};
     WGPUSampler samplerLinearClamp{};
 
-    void initialize(WGPUInstance instance, WGPUSurface surface);
+    void initialize(WGPUInstance instance, WGPUDevice device);
     void release();
     
     // create common objects
     WGPUSampler createSampler(WGPUFilterMode filter, WGPUMipmapFilterMode mipmapFilter, WGPUAddressMode addrMode);
     WGPUTexture createTexture(uint32_t width, uint32_t height, WGPUTextureFormat format);
-    WGPUTexture createTexStorage(uint32_t width, uint32_t height, WGPUTextureFormat format, uint32_t sc = 1);
-    WGPUTexture createTexStencil(uint32_t width, uint32_t height, WGPUTextureFormat format, uint32_t sc = 1);
+    WGPUTexture createTexStorage(uint32_t width, uint32_t height, WGPUTextureFormat format);
+    WGPUTexture createTexAttachement(uint32_t width, uint32_t height, WGPUTextureFormat format, uint32_t sc);
     WGPUTextureView createTextureView(WGPUTexture texture);
     bool allocateTexture(WGPUTexture& texture, uint32_t width, uint32_t height, WGPUTextureFormat format, void* data);
 
@@ -64,6 +63,7 @@ struct WgContext {
     void releaseTextureView(WGPUTextureView& textureView);
     void releaseTexture(WGPUTexture& texture);
     void releaseSampler(WGPUSampler& sampler);
+    void releaseQueue(WGPUQueue queue);
 
     // create buffer objects (return true, if buffer handle was changed)
     bool allocateBufferUniform(WGPUBuffer& buffer, const void* data, uint64_t size);

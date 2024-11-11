@@ -126,7 +126,7 @@ public:
             return 1;
         }
 
-        if (canvas->target(buffer, w, w, h, tvg::SwCanvas::ARGB8888S) != tvg::Result::Success) {
+        if (canvas->target(buffer, w, w, h, tvg::ColorSpace::ARGB8888S) != tvg::Result::Success) {
             cout << "Error: Canvas target failure" << endl;
             return 1;
         }
@@ -143,11 +143,11 @@ public:
             shape->appendRect(0, 0, static_cast<float>(w), static_cast<float>(h), 0, 0);
             shape->fill(r, g, b);
 
-            if (canvas->push(std::move(shape)) != tvg::Result::Success) return 1;
+            if (canvas->push(shape) != tvg::Result::Success) return 1;
         }
 
         //Drawing
-        canvas->push(std::move(picture));
+        canvas->push(picture);
         canvas->draw();
         canvas->sync();
 
@@ -162,8 +162,7 @@ public:
 
     void terminate()
     {
-        //Terminate ThorVG Engine
-        tvg::Initializer::term(tvg::CanvasEngine::Sw);
+        tvg::Initializer::term();
         free(buffer);
     }
 
@@ -180,7 +179,7 @@ private:
         }
 
         //Create a Canvas
-        canvas = tvg::SwCanvas::gen();
+        canvas = unique_ptr<tvg::SwCanvas>(tvg::SwCanvas::gen());
     }
 
     void createBuffer(int w, int h)

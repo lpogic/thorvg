@@ -38,13 +38,13 @@ TEST_CASE("Lottie Slot", "[tvgLottie]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = LottieAnimation::gen();
+    auto animation = unique_ptr<LottieAnimation>(LottieAnimation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
     REQUIRE(picture->type() == Type::Picture);
 
-    const char* slotJson = R"({"gradient_fill":{"p":{"a":0,"k":[0,0.1,0.1,0.2,1,1,0.1,0.2,0.1,1]}}})";
+    const char* slotJson = R"({"gradient_fill":{"p":{"p":2,"k":{"a":0,"k":[0,0.1,0.1,0.2,1,1,0.1,0.2,0.1,1]}}}})";
 
     //Slot override before loaded
     REQUIRE(animation->override(slotJson) == Result::InsufficientCondition);
@@ -74,7 +74,7 @@ TEST_CASE("Lottie Slot 2", "[tvgLottie]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = LottieAnimation::gen();
+    auto animation = unique_ptr<LottieAnimation>(LottieAnimation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -100,7 +100,7 @@ TEST_CASE("Lottie Marker", "[tvgLottie]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = LottieAnimation::gen();
+    auto animation = unique_ptr<LottieAnimation>(LottieAnimation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();

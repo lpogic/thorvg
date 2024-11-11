@@ -47,14 +47,25 @@ public:
         RT_MaskSub,
         RT_MaskIntersect,
         RT_MaskDifference,
+        RT_MaskLighten,
+        RT_MaskDarken,
         RT_Stencil,
         RT_Blit,
+        RT_MultiplyBlend,
+        RT_ScreenBlend,
+        RT_OverlayBlend,
+        RT_ColorDodgeBlend,
+        RT_ColorBurnBlend,
+        RT_HardLightBlend,
+        RT_SoftLightBlend,
+        RT_DifferenceBlend,
+        RT_ExclusionBlend,
 
         RT_None,
     };
 
     RenderData prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper) override;
-    RenderData prepare(Surface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags) override;
+    RenderData prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags) override;
     bool preRender() override;
     bool renderShape(RenderData data) override;
     bool renderImage(RenderData data) override;
@@ -63,17 +74,20 @@ public:
     RenderRegion region(RenderData data) override;
     RenderRegion viewport() override;
     bool viewport(const RenderRegion& vp) override;
-    bool blend(BlendMethod method, bool direct) override;
+    bool blend(BlendMethod method) override;
     ColorSpace colorSpace() override;
-    const Surface* mainSurface() override;
+    const RenderSurface* mainSurface() override;
 
     bool target(int32_t id, uint32_t w, uint32_t h);
     bool sync() override;
     bool clear() override;
 
-    Compositor* target(const RenderRegion& region, ColorSpace cs) override;
-    bool beginComposite(Compositor* cmp, CompositeMethod method, uint8_t opacity) override;
-    bool endComposite(Compositor* cmp) override;
+    RenderCompositor* target(const RenderRegion& region, ColorSpace cs) override;
+    bool beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity) override;
+    bool endComposite(RenderCompositor* cmp) override;
+
+    bool prepare(RenderEffect* effect) override;
+    bool effect(RenderCompositor* cmp, const RenderEffect* effect, bool direct) override;
 
     static GlRenderer* gen();
     static int init(TVG_UNUSED uint32_t threads);
@@ -91,13 +105,17 @@ private:
 
     GlRenderPass* currentPass();
 
+    bool beginComplexBlending(const RenderRegion& vp, RenderRegion bounds);
+    void endBlendingCompose(GlRenderTask* stencilTask, const Matrix& matrix);
+    GlProgram* getBlendProgram();
+
     void prepareBlitTask(GlBlitTask* task);
     void prepareCmpTask(GlRenderTask* task, const RenderRegion& vp, uint32_t cmpWidth, uint32_t cmpHeight);
-    void endRenderPass(Compositor* cmp);
+    void endRenderPass(RenderCompositor* cmp);
 
     void clearDisposes();
 
-    Surface surface;
+    RenderSurface surface;
     GLint mTargetFboId = 0;
     RenderRegion mViewport;
     //TODO: remove all unique_ptr / replace the vector with tvg::Array
@@ -105,6 +123,7 @@ private:
     vector<std::unique_ptr<GlProgram>> mPrograms;
     unique_ptr<GlRenderTarget> mRootTarget = {};
     Array<GlRenderTargetPool*> mComposePool = {};
+    Array<GlRenderTargetPool*> mBlendPool = {};
     vector<GlRenderPass> mRenderPassStack = {};
     vector<unique_ptr<GlCompositor>> mComposeStack = {};
 
@@ -115,6 +134,8 @@ private:
     } mDisposed;
 
     bool mClearBuffer = true;
+
+    BlendMethod mBlendMethod = BlendMethod::Normal;
 };
 
 #endif /* _TVG_GL_RENDERER_H_ */

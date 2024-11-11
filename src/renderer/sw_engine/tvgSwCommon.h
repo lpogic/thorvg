@@ -240,17 +240,17 @@ typedef uint8_t(*SwAlpha)(uint8_t*);                                        //bl
 
 struct SwCompositor;
 
-struct SwSurface : Surface
+struct SwSurface : RenderSurface
 {
     SwJoin  join;
     SwAlpha alphas[4];                    //Alpha:2, InvAlpha:3, Luma:4, InvLuma:5
     SwBlender blender = nullptr;          //blender (optional)
     SwCompositor* compositor = nullptr;   //compositor (optional)
-    BlendMethod blendMethod;              //blending method (uint8_t)
+    BlendMethod blendMethod = BlendMethod::Normal;
 
-    SwAlpha alpha(CompositeMethod method)
+    SwAlpha alpha(MaskMethod method)
     {
-        auto idx = (int)(method) - 2;       //0: None, 1: ClipPath
+        auto idx = (int)(method) - 1;       //-1 for None
         return alphas[idx > 3 ? 0 : idx];   //CompositeMethod has only four Matting methods.
     }
 
@@ -258,7 +258,7 @@ struct SwSurface : Surface
     {
     }
 
-    SwSurface(const SwSurface* rhs) : Surface(rhs)
+    SwSurface(const SwSurface* rhs) : RenderSurface(rhs)
     {
         join = rhs->join;
         memcpy(alphas, rhs->alphas, sizeof(alphas));
@@ -268,7 +268,7 @@ struct SwSurface : Surface
      }
 };
 
-struct SwCompositor : Compositor
+struct SwCompositor : RenderCompositor
 {
     SwSurface* recoverSfc;                  //Recover surface when composition is started
     SwCompositor* recoverCmp;               //Recover compositor when composition is done
@@ -363,7 +363,7 @@ static inline uint32_t opBlendSrcOver(uint32_t s, TVG_UNUSED uint32_t d, TVG_UNU
 }
 
 //TODO: BlendMethod could remove the alpha parameter.
-static inline uint32_t opBlendDifference(uint32_t s, uint32_t d, uint8_t a)
+static inline uint32_t opBlendDifference(uint32_t s, uint32_t d, TVG_UNUSED uint8_t a)
 {
     //if (s > d) => s - d
     //else => d - s
@@ -400,18 +400,13 @@ static inline uint32_t opBlendScreen(uint32_t s, uint32_t d, TVG_UNUSED uint8_t 
     return JOIN(255, c1, c2, c3);
 }
 
-static inline uint32_t opBlendDirectMultiply(uint32_t s, uint32_t d, uint8_t a)
+static inline uint32_t opBlendMultiply(uint32_t s, uint32_t d, TVG_UNUSED uint8_t a)
 {
     // s * d
     auto c1 = MULTIPLY(C1(s), C1(d));
     auto c2 = MULTIPLY(C2(s), C2(d));
     auto c3 = MULTIPLY(C3(s), C3(d));
     return JOIN(255, c1, c2, c3);
-}
-
-static inline uint32_t opBlendMultiply(uint32_t s, uint32_t d, uint8_t a)
-{
-    return opBlendDirectMultiply(s, d, a) + ALPHA_BLEND(d, IA(s));
 }
 
 static inline uint32_t opBlendOverlay(uint32_t s, uint32_t d, TVG_UNUSED uint8_t a)
@@ -489,9 +484,10 @@ SwFixed mathAtan(const SwPoint& pt);
 SwFixed mathCos(SwFixed angle);
 SwFixed mathSin(SwFixed angle);
 void mathSplitCubic(SwPoint* base);
+void mathSplitLine(SwPoint* base);
 SwFixed mathDiff(SwFixed angle1, SwFixed angle2);
 SwFixed mathLength(const SwPoint& pt);
-bool mathSmallCubic(const SwPoint* base, SwFixed& angleIn, SwFixed& angleMid, SwFixed& angleOut);
+int mathCubicAngle(const SwPoint* base, SwFixed& angleIn, SwFixed& angleMid, SwFixed& angleOut);
 SwFixed mathMean(SwFixed angle1, SwFixed angle2);
 SwPoint mathTransform(const Point* to, const Matrix& transform);
 bool mathUpdateOutlineBBox(const SwOutline* outline, const SwBBox& clipRegion, SwBBox& renderRegion, bool fastTrack);
@@ -547,8 +543,8 @@ SwRle* rleRender(const SwBBox* bbox);
 void rleFree(SwRle* rle);
 void rleReset(SwRle* rle);
 void rleMerge(SwRle* rle, SwRle* clip1, SwRle* clip2);
-void rleClipPath(SwRle* rle, const SwRle* clip);
-void rleClipRect(SwRle* rle, const SwBBox* clip);
+void rleClip(SwRle* rle, const SwRle* clip);
+void rleClip(SwRle* rle, const SwBBox* clip);
 
 SwMpool* mpoolInit(uint32_t threads);
 bool mpoolTerm(SwMpool* mpool);
@@ -566,11 +562,19 @@ bool rasterShape(SwSurface* surface, SwShape* shape, uint8_t r, uint8_t g, uint8
 bool rasterImage(SwSurface* surface, SwImage* image, const Matrix& transform, const SwBBox& bbox, uint8_t opacity);
 bool rasterStroke(SwSurface* surface, SwShape* shape, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 bool rasterGradientStroke(SwSurface* surface, SwShape* shape, const Fill* fdata, uint8_t opacity);
-bool rasterClear(SwSurface* surface, uint32_t x, uint32_t y, uint32_t w, uint32_t h);
+bool rasterClear(SwSurface* surface, uint32_t x, uint32_t y, uint32_t w, uint32_t h, pixel_t val = 0);
 void rasterPixel32(uint32_t *dst, uint32_t val, uint32_t offset, int32_t len);
+void rasterTranslucentPixel32(uint32_t* dst, uint32_t* src, uint32_t len, uint8_t opacity);
+void rasterPixel32(uint32_t* dst, uint32_t* src, uint32_t len, uint8_t opacity);
 void rasterGrayscale8(uint8_t *dst, uint8_t val, uint32_t offset, int32_t len);
-void rasterUnpremultiply(Surface* surface);
-void rasterPremultiply(Surface* surface);
-bool rasterConvertCS(Surface* surface, ColorSpace to);
+void rasterXYFlip(uint32_t* src, uint32_t* dst, int32_t stride, int32_t w, int32_t h, const SwBBox& bbox, bool flipped);
+void rasterUnpremultiply(RenderSurface* surface);
+void rasterPremultiply(RenderSurface* surface);
+bool rasterConvertCS(RenderSurface* surface, ColorSpace to);
+
+bool effectGaussianBlur(SwCompositor* cmp, SwSurface* surface, const RenderEffectGaussianBlur* params, bool direct);
+bool effectGaussianBlurPrepare(RenderEffectGaussianBlur* effect);
+bool effectDropShadow(SwCompositor* cmp, SwSurface* surfaces[2], const RenderEffectDropShadow* params, bool direct);
+bool effectDropShadowPrepare(RenderEffectDropShadow* effect);
 
 #endif /* _TVG_SW_COMMON_H_ */

@@ -32,7 +32,7 @@ using namespace std;
 
 TEST_CASE("Animation Basic", "[tvgAnimation]")
 {
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -51,7 +51,7 @@ TEST_CASE("Animation Frames Counting", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(1) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -88,7 +88,7 @@ TEST_CASE("Animation Lottie", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(1) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -108,7 +108,7 @@ TEST_CASE("Animation Lottie2", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -131,7 +131,7 @@ TEST_CASE("Animation Lottie3", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -145,7 +145,7 @@ TEST_CASE("Animation Lottie4", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -159,7 +159,7 @@ TEST_CASE("Animation Lottie5", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -173,7 +173,7 @@ TEST_CASE("Animation Lottie6", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -187,7 +187,7 @@ TEST_CASE("Animation Lottie7", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -201,7 +201,7 @@ TEST_CASE("Animation Lottie8", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -215,7 +215,7 @@ TEST_CASE("Animation Lottie9", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -229,7 +229,7 @@ TEST_CASE("Animation Lottie10", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();
@@ -239,11 +239,50 @@ TEST_CASE("Animation Lottie10", "[tvgAnimation]")
     REQUIRE(Initializer::term() == Result::Success);
 }
 
+TEST_CASE("Animation Lottie11", "[tvgAnimation]")
+{
+    REQUIRE(Initializer::init(0) == Result::Success);
+
+    auto animation = unique_ptr<Animation>(Animation::gen());
+    REQUIRE(animation);
+
+    auto picture = animation->picture();
+
+    ifstream file(TEST_DIR"/test11.json");
+    REQUIRE(file.is_open());
+    file.seekg(0, std::ios::end);
+    auto size = file.tellg();
+    file.seekg(0, std::ios::beg);
+    auto data = (char*)malloc(size);
+    file.seekg(0, ios::beg);
+    file.read(data, size);
+    file.close();
+    REQUIRE(picture->load(data, size, "json", "", true) == Result::Success);
+
+    free(data);
+
+    REQUIRE(Initializer::term() == Result::Success);
+}
+
+TEST_CASE("Animation Lottie12", "[tvgAnimation]")
+{
+    REQUIRE(Initializer::init(0) == Result::Success);
+
+    auto animation = unique_ptr<Animation>(Animation::gen());
+    REQUIRE(animation);
+
+    auto picture = animation->picture();
+
+    REQUIRE(picture->load(TEST_DIR"/test12.json") == Result::Success);
+
+    REQUIRE(Initializer::term() == Result::Success);
+}
+
 TEST_CASE("Animation Segment", "[tvgAnimation]")
 {
     REQUIRE(Initializer::init(0) == Result::Success);
 
-    auto animation = Animation::gen();
+    auto animation = unique_ptr<Animation>(Animation::gen());
     REQUIRE(animation);
 
     auto picture = animation->picture();

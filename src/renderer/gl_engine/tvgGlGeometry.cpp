@@ -58,7 +58,7 @@ bool GlGeometry::tesselate(const RenderShape& rshape, RenderUpdateFlag flag)
     return true;
 }
 
-bool GlGeometry::tesselate(const Surface* image, RenderUpdateFlag flag)
+bool GlGeometry::tesselate(const RenderSurface* image, RenderUpdateFlag flag)
 {
     if (flag & RenderUpdateFlag::Image) {
         fillVertex.clear();
@@ -142,7 +142,7 @@ bool GlGeometry::draw(GlRenderTask* task, GlStageBuffer* gpuBuffer, RenderUpdate
     if (indexBuffer->count == 0) return false;
 
     uint32_t vertexOffset = gpuBuffer->push(vertexBuffer->data, vertexBuffer->count * sizeof(float));
-    uint32_t indexOffset = gpuBuffer->push(indexBuffer->data, indexBuffer->count * sizeof(uint32_t));
+    uint32_t indexOffset = gpuBuffer->pushIndex(indexBuffer->data, indexBuffer->count * sizeof(uint32_t));
 
     // vertex layout
     if (flag & RenderUpdateFlag::Image) {

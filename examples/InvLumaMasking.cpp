@@ -47,9 +47,9 @@ struct UserExample : tvgexam::Example
         nMask->appendCircle(220, 220, 125, 125);
         nMask->fill(255, 200, 255);
 
-        mask->composite(std::move(nMask), tvg::CompositeMethod::InvLumaMask);
-        shape->composite(std::move(mask), tvg::CompositeMethod::InvLumaMask);
-        canvas->push(std::move(shape));
+        mask->mask(nMask, tvg::MaskMethod::InvLuma);
+        shape->mask(mask, tvg::MaskMethod::InvLuma);
+        canvas->push(shape);
 
         //SVG
         auto svg = tvg::Picture::gen();
@@ -63,8 +63,8 @@ struct UserExample : tvgexam::Example
         mask2->appendCircle(150, 500, 75, 75);
         mask2->appendRect(150, 500, 200, 200, 30, 30);
         mask2->fill(255, 255, 255);
-        svg->composite(std::move(mask2), tvg::CompositeMethod::InvLumaMask);
-        canvas->push(std::move(svg));
+        svg->mask(mask2, tvg::MaskMethod::InvLuma);
+        canvas->push(svg);
 
         //Star
         auto star = tvg::Shape::gen();
@@ -87,8 +87,8 @@ struct UserExample : tvgexam::Example
         auto mask3 = tvg::Shape::gen();
         mask3->appendCircle(600, 200, 125, 125);
         mask3->fill(0, 255, 255);
-        star->composite(std::move(mask3), tvg::CompositeMethod::InvLumaMask);
-        canvas->push(std::move(star));
+        star->mask(mask3, tvg::MaskMethod::InvLuma);
+        canvas->push(star);
 
         //Image
         ifstream file(EXAMPLE_DIR"/image/rawimage_200x300.raw", ios::binary);
@@ -98,7 +98,7 @@ struct UserExample : tvgexam::Example
         file.close();
 
         auto image = tvg::Picture::gen();
-        if (!tvgexam::verify(image->load(data, 200, 300, true, true))) return false;
+        if (!tvgexam::verify(image->load(data, 200, 300, tvg::ColorSpace::ARGB8888, true))) return false;
         image->translate(500, 400);
 
         //Mask4
@@ -109,10 +109,10 @@ struct UserExample : tvgexam::Example
         auto mask4_circle = tvg::Shape::gen();
         mask4_circle->appendCircle(600, 550, 125, 125);
         mask4_circle->fill(128, 0, 128);
-        mask4->push(std::move(mask4_rect));
-        mask4->push(std::move(mask4_circle));
-        image->composite(std::move(mask4), tvg::CompositeMethod::InvLumaMask);
-        canvas->push(std::move(image));
+        mask4->push(mask4_rect);
+        mask4->push(mask4_circle);
+        image->mask(mask4, tvg::MaskMethod::InvLuma);
+        canvas->push(image);
 
         free(data);
 

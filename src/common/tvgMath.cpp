@@ -120,9 +120,8 @@ bool inverse(const Matrix* m, Matrix* out)
                m->e12 * (m->e21 * m->e33 - m->e23 * m->e31) +
                m->e13 * (m->e21 * m->e32 - m->e22 * m->e31);
 
-    if (tvg::zero(det)) return false;
-
-    auto invDet = 1 / det;
+    auto invDet = 1.0f / det;
+    if (std::isinf(invDet)) return false;
 
     out->e11 = (m->e22 * m->e33 - m->e32 * m->e23) * invDet;
     out->e12 = (m->e13 * m->e32 - m->e12 * m->e33) * invDet;
@@ -220,6 +219,15 @@ Point normal(const Point& p1, const Point& p2)
 
     auto unitDir = dir / len;
     return {-unitDir.y, unitDir.x};
+}
+
+
+void normalize(Point& pt)
+{
+    if (zero(pt)) return;       //prevent zero division
+    auto ilength = 1.0f / sqrtf((pt.x * pt.x) + (pt.y * pt.y));
+    pt.x *= ilength;
+    pt.y *= ilength;
 }
 
 

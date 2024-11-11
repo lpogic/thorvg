@@ -1,9 +1,8 @@
 #ifndef _THORVG_H_
 #define _THORVG_H_
 
+#include <cstdint>
 #include <functional>
-#include <memory>
-#include <string>
 #include <list>
 
 #ifdef TVG_API
@@ -85,17 +84,28 @@ enum class Result
     FailedAllocation,      ///< The value returned in case of unsuccessful memory allocation.
     MemoryCorruption,      ///< The value returned in the event of bad memory handling - e.g. failing in pointer releasing or casting
     NonSupport,            ///< The value returned in case of choosing unsupported engine features(options).
-    Unknown                ///< The value returned in all other cases.
+    Unknown = 255          ///< The value returned in all other cases.
 };
 
 
 /**
- * @brief Enumeration specifying the values of the path commands accepted by TVG.
- *
- * Not to be confused with the path commands from the svg path element (like M, L, Q, H and many others).
- * TVG interprets all of them and translates to the ones from the PathCommand values.
+ * @brief Enumeration specifying the methods of combining the 8-bit color channels into 32-bit color.
  */
-enum class PathCommand
+enum class ColorSpace : uint8_t
+{
+    ABGR8888 = 0,      ///< The channels are joined in the order: alpha, blue, green, red. Colors are alpha-premultiplied.
+    ARGB8888,          ///< The channels are joined in the order: alpha, red, green, blue. Colors are alpha-premultiplied.
+    ABGR8888S,         ///< The channels are joined in the order: alpha, blue, green, red. Colors are un-alpha-premultiplied. @since 0.12
+    ARGB8888S,         ///< The channels are joined in the order: alpha, red, green, blue. Colors are un-alpha-premultiplied. @since 0.12
+    Grayscale8,        ///< One single channel data.
+    Unknown = 255      ///< Unknown channel data. This is reserved for an initial ColorSpace value. @since 1.0
+};
+
+
+/**
+ * @brief Enumeration specifying the values of the path commands accepted by ThorVG.
+ */
+enum class PathCommand : uint8_t
 {
     Close = 0, ///< Ends the current sub-path and connects it with its initial point. This command doesn't expect any points.
     MoveTo,    ///< Sets a new initial point of the sub-path and a new current point. This command expects 1 point: the starting position.
@@ -148,26 +158,25 @@ enum class FillRule : uint8_t
 
 
 /**
- * @brief Enumeration indicating the method used in the composition of two objects - the target and the source.
+ * @brief Enumeration indicating the method used in the mask of two objects - the target and the source.
  *
  * Notation: S(Source), T(Target), SA(Source Alpha), TA(Target Alpha)
  *
- * @see Paint::composite()
+ * @see Paint::mask()
  */
-enum class CompositeMethod : uint8_t
+enum class MaskMethod : uint8_t
 {
-    None = 0,           ///< No composition is applied.
-    ClipPath,           ///< The intersection of the source and the target is determined and only the resulting pixels from the source are rendered. Note that ClipPath only supports the Shape type.
-    AlphaMask,          ///< Alpha Masking using the compositing target's pixels as an alpha value.
-    InvAlphaMask,       ///< Alpha Masking using the complement to the compositing target's pixels as an alpha value.
-    LumaMask,           ///< Alpha Masking using the grayscale (0.2125R + 0.7154G + 0.0721*B) of the compositing target's pixels. @since 0.9
-    InvLumaMask,        ///< Alpha Masking using the grayscale (0.2125R + 0.7154G + 0.0721*B) of the complement to the compositing target's pixels. @since 0.11
-    AddMask,            ///< Combines the target and source objects pixels using target alpha. (T * TA) + (S * (255 - TA)) (Experimental API)
-    SubtractMask,       ///< Subtracts the source color from the target color while considering their respective target alpha. (T * TA) - (S * (255 - TA)) (Experimental API)
-    IntersectMask,      ///< Computes the result by taking the minimum value between the target alpha and the source alpha and multiplies it with the target color. (T * min(TA, SA)) (Experimental API)
-    DifferenceMask,     ///< Calculates the absolute difference between the target color and the source color multiplied by the complement of the target alpha. abs(T - S * (255 - TA)) (Experimental API)
-    LightenMask,        ///< Where multiple masks intersect, the highest transparency value is used. (Experimental API)
-    DarkenMask          ///< Where multiple masks intersect, the lowest transparency value is used. (Experimental API)
+    None = 0,       ///< No Masking is applied.
+    Alpha,          ///< Alpha Masking using the masking target's pixels as an alpha value.
+    InvAlpha,       ///< Alpha Masking using the complement to the masking target's pixels as an alpha value.
+    Luma,           ///< Alpha Masking using the grayscale (0.2125R + 0.7154G + 0.0721*B) of the masking target's pixels. @since 0.9
+    InvLuma,        ///< Alpha Masking using the grayscale (0.2125R + 0.7154G + 0.0721*B) of the complement to the masking target's pixels. @since 0.11
+    Add,            ///< Combines the target and source objects pixels using target alpha. (T * TA) + (S * (255 - TA)) (Experimental API)
+    Subtract,       ///< Subtracts the source color from the target color while considering their respective target alpha. (T * TA) - (S * (255 - TA)) (Experimental API)
+    Intersect,      ///< Computes the result by taking the minimum value between the target alpha and the source alpha and multiplies it with the target color. (T * min(TA, SA)) (Experimental API)
+    Difference,     ///< Calculates the absolute difference between the target color and the source color multiplied by the complement of the target alpha. abs(T - S * (255 - TA)) (Experimental API)
+    Lighten,        ///< Where multiple masks intersect, the highest transparency value is used. (Experimental API)
+    Darken          ///< Where multiple masks intersect, the lowest transparency value is used. (Experimental API)
 };
 
 
@@ -178,24 +187,46 @@ enum class CompositeMethod : uint8_t
  *
  * @see Paint::blend()
  *
- * @note Experimental API
+ * @since 0.15
  */
 enum class BlendMethod : uint8_t
 {
     Normal = 0,        ///< Perform the alpha blending(default). S if (Sa == 255), otherwise (Sa * S) + (255 - Sa) * D
-    Add,               ///< Simply adds pixel values of one layer with the other. (S + D)
-    Screen,            ///< The values of the pixels in the two layers are inverted, multiplied, and then inverted again. (S + D) - (S * D)
     Multiply,          ///< Takes the RGB channel values from 0 to 255 of each pixel in the top layer and multiples them with the values for the corresponding pixel from the bottom layer. (S * D)
+    Screen,            ///< The values of the pixels in the two layers are inverted, multiplied, and then inverted again. (S + D) - (S * D)
     Overlay,           ///< Combines Multiply and Screen blend modes. (2 * S * D) if (2 * D < Da), otherwise (Sa * Da) - 2 * (Da - S) * (Sa - D)
-    Difference,        ///< Subtracts the bottom layer from the top layer or the other way around, to always get a non-negative value. (S - D) if (S > D), otherwise (D - S)
-    Exclusion,         ///< The result is twice the product of the top and bottom layers, subtracted from their sum. s + d - (2 * s * d)
-    SrcOver,           ///< Replace the bottom layer with the top layer.
     Darken,            ///< Creates a pixel that retains the smallest components of the top and bottom layer pixels. min(S, D)
     Lighten,           ///< Only has the opposite action of Darken Only. max(S, D)
     ColorDodge,        ///< Divides the bottom layer by the inverted top layer. D / (255 - S)
     ColorBurn,         ///< Divides the inverted bottom layer by the top layer, and then inverts the result. 255 - (255 - D) / S
     HardLight,         ///< The same as Overlay but with the color roles reversed. (2 * S * D) if (S < Sa), otherwise (Sa * Da) - 2 * (Da - S) * (Sa - D)
-    SoftLight          ///< The same as Overlay but with applying pure black or white does not result in pure black or white. (1 - 2 * S) * (D ^ 2) + (2 * S * D)
+    SoftLight,         ///< The same as Overlay but with applying pure black or white does not result in pure black or white. (1 - 2 * S) * (D ^ 2) + (2 * S * D)
+    Difference,        ///< Subtracts the bottom layer from the top layer or the other way around, to always get a non-negative value. (S - D) if (S > D), otherwise (D - S)
+    Exclusion,         ///< The result is twice the product of the top and bottom layers, subtracted from their sum. s + d - (2 * s * d)
+    Hue,               ///< Reserved. Not supported.
+    Saturation,        ///< Reserved. Not supported.
+    Color,             ///< Reserved. Not supported.
+    Luminosity,        ///< Reserved. Not supported.
+    Add,               ///< Simply adds pixel values of one layer with the other. (S + D)
+    HardMix            ///< Reserved. Not supported.
+};
+
+
+/**
+ * @brief Enumeration that defines methods used for Scene Effects.
+ *
+ * This enum provides options to apply various post-processing effects to a scene.
+ * Scene effects are typically applied to modify the final appearance of a rendered scene, such as blurring.
+ *
+ * @see Scene::push(SceneEffect effect, ...)
+ *
+ * @note Experimental API
+ */
+enum class SceneEffect : uint8_t
+{
+    ClearAll = 0,      ///< Reset all previously applied scene effects, restoring the scene to its original state.
+    GaussianBlur,      ///< Apply a blur effect with a Gaussian filter. Param(3) = {sigma(float)[> 0], direction(int)[both: 0 / horizontal: 1 / vertical: 2], border(int)[duplicate: 0 / wrap: 1], quality(int)[0 - 100]}
+    DropShadow         ///< Apply a drop shadow effect with a Gaussian Blur filter. Param(8) = {color_R(int)[0 - 255], color_G(int)[0 - 255], color_B(int)[0 - 255], opacity(int)[0 - 255], angle(float)[0 - 360], distance(float), blur_sigma(float)[> 0], quality(int)[0 - 100]}
 };
 
 
@@ -207,7 +238,7 @@ enum class CanvasEngine : uint8_t
     All = 0,       ///< All feasible rasterizers. @since 1.0
     Sw = (1 << 1), ///< CPU rasterizer.
     Gl = (1 << 2), ///< OpenGL rasterizer.
-    Wg = (1 << 3), ///< WebGPU rasterizer. (Experimental API)
+    Wg = (1 << 3), ///< WebGPU rasterizer. @since 0.15
 };
 
 
@@ -327,7 +358,7 @@ public:
      *
      * @since 0.4
      */
-    Matrix transform() noexcept;
+    Matrix& transform() noexcept;
 
     /**
      * @brief Sets the opacity of the object.
@@ -335,17 +366,30 @@ public:
      * @param[in] o The opacity value in the range [0 ~ 255], where 0 is completely transparent and 255 is opaque.
      *
      * @note Setting the opacity with this API may require multiple render pass for composition. It is recommended to avoid changing the opacity if possible.
-     * @note ClipPath won't use the opacity value. (see: enum class CompositeMethod::ClipPath)
      */
     Result opacity(uint8_t o) noexcept;
 
     /**
-     * @brief Sets the composition target object and the composition method.
+     * @brief Sets the masking target object and the masking method.
      *
      * @param[in] target The paint of the target object.
-     * @param[in] method The method used to composite the source object with the target.
+     * @param[in] method The method used to mask the source object with the target.
      */
-    Result composite(std::unique_ptr<Paint> target, CompositeMethod method) noexcept;
+    Result mask(Paint* target, MaskMethod method) noexcept;
+
+    /**
+     * @brief Clip the drawing region of the paint object.
+     *
+     * This function restricts the drawing area of the paint object to the specified shape's paths.
+     *
+     * @param[in] clipper The shape object as the clipper.
+     *
+     * @retval Result::NonSupport If the @p clipper type is not Shape.
+     *
+     * @note @p clipper only supports the Shape type.
+     * @note Experimental API
+     */
+    Result clip(Paint* clipper) noexcept;
 
     /**
      * @brief Sets the blending method for the paint object.
@@ -393,24 +437,15 @@ public:
     uint8_t opacity() const noexcept;
 
     /**
-     * @brief Gets the composition target object and the composition method.
+     * @brief Gets the masking target object and the masking method.
      *
      * @param[out] target The paint of the target object.
      *
-     * @return The method used to composite the source object with the target.
+     * @return The method used to mask the source object with the target.
      *
      * @since 0.5
      */
-    CompositeMethod composite(const Paint** target) const noexcept;
-
-    /**
-     * @brief Retrieves the current blending method applied to the paint object.
-     *
-     * @return The currently set blending method.
-     *
-     * @note Experimental API
-     */
-    BlendMethod blend() const noexcept;
+    MaskMethod mask(const Paint** target) const noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -431,11 +466,6 @@ public:
      * @since Experimental API
      */
     uint32_t id = 0;
-
-    /**
-     * @see Paint::type()
-     */
-    TVG_DEPRECATED uint32_t identifier() const noexcept;
 
     // THORVG_GUI_PATH
 
@@ -520,7 +550,7 @@ public:
      *
      * @return The augmented transformation matrix.
      */
-    Matrix transform() const noexcept;
+    Matrix& transform() const noexcept;
 
     /**
      * @brief Creates a copy of the Fill object.
@@ -541,11 +571,6 @@ public:
      * @since Experimental API
      */
     virtual Type type() const noexcept = 0;
-
-    /**
-     * @see Fill::type()
-     */
-    TVG_DEPRECATED uint32_t identifier() const noexcept;
 
     _TVG_DECLARE_PRIVATE(Fill);
 };
@@ -593,7 +618,7 @@ public:
      * @see Canvas::paints()
      * @see Canvas::clear()
      */
-    virtual Result push(std::unique_ptr<Paint> paint) noexcept;
+    virtual Result push(Paint* paint) noexcept;
 
     /**
      * @brief Clear the internal canvas resources that used for the drawing.
@@ -648,7 +673,7 @@ public:
      * @warning It's not allowed to change the viewport during Canvas::push() - Canvas::sync() or Canvas::update() - Canvas::sync().
      *
      * @note When resetting the target, the viewport will also be reset to the target size.
-     * @note Experimental API
+     * @since 0.15
      */
     virtual Result viewport(int32_t x, int32_t y, int32_t w, int32_t h) noexcept;
 
@@ -717,7 +742,7 @@ public:
      *
      * @return A new LinearGradient object.
      */
-    static std::unique_ptr<LinearGradient> gen() noexcept;
+    static LinearGradient* gen() noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -729,11 +754,6 @@ public:
      * @since Experimental API
      */
     Type type() const noexcept override;
-
-    /**
-     * @see LinearGradient::type()
-     */
-    TVG_DEPRECATED static uint32_t identifier() noexcept;
 
     _TVG_DECLARE_PRIVATE(LinearGradient);
 };
@@ -751,38 +771,50 @@ public:
     ~RadialGradient();
 
     /**
-     * @brief Sets the radial gradient bounds.
+     * @brief Sets the radial gradient attributes.
      *
-     * The radial gradient bounds are defined as a circle centered in a given point (@p cx, @p cy) of a given radius.
+     * The radial gradient is defined by the end circle with a center (@p cx, @p cy) and a radius @p r and
+     * the start circle with a center/focal point (@p fx, @p fy) and a radius @p fr.
+     * The gradient will be rendered such that the gradient stop at an offset of 100% aligns with the edge of the end circle
+     * and the stop at an offset of 0% aligns with the edge of the start circle.
      *
-     * @param[in] cx The horizontal coordinate of the center of the bounding circle.
-     * @param[in] cy The vertical coordinate of the center of the bounding circle.
-     * @param[in] radius The radius of the bounding circle.
+     * @param[in] cx The horizontal coordinate of the center of the end circle.
+     * @param[in] cy The vertical coordinate of the center of the end circle.
+     * @param[in] r The radius of the end circle.
+     * @param[in] fx The horizontal coordinate of the center of the start circle.
+     * @param[in] fy The vertical coordinate of the center of the start circle.
+     * @param[in] fr The radius of the start circle.
      *
-     * @retval Result::InvalidArguments in case the @p radius value is zero or less.
+     * @retval Result::InvalidArguments in case the radius @p r or @p fr value is negative.
      *
-     * @note In case the @p radius is zero, an object is filled with a single color using the last color specified in the colorStops().
+     * @note In case the radius @p r is zero, an object is filled with a single color using the last color specified in the colorStops().
+     * @note By manipulating the position and size of the focal point, a wide range of visual effects can be achieved, such as directing
+     * the gradient focus towards a specific edge or enhancing the depth and complexity of shading patterns.
+     * If a focal effect is not desired, simply align the focal point (@p fx and @p fy) with the center of the end circle (@p cx and @p cy)
+     * and set the radius (@p fr) to zero. This will result in a uniform gradient without any focal variations.
      */
-    Result radial(float cx, float cy, float radius) noexcept;
+    Result radial(float cx, float cy, float r, float fx, float fy, float fr) noexcept;
 
     /**
-     * @brief Gets the radial gradient bounds.
+     * @brief Gets the radial gradient attributes.
      *
-     * The radial gradient bounds are defined as a circle centered in a given point (@p cx, @p cy) of a given radius.
+     * @param[out] cx The horizontal coordinate of the center of the end circle.
+     * @param[out] cy The vertical coordinate of the center of the end circle.
+     * @param[out] r The radius of the end circle.
+     * @param[out] fx The horizontal coordinate of the center of the start circle.
+     * @param[out] fy The vertical coordinate of the center of the start circle.
+     * @param[out] fr The radius of the start circle.
      *
-     * @param[out] cx The horizontal coordinate of the center of the bounding circle.
-     * @param[out] cy The vertical coordinate of the center of the bounding circle.
-     * @param[out] radius The radius of the bounding circle.
-     *
+     * @see RadialGradient::radial()
      */
-    Result radial(float* cx, float* cy, float* radius) const noexcept;
+    Result radial(float* cx, float* cy, float* r, float* fx = nullptr, float* fy = nullptr, float* fr = nullptr) const noexcept;
 
     /**
      * @brief Creates a new RadialGradient object.
      *
      * @return A new RadialGradient object.
      */
-    static std::unique_ptr<RadialGradient> gen() noexcept;
+    static RadialGradient* gen() noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -794,11 +826,6 @@ public:
      * @since Experimental API
      */
     Type type() const noexcept override;
-
-    /**
-     * @see RadialGradient::type()
-     */
-    TVG_DEPRECATED static uint32_t identifier() noexcept;
 
     _TVG_DECLARE_PRIVATE(RadialGradient);
 };
@@ -822,11 +849,11 @@ public:
     ~Shape();
 
     /**
-     * @brief Resets the properties of the shape path.
+     * @brief Resets the shape path.
      *
-     * The transformation matrix, the color, the fill and the stroke properties are retained.
+     * The transformation matrix, color, fill, and stroke properties are retained.
      *
-     * @note The memory, where the path data is stored, is not deallocated at this stage for caching effect.
+     * @note The memory where the path data is stored is not deallocated at this stage to allow for caching.
      */
     Result reset() noexcept;
 
@@ -920,23 +947,6 @@ public:
     Result appendCircle(float cx, float cy, float rx, float ry) noexcept;
 
     /**
-     * @brief Appends a circular arc to the path.
-     *
-     * The arc is treated as a new sub-path - it is not connected with the previous sub-path.
-     * The current point value is set to the end-point of the arc in case @p pie is @c false, and to the center of the arc otherwise.
-     *
-     * @param[in] cx The horizontal coordinate of the center of the arc.
-     * @param[in] cy The vertical coordinate of the center of the arc.
-     * @param[in] radius The radius of the arc.
-     * @param[in] startAngle The start angle of the arc given in degrees, measured counter-clockwise from the horizontal line.
-     * @param[in] sweep The central angle of the arc given in degrees, measured counter-clockwise from @p startAngle.
-     * @param[in] pie Specifies whether to draw radii from the arc's center to both of its end-point - drawn if @c true.
-     *
-     * @note Setting @p sweep value greater than 360 degrees, is equivalent to calling appendCircle(cx, cy, radius, radius).
-     */
-    TVG_DEPRECATED Result appendArc(float cx, float cy, float radius, float startAngle, float sweep, bool pie) noexcept;
-
-    /**
      * @brief Appends a given sub-path to the path.
      *
      * The current point value is set to the last point from the sub-path.
@@ -978,7 +988,7 @@ public:
      *
      * @retval Result::MemoryCorruption In case a @c nullptr is passed as the argument.
      */
-    Result strokeFill(std::unique_ptr<Fill> f) noexcept;
+    Result strokeFill(Fill* f) noexcept;
 
     /**
      * @brief Sets the dash pattern of the stroke.
@@ -1050,7 +1060,6 @@ public:
      * @param[in] a The alpha channel value in the range [0 ~ 255], where 0 is completely transparent and 255 is opaque. The default value is 0.
      *
      * @note Either a solid color or a gradient fill is applied, depending on what was set as last.
-     * @note ClipPath won't use the fill values. (see: enum class CompositeMethod::ClipPath)
      */
     Result fill(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255) noexcept;
 
@@ -1063,7 +1072,7 @@ public:
      *
      * @note Either a solid color or a gradient fill is applied, depending on what was set as last.
      */
-    Result fill(std::unique_ptr<Fill> f) noexcept;
+    Result fill(Fill* f) noexcept;
 
     /**
      * @brief Sets the fill rule for the Shape object.
@@ -1185,23 +1194,11 @@ public:
     float strokeMiterlimit() const noexcept;
 
     /**
-     * @brief Gets the trim of the stroke along the defined path segment.
-     *
-     * @param[out] begin The starting point of the segment to display along the path.
-     * @param[out] end Specifies the end of the segment to display along the path.
-     *
-     * @return @c true if trimming is applied simultaneously to all paths of the shape, @c false otherwise.
-     *
-     * @note Experimental API
-     */
-    bool strokeTrim(float* begin, float* end) const noexcept;
-
-    /**
      * @brief Creates a new Shape object.
      *
      * @return A new Shape object.
      */
-    static std::unique_ptr<Shape> gen() noexcept;
+    static Shape* gen() noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -1213,11 +1210,6 @@ public:
      * @since Experimental API
      */
     Type type() const noexcept override;
-
-    /**
-     * @see Shape::type()
-     */
-    TVG_DEPRECATED static uint32_t identifier() noexcept;
 
     _TVG_DECLARE_PRIVATE(Shape);
 };
@@ -1244,7 +1236,7 @@ public:
      * This means that loading the same file again will not result in duplicate operations;
      * instead, ThorVG will reuse the previously loaded picture data.
      *
-     * @param[in] path A path to the picture file.
+     * @param[in] filename A file name, including the path, for the picture file.
      *
      * @retval Result::InvalidArguments In case the @p path is invalid.
      * @retval Result::NonSupport When trying to load a file with an unknown extension.
@@ -1252,7 +1244,7 @@ public:
      * @note The Load behavior can be asynchronous if the assigned thread number is greater than zero.
      * @see Initializer::init()
      */
-    Result load(const std::string& path) noexcept;
+    Result load(const char* filename) noexcept;
 
     /**
      * @brief Loads a picture data from a memory block of a given size.
@@ -1272,10 +1264,10 @@ public:
      *
      * @warning It's the user responsibility to release the @p data memory.
      *
-     * @note If you are unsure about the MIME type, you can provide an empty value like @c "", and thorvg will attempt to figure it out.
+     * @note If you are unsure about the MIME type, you can provide an empty value like @c nullptr, and thorvg will attempt to figure it out.
      * @since 0.5
      */
-    Result load(const char* data, uint32_t size, const std::string& mimeType, const std::string& rpath = "", bool copy = false) noexcept;
+    Result load(const char* data, uint32_t size, const char* mimeType, const char* rpath = nullptr, bool copy = false) noexcept;
 
     /**
      * @brief Resizes the picture content to the given width and height.
@@ -1299,21 +1291,22 @@ public:
     Result size(float* w, float* h) const noexcept;
 
     /**
-     * @brief Loads raw data in ARGB8888 format from a memory block of the given size.
+     * @brief Loads raw image data in a specific format from a memory block of the given size.
      *
-     * ThorVG efficiently caches the loaded data using the specified @p data address as a key
-     * when the @p copy has @c false. This means that loading the same data again will not result in duplicate operations
-     * for the sharable @p data. Instead, ThorVG will reuse the previously loaded picture data.
+     * ThorVG efficiently caches the loaded data, using the provided @p data address as a key
+     * when @p copy is set to @c false. This allows ThorVG to avoid redundant operations
+     * by reusing the previously loaded picture data for the same sharable @p data,
+     * rather than duplicating the load process.
      *
-     * @param[in] data A pointer to a memory location where the content of the picture raw data is stored.
-     * @param[in] w The width of the image @p data in pixels.
-     * @param[in] h The height of the image @p data in pixels.
-     * @param[in] premultiplied If @c true, the given image data is alpha-premultiplied.
-     * @param[in] copy If @c true the data are copied into the engine local buffer, otherwise they are not.
+     * @param[in] data A pointer to the memory block where the raw image data is stored.
+     * @param[in] w The width of the image in pixels.
+     * @param[in] h The height of the image in pixels.
+     * @param[in] cs Specifies how the 32-bit color values should be interpreted.
+     * @param[in] copy If @c true, the data is copied into the engine's local buffer. If @c false, the data is not copied.
      *
      * @since 0.9
      */
-    Result load(uint32_t* data, uint32_t w, uint32_t h, bool premultiplied, bool copy = false) noexcept;
+    Result load(uint32_t* data, uint32_t w, uint32_t h, ColorSpace cs, bool copy = false) noexcept;
 
     /**
      * @brief Retrieve a paint object from the Picture scene by its Unique ID.
@@ -1335,7 +1328,7 @@ public:
      *
      * @return A new Picture object.
      */
-    static std::unique_ptr<Picture> gen() noexcept;
+    static Picture* gen() noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -1347,11 +1340,6 @@ public:
      * @since Experimental API
      */
     Type type() const noexcept override;
-
-    /**
-     * @see Picture::type()
-     */
-    TVG_DEPRECATED static uint32_t identifier() noexcept;
 
     _TVG_DECLARE_ACCESSOR(Animation);
     _TVG_DECLARE_PRIVATE(Picture);
@@ -1386,7 +1374,7 @@ public:
      * @see Scene::paints()
      * @see Scene::clear()
      */
-    Result push(std::unique_ptr<Paint> paint) noexcept;
+    Result push(Paint* paint) noexcept;
 
     /**
      * @brief Returns the list of the paints that currently held by the Scene.
@@ -1395,7 +1383,7 @@ public:
      *
      * @warning Please avoid accessing the paints during Scene update/draw. You can access them after calling Canvas::sync().
      * @see Canvas::sync()
-     * @see Scene::push()
+     * @see Scene::push(Paint* paint)
      * @see Scene::clear()
      *
      * @note Experimental API
@@ -1415,11 +1403,25 @@ public:
     Result clear(bool free = true) noexcept;
 
     /**
+     * @brief Apply a post-processing effect to the scene.
+     *
+     * This function adds a specified scene effect, such as clearing all effects or applying a Gaussian blur,
+     * to the scene after it has been rendered. Multiple effects can be applied in sequence.
+     *
+     * @param[in] effect The scene effect to apply. Options are defined in the SceneEffect enum.
+     *                   For example, use SceneEffect::GaussianBlur to apply a blur with specific parameters.
+     * @param[in] ... Additional variadic parameters required for certain effects (e.g., sigma and direction for GaussianBlur).
+     *
+     * @note Experimental API
+     */
+    Result push(SceneEffect effect, ...) noexcept;
+
+    /**
      * @brief Creates a new Scene object.
      *
      * @return A new Scene object.
      */
-    static std::unique_ptr<Scene> gen() noexcept;
+    static Scene* gen() noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -1432,11 +1434,6 @@ public:
      */
     Type type() const noexcept override;
 
-    /**
-     * @see Scene::type()
-     */
-    TVG_DEPRECATED static uint32_t identifier() noexcept;
-
     _TVG_DECLARE_PRIVATE(Scene);
 };
 
@@ -1446,7 +1443,7 @@ public:
  *
  * @brief A class to represent text objects in a graphical context, allowing for rendering and manipulation of unicode text.
  *
- * @note Experimental API
+ * @since 0.15
  */
 class TVG_API Text final : public Paint
 {
@@ -1491,7 +1488,7 @@ public:
      *
      * @see Text::font()
      *
-     * @note Experimental API
+     * @since 0.15
      */
     Result fill(uint8_t r, uint8_t g, uint8_t b) noexcept;
 
@@ -1503,11 +1500,11 @@ public:
      * @param[in] f The unique pointer to the gradient fill.
      *
      * @note Either a solid color or a gradient fill is applied, depending on what was set as last.
-     * @note Experimental API
-     *
      * @see Text::font()
+     *
+     * @since 0.15
      */
-    Result fill(std::unique_ptr<Fill> f) noexcept;
+    Result fill(Fill* f) noexcept;
 
     /**
      * @brief Loads a scalable font data (ttf) from a file.
@@ -1516,16 +1513,16 @@ public:
      * This means that loading the same file again will not result in duplicate operations;
      * instead, ThorVG will reuse the previously loaded font data.
      *
-     * @param[in] path The path to the font file.
+     * @param[in] filename A file name, including the path, for the font file.
      *
      * @retval Result::InvalidArguments In case the @p path is invalid.
      * @retval Result::NonSupport When trying to load a file with an unknown extension.
      *
-     * @note Experimental API
+     * @see Text::unload(const char* filename)
      *
-     * @see Text::unload(const std::string& path)
+     * @since 0.15
      */
-    static Result load(const std::string& path) noexcept;
+    static Result load(const char* filename) noexcept;
 
     /**
      * @brief Loads a scalable font data (ttf) from a memory block of a given size.
@@ -1547,37 +1544,37 @@ public:
      * @warning It's the user responsibility to release the @p data memory.
      *
      * @note To unload the font data loaded using this API, pass the proper @p name and @c nullptr as @p data.
-     * @note If you are unsure about the MIME type, you can provide an empty value like @c "", and thorvg will attempt to figure it out.
-     * @note Experimental API
-     *
+     * @note If you are unsure about the MIME type, you can provide an empty value like @c nullptr, and thorvg will attempt to figure it out.
      * @see Text::font(const char* name, float size, const char* style)
+     *
+     * @note 0.15
      */
-    static Result load(const char* name, const char* data, uint32_t size, const std::string& mimeType = "ttf", bool copy = false) noexcept;
+    static Result load(const char* name, const char* data, uint32_t size, const char* mimeType = "ttf", bool copy = false) noexcept;
 
     /**
      * @brief Unloads the specified scalable font data (TTF) that was previously loaded.
      *
      * This function is used to release resources associated with a font file that has been loaded into memory.
      *
-     * @param[in] path The file path of the loaded font.
+     * @param[in] filename The file name of the loaded font, including the path.
      *
      * @retval Result::InsufficientCondition Fails if the loader is not initialized.
      *
      * @note If the font data is currently in use, it will not be immediately unloaded.
-     * @note Experimental API
-     *
-     * @see Text::load(const std::string& path)
+     * @see Text::load(const char* filename)
+     * 
+     * @since 0.15
      */
-    static Result unload(const std::string& path) noexcept;
+    static Result unload(const char* filename) noexcept;
 
     /**
      * @brief Creates a new Text object.
      *
      * @return A new Text object.
      *
-     * @note Experimental API
+     * @since 0.15
      */
-    static std::unique_ptr<Text> gen() noexcept;
+    static Text* gen() noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -1607,17 +1604,6 @@ class TVG_API SwCanvas final : public Canvas
 {
 public:
     ~SwCanvas();
-
-    /**
-     * @brief Enumeration specifying the methods of combining the 8-bit color channels into 32-bit color.
-     */
-    enum Colorspace : uint8_t
-    {
-        ABGR8888 = 0,      ///< The channels are joined in the order: alpha, blue, green, red. Colors are alpha-premultiplied. (a << 24 | b << 16 | g << 8 | r)
-        ARGB8888,          ///< The channels are joined in the order: alpha, red, green, blue. Colors are alpha-premultiplied. (a << 24 | r << 16 | g << 8 | b)
-        ABGR8888S,         ///< The channels are joined in the order: alpha, blue, green, red. Colors are un-alpha-premultiplied. @since 0.12
-        ARGB8888S,         ///< The channels are joined in the order: alpha, red, green, blue. Colors are un-alpha-premultiplied. @since 0.12
-    };
 
     /**
      * @brief Enumeration specifying the methods of Memory Pool behavior policy.
@@ -1650,7 +1636,7 @@ public:
      * @see Canvas::viewport()
      * @see Canvas::sync()
     */
-    Result target(uint32_t* buffer, uint32_t stride, uint32_t w, uint32_t h, Colorspace cs) noexcept;
+    Result target(uint32_t* buffer, uint32_t stride, uint32_t w, uint32_t h, ColorSpace cs) noexcept;
 
     /**
      * @brief Set sw engine memory pool behavior policy.
@@ -1680,7 +1666,7 @@ public:
      * @brief Creates a new SwCanvas object.
      * @return A new SwCanvas object.
      */
-    static std::unique_ptr<SwCanvas> gen() noexcept;
+    static SwCanvas* gen() noexcept;
 
     _TVG_DECLARE_PRIVATE(SwCanvas);
 };
@@ -1726,7 +1712,7 @@ public:
      *
      * @since 0.14
      */
-    static std::unique_ptr<GlCanvas> gen() noexcept;
+    static GlCanvas* gen() noexcept;
 
     _TVG_DECLARE_PRIVATE(GlCanvas);
 };
@@ -1739,7 +1725,7 @@ public:
  *
  * @warning Please do not use it. This class is not fully supported yet.
  *
- * @note Experimental API
+ * @since 0.15
  */
 class TVG_API WgCanvas final : public Canvas
 {
@@ -1753,6 +1739,7 @@ public:
      * @param[in] surface WGPUSurface, handle to a presentable surface.
      * @param[in] w The width of the surface.
      * @param[in] h The height of the surface.
+     * @param[in] device WGPUDevice, a desired handle for the wgpu device. If it is @c nullptr, ThorVG will assign an appropriate device internally.
      *
      * @retval Result::InsufficientCondition if the canvas is performing rendering. Please ensure the canvas is synced.
      * @retval Result::NonSupport In case the wg engine is not supported.
@@ -1762,16 +1749,16 @@ public:
      * @see Canvas::viewport()
      * @see Canvas::sync()
      */
-    Result target(void* instance, void* surface, uint32_t w, uint32_t h) noexcept;
+    Result target(void* instance, void* surface, uint32_t w, uint32_t h, void* device = nullptr) noexcept;
 
     /**
      * @brief Creates a new WgCanvas object.
      *
      * @return A new WgCanvas object.
      *
-     * @note Experimental API
+     * @since 0.15
      */
-    static std::unique_ptr<WgCanvas> gen() noexcept;
+    static WgCanvas* gen() noexcept;
 
     _TVG_DECLARE_PRIVATE(WgCanvas);
 };
@@ -1825,7 +1812,7 @@ public:
      *
      * @return The version of the engine in the format major.minor.micro, or a @p nullptr in case of an internal error.
      *
-     * @note Experimental API
+     * @since 0.15
      */
     static const char* version(uint32_t* major, uint32_t* minor, uint32_t* micro) noexcept;
 
@@ -1930,6 +1917,7 @@ public:
      * @note Animation allows a range from 0.0 to 1.0. @p end should not be higher than @p begin.
      * @note If a marker has been specified, its range will be disregarded.
      * @see LottieAnimation::segment(const char* marker)
+     *
      * @note Experimental API
      */
     Result segment(float begin, float end) noexcept;
@@ -1953,7 +1941,7 @@ public:
      * @return A new Animation object.
      *
      */
-    static std::unique_ptr<Animation> gen() noexcept;
+    static Animation* gen() noexcept;
 
     _TVG_DECLARE_PRIVATE(Animation);
 };
@@ -1988,7 +1976,7 @@ public:
      *
      * @note Experimental API
      */
-    Result background(std::unique_ptr<Paint> paint) noexcept;
+    Result background(Paint* paint) noexcept;
 
     /**
      * @brief Exports the given @p paint data to the given @p path
@@ -1998,7 +1986,7 @@ public:
      * if you wish to optimize for speed.
      *
      * @param[in] paint The paint to be saved with all its associated properties.
-     * @param[in] path A path to the file, in which the paint data is to be saved.
+     * @param[in] filename A file name, including the path, where the paint data will be saved.
      * @param[in] quality The encoded quality level. @c 0 is the minimum, @c 100 is the maximum value(recommended).
      *
      * @retval Result::InsufficientCondition If currently saving other resources.
@@ -2010,7 +1998,7 @@ public:
      *
      * @since 0.5
      */
-    Result save(std::unique_ptr<Paint> paint, const std::string& path, uint32_t quality = 100) noexcept;
+    Result save(Paint* paint, const char* filename, uint32_t quality = 100) noexcept;
 
     /**
      * @brief Export the provided animation data to the specified file path.
@@ -2018,7 +2006,7 @@ public:
      * This function exports the given animation data to the provided file path. You can also specify the desired frame rate in frames per second (FPS) by providing the fps parameter.
      *
      * @param[in] animation The animation to be saved, including all associated properties.
-     * @param[in] path The path to the file where the animation will be saved.
+     * @param[in] filename A file name, including the path, where the animation will be saved.
      * @param[in] quality The encoded quality level. @c 0 is the minimum, @c 100 is the maximum value(recommended).
      * @param[in] fps The desired frames per second (FPS). For example, to encode data at 60 FPS, pass 60. Pass 0 to keep the original frame data.
      *
@@ -2033,7 +2021,7 @@ public:
      *
      * @note Experimental API
      */
-    Result save(std::unique_ptr<Animation> animation, const std::string& path, uint32_t quality = 100, uint32_t fps = 0) noexcept;
+    Result save(Animation* animation, const char* filename, uint32_t quality = 100, uint32_t fps = 0) noexcept;
 
     /**
      * @brief Guarantees that the saving task is finished.
@@ -2056,7 +2044,7 @@ public:
      *
      * @since 0.5
      */
-    static std::unique_ptr<Saver> gen() noexcept;
+    static Saver* gen() noexcept;
 
     _TVG_DECLARE_PRIVATE(Saver);
 };
@@ -2077,8 +2065,6 @@ class TVG_API Accessor final
 {
 public:
     ~Accessor();
-
-    TVG_DEPRECATED std::unique_ptr<Picture> set(std::unique_ptr<Picture> picture, std::function<bool(const Paint* paint)> func) noexcept;
 
     /**
      * @brief Set the access function for traversing the Picture scene tree nodes.
@@ -2114,33 +2100,10 @@ public:
      *
      * @return A new Accessor object.
      */
-    static std::unique_ptr<Accessor> gen() noexcept;
+    static Accessor* gen() noexcept;
 
     _TVG_DECLARE_PRIVATE(Accessor);
 };
-
-
-/**
- * @brief The cast() function is a utility function used to cast a 'Paint' to type 'T'.
- * @since 0.11
- */
-template<typename T = tvg::Paint>
-std::unique_ptr<T> cast(Paint* paint)
-{
-    return std::unique_ptr<T>(static_cast<T*>(paint));
-}
-
-
-/**
- * @brief The cast() function is a utility function used to cast a 'Fill' to type 'T'.
- * @since 0.11
- */
-template<typename T = tvg::Fill>
-std::unique_ptr<T> cast(Fill* fill)
-{
-    return std::unique_ptr<T>(static_cast<T*>(fill));
-}
-
 
 /** @}*/
 

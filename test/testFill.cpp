@@ -30,12 +30,12 @@ using namespace std;
 
 TEST_CASE("Filling Creation", "[tvgFill]")
 {
-    auto linear = LinearGradient::gen();
+    auto linear = unique_ptr<LinearGradient>(LinearGradient::gen());
     REQUIRE(linear);
 
     REQUIRE(linear->type() == Type::LinearGradient);
     
-    auto radial = RadialGradient::gen();
+    auto radial = unique_ptr<RadialGradient>(RadialGradient::gen());
     REQUIRE(radial);
 
     REQUIRE(radial->type() == Type::RadialGradient);
@@ -83,17 +83,16 @@ TEST_CASE("Common Filling", "[tvgFill]")
     REQUIRE(fill->colorStops(&cs) == 0);
 
     //Set to Shape
-    auto shape = Shape::gen();
+    auto shape = unique_ptr<Shape>(Shape::gen());
     REQUIRE(shape);
 
-    auto pFill = fill.get();
-    REQUIRE(shape->fill(std::move(fill)) == Result::Success);
-    REQUIRE(shape->fill() == pFill);
+    REQUIRE(shape->fill(fill) == Result::Success);
+    REQUIRE(shape->fill() == fill);
 }
 
 TEST_CASE("Fill Transformation", "[tvgFill]")
 {
-    auto fill = LinearGradient::gen();
+    auto fill = unique_ptr<LinearGradient>(LinearGradient::gen());
     REQUIRE(fill);
 
     //no transformation
@@ -126,7 +125,7 @@ TEST_CASE("Fill Transformation", "[tvgFill]")
 
 TEST_CASE("Linear Filling", "[tvgFill]")
 {
-    auto fill = LinearGradient::gen();
+    auto fill = unique_ptr<LinearGradient>(LinearGradient::gen());
     REQUIRE(fill);
 
     float x1, y1, x2, y2;
@@ -148,32 +147,39 @@ TEST_CASE("Linear Filling", "[tvgFill]")
 
 TEST_CASE("Radial Filling", "[tvgFill]")
 {
-    auto fill = RadialGradient::gen();
+    auto fill = unique_ptr<RadialGradient>(RadialGradient::gen());
     REQUIRE(fill);
 
-    float cx, cy, radius;
+    float cx, cy, r, fx, fy, fr;
 
-    REQUIRE(fill->radial(0, 0, -1) == Result::InvalidArguments);
+    REQUIRE(fill->radial(0, 0, -1, 0, 0, 0) == Result::InvalidArguments);
+    REQUIRE(fill->radial(0, 0, 0, 0, 0, -1) == Result::InvalidArguments);
     REQUIRE(fill->radial(nullptr, nullptr, nullptr) == Result::Success);
-    REQUIRE(fill->radial(100, 120, 50) == Result::Success);
+    REQUIRE(fill->radial(100, 120, 50, 10, 20, 5) == Result::Success);
 
-    REQUIRE(fill->radial(&cx, nullptr, &radius) == Result::Success);
+    REQUIRE(fill->radial(&cx, nullptr, &r) == Result::Success);
     REQUIRE(cx == 100.0f);
-    REQUIRE(radius == 50.0f);
+    REQUIRE(r == 50.0f);
 
-    REQUIRE(fill->radial(nullptr, &cy, nullptr) == Result::Success);
+    REQUIRE(fill->radial(nullptr, &cy, nullptr, &fx, &fy, &fr) == Result::Success);
     REQUIRE(cy == 120);
+    REQUIRE(fx == 10);
+    REQUIRE(fy == 20);
+    REQUIRE(fr == 5);
 
-    REQUIRE(fill->radial(0, 0, 0) == Result::Success);
-    REQUIRE(fill->radial(&cx, &cy, &radius) == Result::Success);
+    REQUIRE(fill->radial(0, 0, 0, 0, 0, 0) == Result::Success);
+    REQUIRE(fill->radial(&cx, &cy, &r, &fx, &fy, &fr) == Result::Success);
     REQUIRE(cx == 0.0f);
     REQUIRE(cy == 0.0f);
-    REQUIRE(radius == 0.0f);
+    REQUIRE(r == 0.0f);
+    REQUIRE(fx == 0.0f);
+    REQUIRE(fy == 0.0f);
+    REQUIRE(fr == 0.0f);
 }
 
 TEST_CASE("Linear Filling Duplication", "[tvgFill]")
 {
-    auto fill = LinearGradient::gen();
+    auto fill = unique_ptr<LinearGradient>(LinearGradient::gen());
     REQUIRE(fill);
 
     //Setup
@@ -192,7 +198,7 @@ TEST_CASE("Linear Filling Duplication", "[tvgFill]")
     REQUIRE(fill->transform(m) == Result::Success);
 
     //Duplication
-    auto dup = tvg::cast<LinearGradient>(fill->duplicate());
+    auto dup = unique_ptr<LinearGradient>((LinearGradient*)fill->duplicate());
     REQUIRE(dup);
 
     REQUIRE(dup->spread() == FillSpread::Reflect);
@@ -228,7 +234,7 @@ TEST_CASE("Linear Filling Duplication", "[tvgFill]")
 
 TEST_CASE("Radial Filling Duplication", "[tvgFill]")
 {
-    auto fill = RadialGradient::gen();
+    auto fill = unique_ptr<RadialGradient>(RadialGradient::gen());
     REQUIRE(fill);
 
     //Setup
@@ -241,22 +247,25 @@ TEST_CASE("Radial Filling Duplication", "[tvgFill]")
 
     REQUIRE(fill->colorStops(cs, 4) == Result::Success);
     REQUIRE(fill->spread(FillSpread::Reflect) == Result::Success);
-    REQUIRE(fill->radial(100.0f, 120.0f, 50.0f) == Result::Success);
+    REQUIRE(fill->radial(100.0f, 120.0f, 50.0f, 10.0f, 20.0f, 5.0f) == Result::Success);
 
     auto m = Matrix{1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, -7.7f, -8.8f, -9.9f};
     REQUIRE(fill->transform(m) == Result::Success);
 
     //Duplication
-    auto dup = tvg::cast<RadialGradient>(fill->duplicate());
+    auto dup = unique_ptr<RadialGradient>((RadialGradient*)fill->duplicate());
     REQUIRE(dup);
 
     REQUIRE(dup->spread() == FillSpread::Reflect);
 
-    float cx, cy, radius;
-    REQUIRE(dup->radial(&cx, &cy, &radius) == Result::Success);
+    float cx, cy, r, fx, fy, fr;
+    REQUIRE(dup->radial(&cx, &cy, &r, &fx, &fy, &fr) == Result::Success);
     REQUIRE(cx == 100.0f);
     REQUIRE(cy == 120.0f);
-    REQUIRE(radius == 50.0f);
+    REQUIRE(r == 50.0f);
+    REQUIRE(fx == 10.0f);
+    REQUIRE(fy == 20.0f);
+    REQUIRE(fr == 5.0f);
 
     const Fill::ColorStop* cs2 = nullptr;
     REQUIRE(fill->colorStops(&cs2) == 4);

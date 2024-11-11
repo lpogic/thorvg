@@ -43,9 +43,26 @@ void LottieLoader::run(unsigned tid)
             ScopedLock lock(key);
             comp = parser.comp;
         }
+        if (parser.slots) {
+            override(parser.slots, false);
+            parser.slots = nullptr;
+        }
         builder->build(comp);
+
+        release();
     }
     rebuild = false;
+}
+
+
+void LottieLoader::release()
+{
+    if (copy) {
+        free((char*)content);
+        content = nullptr;
+    }
+    free(dirName);
+    dirName = nullptr;
 }
 
 
@@ -63,8 +80,7 @@ LottieLoader::~LottieLoader()
 {
     done();
 
-    if (copy) free((char*)content);
-    free(dirName);
+    release();
 
     //TODO: correct position?
     delete(comp);
@@ -76,6 +92,7 @@ bool LottieLoader::header()
 {
     //A single thread doesn't need to perform intensive tasks.
     if (TaskScheduler::threads() == 0) {
+        LoadModule::read();
         run(0);
         if (comp) {
             w = static_cast<float>(comp->w);
@@ -87,7 +104,6 @@ bool LottieLoader::header()
         } else {
             return false;
         }
-        LoadModule::read();
     }
 
     //Quickly validate the given Lottie file without parsing in order to get the animation info.
@@ -183,7 +199,7 @@ bool LottieLoader::header()
 }
 
 
-bool LottieLoader::open(const char* data, uint32_t size, const std::string& rpath, bool copy)
+bool LottieLoader::open(const char* data, uint32_t size, const char* rpath, bool copy)
 {
     if (copy) {
         content = (char*)malloc(size + 1);
@@ -195,17 +211,16 @@ bool LottieLoader::open(const char* data, uint32_t size, const std::string& rpat
     this->size = size;
     this->copy = copy;
 
-    if (!rpath.empty()) {
-        this->dirName = strdup(rpath.c_str());
-    }
+    if (!rpath) this->dirName = strdup(".");
+    else this->dirName = strdup(rpath);
 
     return header();
 }
 
 
-bool LottieLoader::open(const string& path)
+bool LottieLoader::open(const char* path)
 {
-    auto f = fopen(path.c_str(), "r");
+    auto f = fopen(path, "r");
     if (!f) return false;
 
     fseek(f, 0, SEEK_END);
@@ -227,7 +242,7 @@ bool LottieLoader::open(const string& path)
 
     fclose(f);
 
-    this->dirName = strDirname(path.c_str());
+    this->dirName = strDirname(path);
     this->content = content;
     this->copy = true;
 
@@ -246,7 +261,7 @@ bool LottieLoader::resize(Paint* paint, float w, float h)
 
     //apply the scale to the base clipper
     const Paint* clipper;
-    paint->composite(&clipper);
+    paint->mask(&clipper);
     if (clipper) const_cast<Paint*>(clipper)->transform(m);
 
     return true;
@@ -255,10 +270,10 @@ bool LottieLoader::resize(Paint* paint, float w, float h)
 
 bool LottieLoader::read()
 {
-    if (!content || size == 0) return false;
-
     //the loading has been already completed
     if (!LoadModule::read()) return true;
+
+    if (!content || size == 0) return false;
 
     TaskScheduler::request(this);
 
@@ -276,19 +291,20 @@ Paint* LottieLoader::paint()
 }
 
 
-bool LottieLoader::override(const char* slot)
+bool LottieLoader::override(const char* slots, bool copy)
 {
     if (!ready() || comp->slots.count == 0) return false;
 
     auto success = true;
 
     //override slots
-    if (slot) {
+    if (slots) {
         //Copy the input data because the JSON parser will encode the data immediately.
-        auto temp = strdup(slot);
+        auto temp = copy ? strdup(slots) : slots;
 
         //parsing slot json
         LottieParser parser(temp, dirName);
+        parser.comp = comp;
 
         auto idx = 0;
         while (auto sid = parser.sid(idx == 0)) {
@@ -301,7 +317,7 @@ bool LottieLoader::override(const char* slot)
         }
 
         if (idx < 1) success = false;
-        free(temp);
+        free((char*)temp);
         rebuild = overridden = success;
     //reset slots
     } else if (overridden) {

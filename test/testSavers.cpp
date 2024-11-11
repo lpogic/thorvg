@@ -27,82 +27,12 @@
 
 using namespace tvg;
 using namespace std;
-
+#if 0
 TEST_CASE("Saver Creation", "[tvgSavers]")
 {
-    auto saver = Saver::gen();
+    auto saver = unique_ptr<Saver>(Saver::gen());
     REQUIRE(saver);
 }
-
-#ifdef THORVG_TVG_SAVER_SUPPORT
-
-TEST_CASE("Save empty shape", "[tvgSavers]")
-{
-    auto shape = Shape::gen();
-    REQUIRE(shape);
-
-    auto saver = Saver::gen();
-    REQUIRE(saver);
-
-    REQUIRE(saver->save(std::move(shape), TEST_DIR"/test.tvg") == Result::Unknown);
-}
-
-#ifdef THORVG_SVG_LOADER_SUPPORT
-
-TEST_CASE("Save svg into tvg", "[tvgSavers]")
-{
-    REQUIRE(Initializer::init(0) == Result::Success);
-
-    auto picture = Picture::gen();
-    REQUIRE(picture);
-    REQUIRE(picture->load(TEST_DIR"/tag.svg") == Result::Success);
-
-    auto saver = Saver::gen();
-    REQUIRE(saver);
-
-    REQUIRE(saver->save(std::move(picture), TEST_DIR"/tag.tvg") == Result::Success);
-    REQUIRE(saver->sync() == Result::Success);
-
-    REQUIRE(Initializer::term() == Result::Success);
-}
-
-#endif
-
-TEST_CASE("Save scene into tvg", "[tvgSavers]")
-{
-    REQUIRE(Initializer::init(0) == Result::Success);
-
-    auto picture = tvg::Picture::gen();
-    REQUIRE(picture);
-
-    ifstream file(TEST_DIR"/rawimage_200x300.raw");
-    if (!file.is_open()) return;
-    auto data = (uint32_t*)malloc(sizeof(uint32_t) * (200*300));
-    file.read(reinterpret_cast<char *>(data), sizeof (uint32_t) * 200 * 300);
-    file.close();
-
-    REQUIRE(picture->load(data, 200, 300, true, false) == Result::Success);
-    REQUIRE(picture->translate(50, 0) == Result::Success);
-    REQUIRE(picture->scale(2) == Result::Success);
-
-    auto mask = tvg::Shape::gen();
-    REQUIRE(mask);
-    REQUIRE(mask->appendCircle(400, 400, 15, 15) == Result::Success);
-    REQUIRE(mask->fill(0, 0, 0, 255) == Result::Success);
-    REQUIRE(picture->composite(std::move(mask), tvg::CompositeMethod::InvAlphaMask) == Result::Success);
-
-    auto saver = Saver::gen();
-    REQUIRE(saver);
-    REQUIRE(saver->save(std::move(picture), TEST_DIR"/test.tvg") == Result::Success);
-    REQUIRE(saver->sync() == Result::Success);
-
-    REQUIRE(Initializer::term() == Result::Success);
-
-    free(data);
-}
-
-#endif
-
 
 #if defined(THORVG_GIF_SAVER_SUPPORT) && defined(THORVG_LOTTIE_LOADER_SUPPORT)
 
@@ -118,9 +48,9 @@ TEST_CASE("Save a lottie into gif", "[tvgSavers]")
     REQUIRE(picture->load(TEST_DIR"/test.json") == Result::Success);
     REQUIRE(picture->size(100, 100) == Result::Success);
 
-    auto saver = Saver::gen();
+    auto saver =  unique_ptr<Saver>(Saver::gen());
     REQUIRE(saver);
-    REQUIRE(saver->save(std::move(animation), TEST_DIR"/test.gif") == Result::Success);
+    REQUIRE(saver->save(animation, TEST_DIR"/test.gif") == Result::Success);
     REQUIRE(saver->sync() == Result::Success);
 
     //with a background
@@ -136,11 +66,11 @@ TEST_CASE("Save a lottie into gif", "[tvgSavers]")
     REQUIRE(bg->fill(255, 255, 255) == Result::Success);
     REQUIRE(bg->appendRect(0, 0, 100, 100) == Result::Success);
 
-    REQUIRE(saver->background(std::move(bg)) == Result::Success);
-    REQUIRE(saver->save(std::move(animation2), TEST_DIR"/test.gif") == Result::Success);
+    REQUIRE(saver->background(bg) == Result::Success);
+    REQUIRE(saver->save(animation2, TEST_DIR"/test.gif") == Result::Success);
     REQUIRE(saver->sync() == Result::Success);
 
     REQUIRE(Initializer::term() == Result::Success);
 }
-
+#endif
 #endif

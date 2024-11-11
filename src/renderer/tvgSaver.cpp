@@ -21,12 +21,10 @@
  */
 
 #include "tvgCommon.h"
+#include "tvgStr.h"
 #include "tvgSaveModule.h"
 #include "tvgPaint.h"
 
-#ifdef THORVG_TVG_SAVER_SUPPORT
-    #include "tvgTvgSaver.h"
-#endif
 #ifdef THORVG_GIF_SAVER_SUPPORT
     #include "tvgGifSaver.h"
 #endif
@@ -51,12 +49,6 @@ struct Saver::Impl
 static SaveModule* _find(FileType type)
 {
     switch(type) {
-        case FileType::Tvg: {
-#ifdef THORVG_TVG_SAVER_SUPPORT
-            return new TvgSaver;
-#endif
-            break;
-        }
         case FileType::Gif: {
 #ifdef THORVG_GIF_SAVER_SUPPORT
             return new GifSaver;
@@ -71,10 +63,6 @@ static SaveModule* _find(FileType type)
 #ifdef THORVG_LOG_ENABLED
     const char *format;
     switch(type) {
-        case FileType::Tvg: {
-            format = "TVG";
-            break;
-        }
         case FileType::Gif: {
             format = "GIF";
             break;
@@ -90,14 +78,10 @@ static SaveModule* _find(FileType type)
 }
 
 
-static SaveModule* _find(const string& path)
+static SaveModule* _find(const char* filename)
 {
-    auto ext = path.substr(path.find_last_of(".") + 1);
-    if (!ext.compare("tvg")) {
-        return _find(FileType::Tvg);
-    } else if (!ext.compare("gif")) {
-        return _find(FileType::Gif);
-    }
+    auto ext = strExtension(filename);
+    if (ext && !strcmp(ext, "gif")) return _find(FileType::Gif);
     return nullptr;
 }
 
@@ -117,71 +101,69 @@ Saver::~Saver()
 }
 
 
-Result Saver::save(unique_ptr<Paint> paint, const string& path, uint32_t quality) noexcept
+Result Saver::save(Paint* paint, const char* filename, uint32_t quality) noexcept
 {
-    auto p = paint.release();
-    if (!p) return Result::MemoryCorruption;
+    if (!paint) return Result::MemoryCorruption;
 
     //Already on saving another resource.
     if (pImpl->saveModule) {
-        if (P(p)->refCnt == 0) delete(p);
+        if (P(paint)->refCnt == 0) delete(paint);
         return Result::InsufficientCondition;
     }
 
-    if (auto saveModule = _find(path)) {
-        if (saveModule->save(p, pImpl->bg, path, quality)) {
+    if (auto saveModule = _find(filename)) {
+        if (saveModule->save(paint, pImpl->bg, filename, quality)) {
             pImpl->saveModule = saveModule;
             return Result::Success;
         } else {
-            if (P(p)->refCnt == 0) delete(p);
+            if (P(paint)->refCnt == 0) delete(paint);
             delete(saveModule);
             return Result::Unknown;
         }
     }
-    if (P(p)->refCnt == 0) delete(p);
+    if (P(paint)->refCnt == 0) delete(paint);
     return Result::NonSupport;
 }
 
 
-Result Saver::background(unique_ptr<Paint> paint) noexcept
+Result Saver::background(Paint* paint) noexcept
 {
     delete(pImpl->bg);
-    pImpl->bg = paint.release();
+    pImpl->bg = paint;
 
     return Result::Success;
 }
 
 
-Result Saver::save(unique_ptr<Animation> animation, const string& path, uint32_t quality, uint32_t fps) noexcept
+Result Saver::save(Animation* animation, const char* filename, uint32_t quality, uint32_t fps) noexcept
 {
-    auto a = animation.release();
-    if (!a) return Result::MemoryCorruption;
+    if (!animation) return Result::MemoryCorruption;
 
     //animation holds the picture, it must be 1 at the bottom.
-    auto remove = PP(a->picture())->refCnt <= 1 ? true : false;
+    auto remove = PP(animation->picture())->refCnt <= 1 ? true : false;
 
-    if (tvg::zero(a->totalFrame())) {
-        if (remove) delete(a);
+    if (tvg::zero(animation->totalFrame())) {
+        if (remove) delete(animation);
         return Result::InsufficientCondition;
     }
 
     //Already on saving another resource.
     if (pImpl->saveModule) {
-        if (remove) delete(a);
+        if (remove) delete(animation);
         return Result::InsufficientCondition;
     }
 
-    if (auto saveModule = _find(path)) {
-        if (saveModule->save(a, pImpl->bg, path, quality, fps)) {
+    if (auto saveModule = _find(filename)) {
+        if (saveModule->save(animation, pImpl->bg, filename, quality, fps)) {
             pImpl->saveModule = saveModule;
             return Result::Success;
         } else {
-            if (remove) delete(a);
+            if (remove) delete(animation);
             delete(saveModule);
             return Result::Unknown;
         }
     }
-    if (remove) delete(a);
+    if (remove) delete(animation);
     return Result::NonSupport;
 }
 
@@ -197,7 +179,7 @@ Result Saver::sync() noexcept
 }
 
 
-unique_ptr<Saver> Saver::gen() noexcept
+Saver* Saver::gen() noexcept
 {
-    return unique_ptr<Saver>(new Saver);
+    return new Saver;
 }

@@ -25,10 +25,11 @@
 #include "catch.hpp"
 
 using namespace tvg;
+using namespace std;
 
 TEST_CASE("Shape Creation", "[tvgShape]")
 {
-    auto shape = Shape::gen();
+    auto shape = unique_ptr<Shape>(Shape::gen());
     REQUIRE(shape);
 
     REQUIRE(shape->type() == Type::Shape);
@@ -36,7 +37,7 @@ TEST_CASE("Shape Creation", "[tvgShape]")
 
 TEST_CASE("Appending Commands", "[tvgShape]")
 {
-    auto shape = Shape::gen();
+    auto shape = unique_ptr<Shape>(Shape::gen());
     REQUIRE(shape);
 
     REQUIRE(shape->close() == Result::Success);
@@ -62,7 +63,7 @@ TEST_CASE("Appending Commands", "[tvgShape]")
 
 TEST_CASE("Appending Shapes", "[tvgShape]")
 {
-    auto shape = Shape::gen();
+    auto shape = unique_ptr<Shape>(Shape::gen());
     REQUIRE(shape);
 
     REQUIRE(shape->moveTo(100, 100) == Result::Success);
@@ -80,7 +81,7 @@ TEST_CASE("Appending Shapes", "[tvgShape]")
 
 TEST_CASE("Appending Paths", "[tvgShape]")
 {
-    auto shape = Shape::gen();
+    auto shape = unique_ptr<Shape>(Shape::gen());
     REQUIRE(shape);
 
     //Negative cases
@@ -127,7 +128,7 @@ TEST_CASE("Appending Paths", "[tvgShape]")
 
 TEST_CASE("Stroking", "[tvgShape]")
 {
-    auto shape = Shape::gen();
+    auto shape = unique_ptr<Shape>(Shape::gen());
     REQUIRE(shape);
 
     //Stroke Order Before Stroke Setting
@@ -192,16 +193,7 @@ TEST_CASE("Stroking", "[tvgShape]")
     REQUIRE(shape->strokeMiterlimit() == 1000.0f);
     REQUIRE(shape->strokeMiterlimit(-0.001f) == Result::InvalidArguments);
 
-    //Stroke Trim
-    float begin, end;
-    REQUIRE(shape->strokeTrim(&begin, &end) == true);
-    REQUIRE(begin == Approx(0.0).margin(0.000001));
-    REQUIRE(end == Approx(1.0).margin(0.000001));
-
     REQUIRE(shape->strokeTrim(0.3f, 0.88f, false) == Result::Success);
-    REQUIRE(shape->strokeTrim(&begin, &end) == false);
-    REQUIRE(begin == Approx(0.3).margin(0.000001));
-    REQUIRE(end == Approx(0.88).margin(0.000001));
 
     //Stroke Order After Stroke Setting
     REQUIRE(shape->order(true) == Result::Success);
@@ -210,7 +202,7 @@ TEST_CASE("Stroking", "[tvgShape]")
 
 TEST_CASE("Shape Filling", "[tvgShape]")
 {
-    auto shape = Shape::gen();
+    auto shape = unique_ptr<Shape>(Shape::gen());
     REQUIRE(shape);
 
     //Fill Color

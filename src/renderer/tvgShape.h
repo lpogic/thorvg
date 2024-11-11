@@ -51,17 +51,18 @@ struct Shape::Impl
 
     bool render(RenderMethod* renderer)
     {
-        Compositor* cmp = nullptr;
-        bool ret;
+        if (!rd) return false;
 
-        renderer->blend(shape->blend(), !needComp);
+        RenderCompositor* cmp = nullptr;
+
+        renderer->blend(PP(shape)->blendMethod);
 
         if (needComp) {
             cmp = renderer->target(bounds(renderer), renderer->colorSpace());
-            renderer->beginComposite(cmp, CompositeMethod::None, opacity);
+            renderer->beginComposite(cmp, MaskMethod::None, opacity);
         }
 
-        ret = renderer->renderShape(rd);
+        auto ret = renderer->renderShape(rd);
         if (cmp) renderer->endComposite(cmp);
         return ret;
     }
@@ -79,19 +80,18 @@ struct Shape::Impl
 
         //Composition test
         const Paint* target;
-        auto method = shape->composite(&target);
-        if (!target || method == CompositeMethod::ClipPath) return false;
-        if (target->pImpl->opacity == 255 || target->pImpl->opacity == 0) {
-            if (target->type() == Type::Shape) {
-                auto shape = static_cast<const Shape*>(target);
-                if (!shape->fill()) {
-                    uint8_t r, g, b, a;
-                    shape->fillColor(&r, &g, &b, &a);
-                    if (a == 0 || a == 255) {
-                        if (method == CompositeMethod::LumaMask || method == CompositeMethod::InvLumaMask) {
-                            if ((r == 255 && g == 255 && b == 255) || (r == 0 && g == 0 && b == 0)) return false;
-                        } else return false;
-                    }
+        auto method = shape->mask(&target);
+        if (!target) return false;
+
+        if ((target->pImpl->opacity == 255 || target->pImpl->opacity == 0) && target->type() == Type::Shape) {
+            auto shape = static_cast<const Shape*>(target);
+            if (!shape->fill()) {
+                uint8_t r, g, b, a;
+                shape->fillColor(&r, &g, &b, &a);
+                if (a == 0 || a == 255) {
+                    if (method == MaskMethod::Luma || method == MaskMethod::InvLuma) {
+                        if ((r == 255 && g == 255 && b == 255) || (r == 0 && g == 0 && b == 0)) return false;
+                    } else return false;
                 }
             }
         }
@@ -117,6 +117,7 @@ struct Shape::Impl
 
     RenderRegion bounds(RenderMethod* renderer)
     {
+        if (!rd) return {0, 0, 0, 0};
         return renderer->region(rd);
     }
 
@@ -277,14 +278,13 @@ struct Shape::Impl
         flag |= RenderUpdateFlag::Stroke;
     }
 
-    Result strokeFill(unique_ptr<Fill> f)
+    Result strokeFill(Fill* f)
     {
-        auto p = f.release();
-        if (!p) return Result::MemoryCorruption;
+        if (!f) return Result::MemoryCorruption;
 
         if (!rs.stroke) rs.stroke = new RenderStroke();
-        if (rs.stroke->fill && rs.stroke->fill != p) delete(rs.stroke->fill);
-        rs.stroke->fill = p;
+        if (rs.stroke->fill && rs.stroke->fill != f) delete(rs.stroke->fill);
+        rs.stroke->fill = f;
         rs.stroke->color[3] = 0;
 
         flag |= RenderUpdateFlag::Stroke;
@@ -350,7 +350,7 @@ struct Shape::Impl
     {
         auto shape = static_cast<Shape*>(ret);
         if (shape) shape->reset();
-        else shape = Shape::gen().release();
+        else shape = Shape::gen();
 
         auto dup = shape->pImpl;
         delete(dup->rs.fill);

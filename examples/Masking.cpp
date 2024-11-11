@@ -47,9 +47,9 @@ struct UserExample : tvgexam::Example
         nMask->appendCircle(220, 220, 125, 125);
         nMask->fill(255, 255, 255);       //AlphaMask RGB channels are unused.
 
-        mask->composite(std::move(nMask), tvg::CompositeMethod::AlphaMask);
-        shape->composite(std::move(mask), tvg::CompositeMethod::AlphaMask);
-        canvas->push(std::move(shape));
+        mask->mask(nMask, tvg::MaskMethod::Alpha);
+        shape->mask(mask, tvg::MaskMethod::Alpha);
+        canvas->push(shape);
 
         //SVG
         auto svg = tvg::Picture::gen();
@@ -63,8 +63,8 @@ struct UserExample : tvgexam::Example
         mask2->appendCircle(150, 500, 75, 75);
         mask2->appendRect(150, 500, 200, 200, 30, 30);
         mask2->fill(255, 255, 255);       //AlphaMask RGB channels are unused.
-        svg->composite(std::move(mask2), tvg::CompositeMethod::AlphaMask);
-        canvas->push(std::move(svg));
+        svg->mask(mask2, tvg::MaskMethod::Alpha);
+        canvas->push(svg);
 
         //Star
         auto star = tvg::Shape::gen();
@@ -89,8 +89,8 @@ struct UserExample : tvgexam::Example
         mask3->appendCircle(600, 200, 125, 125);
         mask3->fill(255, 255, 255);       //AlphaMask RGB channels are unused.
         mask3->opacity(200);
-        star->composite(std::move(mask3), tvg::CompositeMethod::AlphaMask);
-        canvas->push(std::move(star));
+        star->mask(mask3, tvg::MaskMethod::Alpha);
+        canvas->push(star);
 
         //Image
         ifstream file(EXAMPLE_DIR"/image/rawimage_200x300.raw", ios::binary);
@@ -100,7 +100,7 @@ struct UserExample : tvgexam::Example
         file.close();
 
         auto image = tvg::Picture::gen();
-        if (!tvgexam::verify(image->load(data, 200, 300, true, true))) return false;
+        if (!tvgexam::verify(image->load(data, 200, 300, tvg::ColorSpace::ARGB8888, true))) return false;
         image->translate(500, 400);
 
         //Mask4
@@ -118,8 +118,8 @@ struct UserExample : tvgexam::Example
         mask4->close();
         mask4->fill(255, 255, 255);        //AlphaMask RGB channels are unused.
         mask4->opacity(70);
-        image->composite(std::move(mask4), tvg::CompositeMethod::AlphaMask);
-        canvas->push(std::move(image));
+        image->mask(mask4, tvg::MaskMethod::Alpha);
+        canvas->push(image);
 
         free(data);
 

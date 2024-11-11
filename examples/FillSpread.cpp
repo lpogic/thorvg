@@ -49,12 +49,12 @@ struct UserExample : tvgexam::Example
             shape1->appendRect(x1, y1, 2.0f * r, 2.0f * r);
 
             auto fill1 = tvg::RadialGradient::gen();
-            fill1->radial(x1 + r, y1 + r, 40.0f);
+            fill1->radial(x1 + r, y1 + r, 40.0f, x1 + r, y1 + r, 0.0f);
             fill1->colorStops(colorStops, colorCnt);
             fill1->spread(tvg::FillSpread::Pad);
-            shape1->fill(std::move(fill1));
+            shape1->fill(fill1);
 
-            canvas->push(std::move(shape1));
+            canvas->push(shape1);
 
             //Reflect
             x1 = 280.0f;
@@ -62,12 +62,12 @@ struct UserExample : tvgexam::Example
             shape2->appendRect(x1, y1, 2.0f * r, 2.0f * r);
 
             auto fill2 = tvg::RadialGradient::gen();
-            fill2->radial(x1 + r, y1 + r, 40.0f);
+            fill2->radial(x1 + r, y1 + r, 40.0f, x1 + r, y1 + r, 0.0f);
             fill2->colorStops(colorStops, colorCnt);
             fill2->spread(tvg::FillSpread::Reflect);
-            shape2->fill(std::move(fill2));
+            shape2->fill(fill2);
 
-            canvas->push(std::move(shape2));
+            canvas->push(shape2);
 
             //Repeat
             x1 = 540.0f;
@@ -75,12 +75,12 @@ struct UserExample : tvgexam::Example
             shape3->appendRect(x1, y1, 2.0f * r, 2.0f * r);
 
             auto fill3 = tvg::RadialGradient::gen();
-            fill3->radial(x1 + r, y1 + r, 40.0f);
+            fill3->radial(x1 + r, y1 + r, 40.0f, x1 + r, y1 + r, 0.0f);
             fill3->colorStops(colorStops, colorCnt);
             fill3->spread(tvg::FillSpread::Repeat);
-            shape3->fill(std::move(fill3));
+            shape3->fill(fill3);
 
-            canvas->push(std::move(shape3));
+            canvas->push(shape3);
         }
 
         //Linear grad
@@ -96,9 +96,9 @@ struct UserExample : tvgexam::Example
             fill1->linear(x1, y1, x1 + 50.0f, y1 + 50.0f);
             fill1->colorStops(colorStops, colorCnt);
             fill1->spread(tvg::FillSpread::Pad);
-            shape1->fill(std::move(fill1));
+            shape1->fill(fill1);
 
-            canvas->push(std::move(shape1));
+            canvas->push(shape1);
 
             //Reflect
             x1 = 280.0f;
@@ -109,9 +109,9 @@ struct UserExample : tvgexam::Example
             fill2->linear(x1, y1, x1 + 50.0f, y1 + 50.0f);
             fill2->colorStops(colorStops, colorCnt);
             fill2->spread(tvg::FillSpread::Reflect);
-            shape2->fill(std::move(fill2));
+            shape2->fill(fill2);
 
-            canvas->push(std::move(shape2));
+            canvas->push(shape2);
 
             //Repeat
             x1 = 540.0f;
@@ -122,9 +122,9 @@ struct UserExample : tvgexam::Example
             fill3->linear(x1, y1, x1 + 50.0f, y1 + 50.0f);
             fill3->colorStops(colorStops, colorCnt);
             fill3->spread(tvg::FillSpread::Repeat);
-            shape3->fill(std::move(fill3));
+            shape3->fill(fill3);
 
-            canvas->push(std::move(shape3));
+            canvas->push(shape3);
 
             return true;
         }

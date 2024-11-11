@@ -37,9 +37,11 @@ struct WgMeshData {
     void drawFan(WgContext& context, WGPURenderPassEncoder renderPassEncoder);
     void drawImage(WgContext& context, WGPURenderPassEncoder renderPassEncoder);
 
-    void update(WgContext& context, const WgPolyline* polyline);
-    void update(WgContext& context, const WgGeometryData* geometryData);
-    void update(WgContext& context, const WgPoint pmin, const WgPoint pmax);
+    void update(WgContext& context, const WgVertexBuffer& vertexBuffer);
+    void update(WgContext& context, const WgVertexBufferInd& vertexBufferInd);
+    void bbox(WgContext& context, const Point pmin, const Point pmax);
+    void imageBox(WgContext& context, float w, float h);
+    void blitBox(WgContext& context);
     void release(WgContext& context);
 };
 
@@ -58,9 +60,9 @@ struct WgMeshDataGroup {
 
     Array<WgMeshData*> meshes{};
     
-    void append(WgContext& context, const WgPolyline* polyline);
-    void append(WgContext& context, const WgGeometryData* geometryData);
-    void append(WgContext& context, const WgPoint pmin, const WgPoint pmax);
+    void append(WgContext& context, const WgVertexBuffer& vertexBuffer);
+    void append(WgContext& context, const WgVertexBufferInd& vertexBufferInd);
+    void append(WgContext& context, const Point pmin, const Point pmax);
     void release(WgContext& context);
 };
 
@@ -68,7 +70,7 @@ struct WgImageData {
     WGPUTexture texture{};
     WGPUTextureView textureView{};
 
-    void update(WgContext& context, Surface* surface);
+    void update(WgContext& context, RenderSurface* surface);
     void release(WgContext& context);
 };
 
@@ -82,6 +84,7 @@ struct WgRenderSettings
     WGPUTexture texGradient{};
     WGPUTextureView texViewGradient{};
     WGPUBuffer bufferGroupGradient{};
+    WGPUBuffer bufferGroupTransfromGrad{};
     WGPUBindGroup bindGroupGradient{};
     WgRenderSettingsType fillType{};
     WgRenderRasterType rasterType{};
@@ -93,6 +96,9 @@ struct WgRenderSettings
 
 struct WgRenderDataPaint
 {
+    // global strokes generator. single instance
+    static WgVertexBufferInd* gStrokesGenerator;
+
     WGPUBuffer bufferModelMat{};
     WGPUBuffer bufferBlendSettings{};
     WGPUBindGroup bindGroupPaint{};
@@ -118,17 +124,17 @@ struct WgRenderDataShape: public WgRenderDataPaint
     WgMeshData meshDataBBox{};
     WgMeshDataGroup meshGroupStrokes{};
     WgMeshDataGroup meshGroupStrokesBBox{};
-    WgPoint pMin{};
-    WgPoint pMax{};
+    Point pMin{};
+    Point pMax{};
     bool strokeFirst{};
     FillRule fillRule{};
 
-    void updateBBox(WgPoint pmin, WgPoint pmax);
-    void updateAABB(const Matrix& rt);
-    void updateMeshes(WgContext& context, const RenderShape& rshape, const Matrix& rt);
-    void updateShapes(WgContext& context, const WgPolyline* polyline);
-    void updateStrokesList(WgContext& context, Array<WgPolyline*> polylines, const RenderStroke* rstroke, float totalLen, float trimBegin, float trimEnd);
-    void updateStrokes(WgContext& context, const WgPolyline* polyline, const RenderStroke* rstroke, float trimBegin, float trimEnd);
+    void appendShape(WgContext context, const WgVertexBuffer& vertexBuffer);
+    void appendStroke(WgContext context, const WgVertexBufferInd& vertexBufferInd);
+    void updateBBox(Point pmin, Point pmax);
+    void updateAABB(const Matrix& tr);
+    void updateMeshes(WgContext& context, const RenderShape& rshape, const Matrix& tr);
+    void proceedStrokes(WgContext context, const RenderStroke* rstroke, float tbeg, float tend, const WgVertexBuffer& buff);
     void releaseMeshes(WgContext& context);
     void release(WgContext& context) override;
     Type type() override { return Type::Shape; };

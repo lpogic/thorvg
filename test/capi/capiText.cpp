@@ -145,7 +145,7 @@ TEST_CASE("Set gradient text fill", "[capiText]")
 
     Tvg_Gradient *gradientRad = tvg_radial_gradient_new();
     REQUIRE(gradientRad);
-    REQUIRE(tvg_radial_gradient_set(gradientRad, 10.0, 15.0, 30.0) == TVG_RESULT_SUCCESS);
+    REQUIRE(tvg_radial_gradient_set(gradientRad, 10.0, 15.0, 30.0, 10.0, 15.0, 0.0) == TVG_RESULT_SUCCESS);
 
     Tvg_Gradient *gradientLin = tvg_linear_gradient_new();
     REQUIRE(gradientLin);
@@ -153,17 +153,14 @@ TEST_CASE("Set gradient text fill", "[capiText]")
 
     REQUIRE(tvg_font_load(TEST_DIR"/Arial.ttf") == TVG_RESULT_SUCCESS);
 
-    REQUIRE(tvg_text_set_linear_gradient(text, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
-    REQUIRE(tvg_text_set_radial_gradient(text, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
+    REQUIRE(tvg_text_set_gradient(text, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
 
     REQUIRE(tvg_text_set_font(text, "Arial", 10.0f, "") == TVG_RESULT_SUCCESS);
 
-    REQUIRE(tvg_text_set_linear_gradient(text, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
-    REQUIRE(tvg_text_set_radial_gradient(text, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
-    REQUIRE(tvg_text_set_linear_gradient(NULL, NULL) == TVG_RESULT_INVALID_ARGUMENT);
-    REQUIRE(tvg_text_set_radial_gradient(NULL, NULL) == TVG_RESULT_INVALID_ARGUMENT);
-    REQUIRE(tvg_text_set_linear_gradient(text, gradientLin) == TVG_RESULT_SUCCESS);
-    REQUIRE(tvg_text_set_radial_gradient(text, gradientRad) == TVG_RESULT_SUCCESS);
+    REQUIRE(tvg_text_set_gradient(text, NULL) == TVG_RESULT_MEMORY_CORRUPTION);
+    REQUIRE(tvg_text_set_gradient(NULL, NULL) == TVG_RESULT_INVALID_ARGUMENT);
+    REQUIRE(tvg_text_set_gradient(text, gradientLin) == TVG_RESULT_SUCCESS);
+    REQUIRE(tvg_text_set_gradient(text, gradientRad) == TVG_RESULT_SUCCESS);
 
     REQUIRE(tvg_paint_del(text) == TVG_RESULT_SUCCESS);
 }

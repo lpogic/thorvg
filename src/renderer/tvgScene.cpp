@@ -20,7 +20,25 @@
  * SOFTWARE.
  */
 
+#include <cstdarg>
 #include "tvgScene.h"
+
+/************************************************************************/
+/* Internal Class Implementation                                        */
+/************************************************************************/
+
+Result Scene::Impl::resetEffects()
+{
+    if (effects) {
+        for (auto e = effects->begin(); e < effects->end(); ++e) {
+            delete(*e);
+        }
+        delete(effects);
+        effects = nullptr;
+    }
+    return Result::Success;
+}
+
 
 /************************************************************************/
 /* External Class Implementation                                        */
@@ -37,15 +55,9 @@ Scene::~Scene()
 }
 
 
-unique_ptr<Scene> Scene::gen() noexcept
+Scene* Scene::gen() noexcept
 {
-    return unique_ptr<Scene>(new Scene);
-}
-
-
-TVG_DEPRECATED uint32_t Scene::identifier() noexcept
-{
-    return (uint32_t) Type::Scene;
+    return new Scene;
 }
 
 
@@ -55,12 +67,11 @@ Type Scene::type() const noexcept
 }
 
 
-Result Scene::push(unique_ptr<Paint> paint) noexcept
+Result Scene::push(Paint* paint) noexcept
 {
-    auto p = paint.release();
-    if (!p) return Result::MemoryCorruption;
-    PP(p)->ref();
-    pImpl->paints.push_back(p);
+    if (!paint) return Result::MemoryCorruption;
+    PP(paint)->ref();
+    pImpl->paints.push_back(paint);
 
     return Result::Success;
 }
@@ -77,4 +88,35 @@ Result Scene::clear(bool free) noexcept
 list<Paint*>& Scene::paints() noexcept
 {
     return pImpl->paints;
+}
+
+
+Result Scene::push(SceneEffect effect, ...) noexcept
+{
+    if (effect == SceneEffect::ClearAll) return pImpl->resetEffects();
+
+    if (!pImpl->effects) pImpl->effects = new Array<RenderEffect*>;
+
+    va_list args;
+    va_start(args, effect);
+
+    RenderEffect* re = nullptr;
+
+    switch (effect) {
+        case SceneEffect::GaussianBlur: {
+            re = RenderEffectGaussianBlur::gen(args);
+            break;
+        }
+        case SceneEffect::DropShadow: {
+            re = RenderEffectDropShadow::gen(args);
+            break;
+        }
+        default: break;
+    }
+
+    if (!re) return Result::InvalidArguments;
+
+    pImpl->effects->push(re);
+
+    return Result::Success;
 }

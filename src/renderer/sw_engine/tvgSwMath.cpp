@@ -44,7 +44,7 @@ SwFixed mathMean(SwFixed angle1, SwFixed angle2)
 }
 
 
-bool mathSmallCubic(const SwPoint* base, SwFixed& angleIn, SwFixed& angleMid, SwFixed& angleOut)
+int mathCubicAngle(const SwPoint* base, SwFixed& angleIn, SwFixed& angleMid, SwFixed& angleOut)
 {
     auto d1 = base[2] - base[3];
     auto d2 = base[1] - base[2];
@@ -54,7 +54,7 @@ bool mathSmallCubic(const SwPoint* base, SwFixed& angleIn, SwFixed& angleMid, Sw
         if (d2.small()) {
             if (d3.small()) {
                 angleIn = angleMid = angleOut = 0;
-                return true;
+                return -1;  //ignoreable
             } else {
                 angleIn = angleMid = angleOut = mathAtan(d3);
             }
@@ -90,8 +90,8 @@ bool mathSmallCubic(const SwPoint* base, SwFixed& angleIn, SwFixed& angleMid, Sw
     auto theta1 = abs(mathDiff(angleIn, angleMid));
     auto theta2 = abs(mathDiff(angleMid, angleOut));
 
-    if ((theta1 < (SW_ANGLE_PI / 8)) && (theta2 < (SW_ANGLE_PI / 8))) return true;
-    return false;
+    if ((theta1 < (SW_ANGLE_PI / 8)) && (theta2 < (SW_ANGLE_PI / 8))) return 0; //small size
+    return 1;
 }
 
 
@@ -242,6 +242,15 @@ void mathSplitCubic(SwPoint* base)
 }
 
 
+void mathSplitLine(SwPoint* base)
+{
+    base[2] = base[1];
+
+    base[1].x = (base[0].x + base[1].x) >> 1;
+    base[1].y = (base[0].y + base[1].y) >> 1;
+}
+
+
 SwFixed mathDiff(SwFixed angle1, SwFixed angle2)
 {
     auto delta = angle2 - angle1;
@@ -303,9 +312,7 @@ bool mathUpdateOutlineBBox(const SwOutline* outline, const SwBBox& clipRegion, S
         if (yMin > pt->y) yMin = pt->y;
         if (yMax < pt->y) yMax = pt->y;
     }
-    //Since no antialiasing is applied in the Fast Track case,
-    //the rasterization region has to be rearranged.
-    //https://github.com/Samsung/thorvg/issues/916
+
     if (fastTrack) {
         renderRegion.min.x = static_cast<SwCoord>(nearbyint(xMin / 64.0f));
         renderRegion.max.x = static_cast<SwCoord>(nearbyint(xMax / 64.0f));

@@ -45,7 +45,7 @@ void PngLoader::run(unsigned tid)
     surface.stride = width;
     surface.w = width;
     surface.h = height;
-    surface.cs = ColorSpace::ABGR8888;
+    surface.cs = ColorSpace::ABGR8888S;
     surface.channelSize = sizeof(uint32_t);
 }
 
@@ -68,9 +68,9 @@ PngLoader::~PngLoader()
 }
 
 
-bool PngLoader::open(const string& path)
+bool PngLoader::open(const char* path)
 {
-    auto pngFile = fopen(path.c_str(), "rb");
+    auto pngFile = fopen(path, "rb");
     if (!pngFile) return false;
 
     auto ret = false;
@@ -105,7 +105,7 @@ finalize:
 }
 
 
-bool PngLoader::open(const char* data, uint32_t size, TVG_UNUSED const string& rpath, bool copy)
+bool PngLoader::open(const char* data, uint32_t size, TVG_UNUSED const char* rpath, bool copy)
 {
     unsigned int width, height;
     if (lodepng_inspect(&width, &height, &state, (unsigned char*)(data), size) > 0) return false;
@@ -140,7 +140,7 @@ bool PngLoader::read()
 }
 
 
-Surface* PngLoader::bitmap()
+RenderSurface* PngLoader::bitmap()
 {
     this->done();
     return ImageLoader::bitmap();

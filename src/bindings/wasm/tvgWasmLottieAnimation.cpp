@@ -21,6 +21,7 @@
  */
 
 #include <thorvg.h>
+#include <emscripten.h>
 #include <emscripten/bind.h>
 #include "tvgPicture.h"
 #ifdef THORVG_WG_RASTER_SUPPORT
@@ -33,10 +34,51 @@ using namespace tvg;
 
 static const char* NoError = "None";
 
+#ifdef THORVG_WG_RASTER_SUPPORT
+    static WGPUInstance instance{};
+    static WGPUAdapter adapter{};
+    static WGPUDevice device{};
+#endif
+
+void init()
+{
+#ifdef THORVG_WG_RASTER_SUPPORT
+    //Init WebGPU
+    if (!instance) instance = wgpuCreateInstance(nullptr);
+
+    // request adapter
+    if (!adapter) {
+        const WGPURequestAdapterOptions requestAdapterOptions { .nextInChain = nullptr, .powerPreference = WGPUPowerPreference_HighPerformance, .forceFallbackAdapter = false };
+        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) { *((WGPUAdapter*)pUserData) = adapter; };
+        wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &adapter);
+        while (!adapter) emscripten_sleep(10);
+    }
+
+    // request device
+    WGPUFeatureName featureNames[32]{};
+    size_t featuresCount = wgpuAdapterEnumerateFeatures(adapter, featureNames);
+    if (!device) {
+        const WGPUDeviceDescriptor deviceDesc { .nextInChain = nullptr, .label = "The device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
+        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const * message, void * pUserData) { *((WGPUDevice*)pUserData) = device; };
+        wgpuAdapterRequestDevice(adapter, &deviceDesc, onDeviceRequestEnded, &device);
+        while (!device) emscripten_sleep(10);
+    }
+#endif
+}
+
+void term()
+{
+#ifdef THORVG_WG_RASTER_SUPPORT
+    wgpuDeviceRelease(device);
+    wgpuAdapterRelease(adapter);
+    wgpuInstanceRelease(instance);
+#endif
+}
+
 struct TvgEngineMethod
 {
     virtual ~TvgEngineMethod() {}
-    virtual unique_ptr<Canvas> init(string&) = 0;
+    virtual Canvas* init(string&) = 0;
     virtual void resize(Canvas* canvas, int w, int h) = 0;
     virtual val output(int w, int h)
     {
@@ -54,7 +96,7 @@ struct TvgSwEngine : TvgEngineMethod
         Initializer::term(tvg::CanvasEngine::Sw);
     }
 
-    unique_ptr<Canvas> init(string&) override
+    Canvas* init(string&) override
     {
         Initializer::init(0, tvg::CanvasEngine::Sw);
         return SwCanvas::gen();
@@ -64,7 +106,7 @@ struct TvgSwEngine : TvgEngineMethod
     {
         free(buffer);
         buffer = (uint8_t*)malloc(w * h * sizeof(uint32_t));
-        static_cast<SwCanvas*>(canvas)->target((uint32_t *)buffer, w, w, h, SwCanvas::ABGR8888S);
+        static_cast<SwCanvas*>(canvas)->target((uint32_t *)buffer, w, w, h, ColorSpace::ABGR8888S);
     }
 
     val output(int w, int h) override
@@ -77,7 +119,6 @@ struct TvgSwEngine : TvgEngineMethod
 struct TvgWgEngine : TvgEngineMethod
 {
     #ifdef THORVG_WG_RASTER_SUPPORT
-        WGPUInstance instance{};
         WGPUSurface surface{};
     #endif
 
@@ -85,17 +126,13 @@ struct TvgWgEngine : TvgEngineMethod
     {
         #ifdef THORVG_WG_RASTER_SUPPORT
             wgpuSurfaceRelease(surface);
-            wgpuInstanceRelease(instance);
         #endif
         Initializer::term(tvg::CanvasEngine::Wg);
     }
 
-    unique_ptr<Canvas> init(string& selector) override
+    Canvas* init(string& selector) override
     {
         #ifdef THORVG_WG_RASTER_SUPPORT
-            //Init WebGPU
-            instance = wgpuCreateInstance(nullptr);
-
             WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
             canvasDesc.chain.next = nullptr;
             canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
@@ -112,7 +149,9 @@ struct TvgWgEngine : TvgEngineMethod
 
     void resize(Canvas* canvas, int w, int h) override
     {
-        static_cast<WgCanvas*>(canvas)->target(instance, surface, w, h);
+    #ifdef THORVG_WG_RASTER_SUPPORT
+        static_cast<WgCanvas*>(canvas)->target(instance, surface, w, h, device);
+    #endif
     }
 };
 
@@ -122,6 +161,8 @@ class __attribute__((visibility("default"))) TvgLottieAnimation
 public:
     ~TvgLottieAnimation()
     {
+        delete(animation);
+        delete(canvas);
         delete(engine);
     }
 
@@ -189,10 +230,12 @@ public:
             return false;
         }
 
+        //FIXME: remove this copy, save with a file passing.
         this->data = data; //back up for saving
 
         canvas->clear(true);
 
+        delete(animation);
         animation = Animation::gen();
 
         string filetype = mimetype;
@@ -200,7 +243,7 @@ public:
             filetype = "lottie";
         }
 
-        if (animation->picture()->load(data.c_str(), data.size(), filetype, rpath, false) != Result::Success) {
+        if (animation->picture()->load(data.c_str(), data.size(), filetype.c_str(), rpath.c_str(), false) != Result::Success) {
             errorMsg = "load() fail";
             return false;
         }
@@ -213,7 +256,7 @@ public:
 
         resize(width, height);
 
-        if (canvas->push(cast(animation->picture())) != Result::Success) {
+        if (canvas->push(animation->picture()) != Result::Success) {
             errorMsg = "push() fail";
             return false;
         }
@@ -289,7 +332,7 @@ public:
         this->width = width;
         this->height = height;
 
-        engine->resize(canvas.get(), width, height);
+        engine->resize(canvas, width, height);
 
         float scale;
         float shiftX = 0.0f, shiftY = 0.0f;
@@ -309,11 +352,7 @@ public:
     // Saver methods
     bool save(string mimetype)
     {
-        if (mimetype == "gif") {
-            return save2Gif();
-        } else if (mimetype == "tvg") {
-            return save2Tvg();
-        }
+        if (mimetype == "gif") return save2Gif();
 
         errorMsg = "Invalid mimetype";
         return false;
@@ -328,14 +367,14 @@ public:
             return false;
         }
 
-        auto saver = Saver::gen();
+        auto saver = unique_ptr<Saver>(Saver::gen());
         if (!saver) {
             errorMsg = "Invalid saver";
             return false;
         }
 
         //animation to save
-        auto animation = Animation::gen();
+        auto animation = unique_ptr<Animation>(Animation::gen());
         if (!animation) {
             errorMsg = "Invalid animation";
             return false;
@@ -371,40 +410,12 @@ public:
             return false;
         }
 
-        if (saver->save(std::move(animation), "output.gif", 100, 30) != tvg::Result::Success) {
+        if (saver->save(animation.release(), "output.gif", 100, 30) != tvg::Result::Success) {
             errorMsg = "save(), fail";
             return false;
         }
 
         saver->sync();
-
-        return true;
-    }
-
-    bool save2Tvg()
-    {
-        errorMsg = NoError;
-
-        if (!animation) return false;
-
-        auto saver = Saver::gen();
-        if (!saver) {
-            errorMsg = "Invalid saver";
-            return false;
-        }
-
-        //preserve the picture using the reference counting
-        PP(animation->picture())->ref();
-
-        if (saver->save(tvg::cast<Picture>(animation->picture()), "output.tvg") != tvg::Result::Success) {
-            PP(animation->picture())->unref();
-            errorMsg = "save(), fail";
-            return false;
-        }
-
-        saver->sync();
-
-        PP(animation->picture())->unref();
 
         return true;
     }
@@ -413,8 +424,8 @@ public:
 
 private:
     string                 errorMsg;
-    unique_ptr<Canvas>     canvas = nullptr;
-    unique_ptr<Animation>  animation = nullptr;
+    Canvas*                canvas = nullptr;
+    Animation*             animation = nullptr;
     TvgEngineMethod*       engine = nullptr;
     string                 data;
     uint32_t               width = 0;
@@ -425,6 +436,9 @@ private:
 
 EMSCRIPTEN_BINDINGS(thorvg_bindings)
 {
+    emscripten::function("init", &init);
+    emscripten::function("term", &term);
+
     class_<TvgLottieAnimation>("TvgLottieAnimation")
         .constructor<string, string>()
         .function("error", &TvgLottieAnimation ::error, allow_raw_pointers())

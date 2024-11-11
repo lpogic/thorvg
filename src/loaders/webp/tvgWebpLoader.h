@@ -37,12 +37,12 @@ public:
     WebpLoader();
     ~WebpLoader();
 
-    bool open(const string& path) override;
-    bool open(const char* data, uint32_t size, const string& rpath, bool copy) override;
+    bool open(const char* path) override;
+    bool open(const char* data, uint32_t size, const char* rpath, bool copy) override;
     bool read() override;
     bool close() override;
 
-    Surface* bitmap() override;
+    RenderSurface* bitmap() override;
 };
 
 #endif //_TVG_WEBP_LOADER_H_

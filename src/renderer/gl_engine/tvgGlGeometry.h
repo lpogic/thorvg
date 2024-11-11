@@ -80,106 +80,6 @@
         mat4[15] = mat3.e33;        \
     } while (false)
 
-class GlPoint
-{
-public:
-    float x = 0.0f;
-    float y = 0.0f;
-
-    GlPoint() = default;
-
-    GlPoint(float pX, float pY):x(pX), y(pY)
-    {
-    }
-
-    GlPoint(const Point& rhs):GlPoint(rhs.x, rhs.y)
-    {
-    }
-
-    GlPoint(const GlPoint& rhs) = default;
-    GlPoint(GlPoint&& rhs) = default;
-
-    GlPoint& operator= (const GlPoint& rhs) = default;
-    GlPoint& operator= (GlPoint&& rhs) = default;
-
-    GlPoint& operator= (const Point& rhs)
-    {
-        x = rhs.x;
-        y = rhs.y;
-        return *this;
-    }
-
-    bool operator== (const GlPoint& rhs) const
-    {
-        if (&rhs == this) return true;
-        if (rhs.x == this->x && rhs.y == this->y) return true;
-        return false;
-    }
-
-    bool operator!= (const GlPoint& rhs) const
-    {
-        if (&rhs == this) return true;
-        if (rhs.x != this->x || rhs.y != this->y) return true;
-        return false;
-    }
-
-    GlPoint operator+ (const GlPoint& rhs) const
-    {
-        return GlPoint(x + rhs.x, y + rhs.y);
-    }
-
-    GlPoint operator+ (const float c) const
-    {
-        return GlPoint(x + c, y + c);
-    }
-
-    GlPoint operator- (const GlPoint& rhs) const
-    {
-        return GlPoint(x - rhs.x, y - rhs.y);
-    }
-
-    GlPoint operator- (const float c) const
-    {
-        return GlPoint(x - c, y - c);
-    }
-
-    GlPoint operator* (const GlPoint& rhs) const
-    {
-        return GlPoint(x * rhs.x, y * rhs.y);
-    }
-
-    GlPoint operator* (const float c) const
-    {
-        return GlPoint(x * c, y * c);
-    }
-
-    GlPoint operator/ (const GlPoint& rhs) const
-    {
-        return GlPoint(x / rhs.x, y / rhs.y);
-    }
-
-    GlPoint operator/ (const float c) const
-    {
-        return GlPoint(x / c, y / c);
-    }
-
-    void mod()
-    {
-        x = fabsf(x);
-        y = fabsf(y);
-    }
-
-    void normalize()
-    {
-        auto length = sqrtf((x * x) + (y * y));
-        if (length != 0.0f) {
-            const auto inverseLen = 1.0f / length;
-            x *= inverseLen;
-            y *= inverseLen;
-        }
-    }
-};
-
 class GlStageBuffer;
 class GlRenderTask;
 
@@ -190,7 +90,7 @@ public:
     ~GlGeometry();
 
     bool tesselate(const RenderShape& rshape, RenderUpdateFlag flag);
-    bool tesselate(const Surface* image, RenderUpdateFlag flag);
+    bool tesselate(const RenderSurface* image, RenderUpdateFlag flag);
     void disableVertex(uint32_t location);
     bool draw(GlRenderTask* task, GlStageBuffer* gpuBuffer, RenderUpdateFlag flag);
     void updateTransform(const Matrix& m);

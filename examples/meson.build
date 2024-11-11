@@ -8,7 +8,7 @@ endif
 
 examples_dep = [dependency('sdl2')]
 
-if get_option('engines').contains('wg_beta')
+if all_engines or get_option('engines').contains('wg')
     examples_dep += dependency('wgpu_native')
     if host_machine.system() == 'darwin'
         add_languages('objcpp')
@@ -22,11 +22,13 @@ source_file = [
     'AnimateMasking.cpp',
     'Animation.cpp',
     'Blending.cpp',
-    'ClipPath.cpp',
+    'Clipping.cpp',
     'CustomTransform.cpp',
     'DataLoad.cpp',
     'DirectUpdate.cpp',
     'Duplicate.cpp',
+    'EffectGaussianBlur.cpp',
+    'EffectDropShadow.cpp',
     'FillRule.cpp',
     'FillSpread.cpp',
     'GifSaver.cpp',
@@ -45,7 +47,6 @@ source_file = [
     'Masking.cpp',
     'MaskingMethods.cpp',
     'MultiCanvas.cpp',
-    'MultiShapes.cpp',
     'Opacity.cpp',
     'Path.cpp',
     'Performance.cpp',
@@ -53,14 +54,13 @@ source_file = [
     'PicturePng.cpp',
     'PictureRaw.cpp',
     'PictureSvg.cpp',
-    'PictureTvg.cpp',
     'PictureWebp.cpp',
     'RadialGradient.cpp',
     'Retaining.cpp',
     'Scene.cpp',
     'SceneBlending.cpp',
     'SceneTransform.cpp',
-    'Shape.cpp',
+    'Shapes.cpp',
     'Stroke.cpp',
     'StrokeLine.cpp',
     'StrokeMiterlimit.cpp',
@@ -68,8 +68,6 @@ source_file = [
     'Svg.cpp',
     'Text.cpp',
     'Transform.cpp',
-    'Tvg.cpp',
-    'TvgSaver.cpp',
     'Update.cpp',
     'Viewport.cpp'
 ]

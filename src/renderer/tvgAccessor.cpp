@@ -50,20 +50,6 @@ static bool accessChildren(Iterator* it, function<bool(const Paint* paint, void*
 /* External Class Implementation                                        */
 /************************************************************************/
 
-TVG_DEPRECATED unique_ptr<Picture> Accessor::set(unique_ptr<Picture> picture, function<bool(const Paint* paint)> func) noexcept
-{
-    auto backward = [](const tvg::Paint* paint, void* data) -> bool
-    {
-        auto func = reinterpret_cast<function<bool(const Paint* paint)>*>(data);
-        if (!(*func)(paint)) return false;
-        return true;
-    };
-
-    set(picture.get(), backward, reinterpret_cast<void*>(&func));
-    return picture;
-}
-
-
 Result Accessor::set(const Picture* picture, function<bool(const Paint* paint, void* data)> func, void* data) noexcept
 {
     if (!picture || !func) return Result::InvalidArguments;
@@ -100,7 +86,7 @@ Accessor::Accessor() : pImpl(nullptr)
 }
 
 
-unique_ptr<Accessor> Accessor::gen() noexcept
+Accessor* Accessor::gen() noexcept
 {
-    return unique_ptr<Accessor>(new Accessor);
+    return new Accessor;
 }

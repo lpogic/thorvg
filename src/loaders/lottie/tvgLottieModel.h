@@ -77,11 +77,55 @@ struct LottieStroke
 };
 
 
+struct LottieEffect
+{
+    enum Type : uint8_t
+    {
+        DropShadow = 0,
+        GaussianBlur = 1,
+    };
+
+    virtual ~LottieEffect() {}
+
+    Type type;
+    bool enable = false;
+};
+
+
+struct LottieDropShadow : LottieEffect
+{
+    LottieColor color;
+    LottieFloat opacity = 0;
+    LottieAngle angle = 0.0f;
+    LottieSlider distance = 0.0f;
+    LottieSlider blurness = 0.0f;
+
+    LottieDropShadow()
+    {
+        type = DropShadow;
+    }
+};
+
+
+struct LottieGaussianBlur : LottieEffect
+{
+    LottieSlider blurness = 0.0f;
+    LottieCheckbox direction = 0;
+    LottieCheckbox wrap = 0;
+
+    LottieGaussianBlur()
+    {
+        type = GaussianBlur;
+    }
+};
+
+
 struct LottieMask
 {
     LottiePathSet pathset;
+    LottieFloat expand = 0.0f;
     LottieOpacity opacity = 255;
-    CompositeMethod method;
+    MaskMethod method;
     bool inverse = false;
 };
 
@@ -151,40 +195,40 @@ struct LottieGlyph
 };
 
 
-struct LottieTextStyle
-{
-    LottieColor fillColor = RGB24{255, 255, 255};
-    LottieColor strokeColor = RGB24{255, 255, 255};
-    LottiePosition position = Point{0, 0};
-    LottiePoint scale = Point{100, 100};
-    LottieFloat letterSpacing = 0.0f;
-    LottieFloat strokeWidth = 0.0f;
-    LottieFloat rotation = 0.0f;
-    LottieOpacity fillOpacity = 255;
-    LottieOpacity strokeOpacity = 255;
-    LottieOpacity opacity = 255;
-};
-
-
 struct LottieTextRange
 {
     enum Based : uint8_t { Chars = 1, CharsExcludingSpaces, Words, Lines };
     enum Shape : uint8_t { Square = 1, RampUp, RampDown, Triangle, Round, Smooth };
     enum Unit : uint8_t { Percent = 1, Index };
 
-    LottieTextStyle style;
+    struct {
+        LottieColor fillColor = RGB24{255, 255, 255};
+        LottieColor strokeColor = RGB24{255, 255, 255};
+        LottiePosition position = Point{0, 0};
+        LottiePoint scale = Point{100, 100};
+        LottieFloat letterSpacing = 0.0f;
+        LottieFloat lineSpacing = 0.0f;
+        LottieFloat strokeWidth = 0.0f;
+        LottieFloat rotation = 0.0f;
+        LottieOpacity fillOpacity = 255;
+        LottieOpacity strokeOpacity = 255;
+        LottieOpacity opacity = 255;
+    } style;
+
     LottieFloat offset = 0.0f;
     LottieFloat maxEase = 0.0f;
     LottieFloat minEase = 0.0f;
     LottieFloat maxAmount = 0.0f;
     LottieFloat smoothness = 0.0f;
     LottieFloat start = 0.0f;
-    LottieFloat end = 0.0f;
+    LottieFloat end = FLT_MAX;
     Based based = Chars;
     Shape shape = Square;
     Unit rangeUnit = Percent;
+    uint8_t random = 0;
     bool expressible = false;
-    bool randomize = false;
+
+    float factor(float frameNo, float totalLen, float idx);
 };
 
 
@@ -222,6 +266,13 @@ struct LottieMarker
 
 struct LottieText : LottieObject, LottieRenderPooler<tvg::Shape>
 {
+    struct AlignOption
+    {
+        enum Group : uint8_t { Chars = 1, Word = 2, Line = 3, All = 4 };
+        Group grouping = Chars;
+        LottiePoint anchor{};
+    } alignOption;
+
     void prepare()
     {
         LottieObject::type = LottieObject::Text;
@@ -515,7 +566,8 @@ struct LottieSolidFill : LottieSolid
 
     void override(LottieProperty* prop) override
     {
-        this->color = *static_cast<LottieColor*>(prop);
+        if (prop->type == LottieProperty::Type::Opacity) this->opacity = *static_cast<LottieOpacity*>(prop);
+        else if (prop->type == LottieProperty::Type::Color) this->color = *static_cast<LottieColor*>(prop);
         this->prepare();
     }
 
@@ -528,13 +580,15 @@ struct LottieGradient : LottieObject
     bool prepare()
     {
         if (!colorStops.populated) {
+            auto count = colorStops.count;  //colorstop count can be modified after population
             if (colorStops.frames) {
                 for (auto v = colorStops.frames->begin(); v < colorStops.frames->end(); ++v) {
-                    colorStops.count = populate(v->value);
+                    colorStops.count = populate(v->value, count);
                 }
             } else {
-                colorStops.count = populate(colorStops.value);
+                colorStops.count = populate(colorStops.value, count);
             }
+            colorStops.populated = true;
         }
         if (start.frames || end.frames || height.frames || angle.frames || opacity.frames || colorStops.frames) return true;
         return false;
@@ -551,8 +605,7 @@ struct LottieGradient : LottieObject
         return nullptr;
     }
 
-
-    uint32_t populate(ColorStop& color);
+    uint32_t populate(ColorStop& color, size_t count);
     Fill* fill(float frameNo, LottieExpressions* exps);
 
     LottiePoint start = Point{0.0f, 0.0f};
@@ -734,6 +787,7 @@ struct LottieLayer : LottieGroup
     LottieLayer* comp = nullptr;  //Precompositor, current layer is belonges.
     LottieTransform* transform = nullptr;
     Array<LottieMask*> masks;
+    Array<LottieEffect*> effects;
     LottieLayer* matteTarget = nullptr;
 
     LottieRenderPooler<tvg::Shape> statical;  //static pooler for solid fill and clipper
@@ -754,7 +808,7 @@ struct LottieLayer : LottieGroup
         uint8_t opacity;
     } cache;
 
-    CompositeMethod matteType = CompositeMethod::None;
+    MaskMethod matteType = MaskMethod::None;
     BlendMethod blendMethod = BlendMethod::Normal;
     Type type = Null;
     bool autoOrient = false;

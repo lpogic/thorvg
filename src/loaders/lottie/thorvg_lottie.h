@@ -15,7 +15,7 @@ namespace tvg
  *
  * @see Animation
  * 
- * @note Experimental API
+ * @since 0.15
  */
 class TVG_API LottieAnimation final : public Animation
 {
@@ -84,9 +84,9 @@ public:
      *
      * @return A new LottieAnimation object.
      *
-     * @note Experimental API
+     * @since 0.15
      */
-    static std::unique_ptr<LottieAnimation> gen() noexcept;
+    static LottieAnimation* gen() noexcept;
 };
 
 } //namespace

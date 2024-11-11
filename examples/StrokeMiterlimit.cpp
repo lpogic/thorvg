@@ -37,7 +37,7 @@ struct UserExample : tvgexam::Example
             auto bg = tvg::Shape::gen();
             bg->appendRect(0, 0, w, h);    //x, y, w, h
             bg->fill(200, 200, 255);       //r, g, b
-            canvas->push(std::move(bg));
+            canvas->push(bg);
         }
 
         //wild
@@ -67,20 +67,20 @@ struct UserExample : tvgexam::Example
             static float ml = path->strokeMiterlimit();
             cout << "stroke miterlimit = " << ml << endl;
 
-            canvas->push(std::move(path));
+            canvas->push(path);
         }
 
         //blueprint
         {
             // Load png file from path.
-            string path = EXAMPLE_DIR"/image/stroke-miterlimit.png";
+            const char* path = EXAMPLE_DIR"/image/stroke-miterlimit.png";
 
             auto picture = tvg::Picture::gen();
             if (!tvgexam::verify(picture->load(path))) return false;
 
             picture->opacity(42);
             picture->translate(24, 0);
-            canvas->push(std::move(picture));
+            canvas->push(picture);
         }
 
         //svg
@@ -140,7 +140,7 @@ struct UserExample : tvgexam::Example
             auto picture = tvg::Picture::gen();
             if (!tvgexam::verify(picture->load(svgText.data(), svgText.size(), "svg", "", true))) return false;
             picture->scale(20);
-            canvas->push(std::move(picture));
+            canvas->push(picture);
         }
 
         return true;
