@@ -338,13 +338,17 @@ struct GlWindow : Window
 
     virtual ~GlWindow()
     {
+        //Free in the reverse order of their creation.
+        delete(canvas);
+        canvas = nullptr;
+
         SDL_GL_DeleteContext(context);
     }
 
     void resize() override
     {
         //Set the canvas target and draw on it.
-        verify(static_cast<tvg::GlCanvas*>(canvas)->target(0, width, height));
+        verify(static_cast<tvg::GlCanvas*>(canvas)->target(0, width, height, tvg::ColorSpace::ABGR8888S));
     }
 
     void refresh() override
@@ -363,6 +367,8 @@ struct WgWindow : Window
 {
     WGPUInstance instance;
     WGPUSurface surface;
+    WGPUAdapter adapter;
+    WGPUDevice device;
 
     WgWindow(Example* example, uint32_t width, uint32_t height, uint32_t threadsCnt) : Window(tvg::CanvasEngine::Wg, example, width, height, threadsCnt)
     {
@@ -408,10 +414,25 @@ struct WgWindow : Window
             };
         #endif
 
+        // create surface
         WGPUSurfaceDescriptor surfaceDesc{};
         surfaceDesc.nextInChain = (const WGPUChainedStruct*)&surfaceNativeDesc;
         surfaceDesc.label = "The surface";
         surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
+
+        // request adapter
+        const WGPURequestAdapterOptions requestAdapterOptions { .compatibleSurface = surface, .powerPreference = WGPUPowerPreference_HighPerformance };
+        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) { *((WGPUAdapter*)pUserData) = adapter; };
+        wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &adapter);
+
+        // get adapter and surface properties
+        WGPUFeatureName featureNames[32]{};
+        size_t featuresCount = wgpuAdapterEnumerateFeatures(this->adapter, featureNames);
+
+        // request device
+        const WGPUDeviceDescriptor deviceDesc { .label = "The owned device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
+        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const * message, void * pUserData) { *((WGPUDevice*)pUserData) = device; };
+        wgpuAdapterRequestDevice(this->adapter, &deviceDesc, onDeviceRequestEnded, &device);
 
         //Create a Canvas
         canvas = tvg::WgCanvas::gen();
@@ -425,6 +446,12 @@ struct WgWindow : Window
 
     virtual ~WgWindow()
     {
+        //Free in the reverse order of their creation.
+        delete(canvas);
+        canvas = nullptr;
+
+        wgpuDeviceRelease(device);
+        wgpuAdapterRelease(adapter);
         wgpuSurfaceRelease(surface);
         wgpuInstanceRelease(instance);
     }
@@ -432,7 +459,7 @@ struct WgWindow : Window
     void resize() override
     {
         //Set the canvas target and draw on it.
-        verify(static_cast<tvg::WgCanvas*>(canvas)->target(instance, surface, width, height));
+        verify(static_cast<tvg::WgCanvas*>(canvas)->target(device, instance, surface, width, height, tvg::ColorSpace::ABGR8888S));
     }
 
     void refresh() override 

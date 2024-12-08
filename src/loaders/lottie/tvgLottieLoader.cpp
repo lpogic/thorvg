@@ -44,7 +44,7 @@ void LottieLoader::run(unsigned tid)
             comp = parser.comp;
         }
         if (parser.slots) {
-            override(parser.slots, false);
+            override(parser.slots, true);
             parser.slots = nullptr;
         }
         builder->build(comp);
@@ -220,6 +220,7 @@ bool LottieLoader::open(const char* data, uint32_t size, const char* rpath, bool
 
 bool LottieLoader::open(const char* path)
 {
+#ifdef THORVG_FILE_IO_SUPPORT
     auto f = fopen(path, "r");
     if (!f) return false;
 
@@ -247,6 +248,9 @@ bool LottieLoader::open(const char* path)
     this->copy = true;
 
     return header();
+#else
+    return false;
+#endif
 }
 
 
@@ -291,34 +295,35 @@ Paint* LottieLoader::paint()
 }
 
 
-bool LottieLoader::override(const char* slots, bool copy)
+bool LottieLoader::override(const char* slots, bool byDefault)
 {
     if (!ready() || comp->slots.count == 0) return false;
-
-    auto success = true;
 
     //override slots
     if (slots) {
         //Copy the input data because the JSON parser will encode the data immediately.
-        auto temp = copy ? strdup(slots) : slots;
+        auto temp = byDefault ? slots : strdup(slots);
 
         //parsing slot json
         LottieParser parser(temp, dirName);
         parser.comp = comp;
 
         auto idx = 0;
+        auto succeed = false;
         while (auto sid = parser.sid(idx == 0)) {
+            auto applied = false;
             for (auto s = comp->slots.begin(); s < comp->slots.end(); ++s) {
                 if (strcmp((*s)->sid, sid)) continue;
-                if (!parser.apply(*s)) success = false;
+                if (parser.apply(*s, byDefault)) succeed = applied = true;
                 break;
             }
+            if (!applied) parser.skip(sid);
             ++idx;
         }
-
-        if (idx < 1) success = false;
         free((char*)temp);
-        rebuild = overridden = success;
+        rebuild = succeed;
+        overridden |= succeed;
+        return rebuild;
     //reset slots
     } else if (overridden) {
         for (auto s = comp->slots.begin(); s < comp->slots.end(); ++s) {
@@ -327,7 +332,7 @@ bool LottieLoader::override(const char* slots, bool copy)
         overridden = false;
         rebuild = true;
     }
-    return success;
+    return true;
 }
 
 

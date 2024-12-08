@@ -448,6 +448,53 @@ public:
     MaskMethod mask(const Paint** target) const noexcept;
 
     /**
+     * @brief Increment the reference count for the Paint instance.
+     *
+     * This method increases the reference count of the Paint object, allowing shared ownership and control over its lifetime.
+     *
+     * @return The updated reference count after the increment by 1.
+     *
+     * @warning Please ensure that each call to ref() is paired with a corresponding call to unref() to prevent a dangling instance.
+     *
+     * @see Paint::unref()
+     * @see Paint::refCnt()
+     *
+     * @since 1.0
+     */
+    uint8_t ref() noexcept;
+
+    /**
+     * @brief Decrement the reference count for the Paint instance.
+     *
+     * This method decreases the reference count of the Paint object by 1.
+     * If the reference count reaches zero and the @p free flag is set to true, the Paint instance is automatically deleted.
+     *
+     * @param[in] free Flag indicating whether to delete the Paint instance when the reference count reaches zero.
+     *
+     * @return The updated reference count after the decrement.
+     *
+     * @see Paint::ref()
+     * @see Paint::refCnt()
+     *
+     * @since 1.0
+     */
+    uint8_t unref(bool free = true) noexcept;
+
+    /**
+     * @brief Retrieve the current reference count of the Paint instance.
+     *
+     * This method provides the current reference count, allowing the user to check the shared ownership state of the Paint object.
+     *
+     * @return The current reference count of the Paint instance.
+     *
+     * @see Paint::ref()
+     * @see Paint::unref()
+     *
+     * @since 1.0
+     */
+    uint8_t refCnt() const noexcept;
+
+    /**
      * @brief Returns the ID value of this class.
      *
      * This method can be used to check the current concrete instance type.
@@ -589,32 +636,40 @@ public:
     virtual ~Canvas();
 
     /**
-     * @brief Returns the list of the paints that currently held by the Canvas.
+     * @brief Returns the list of paints currently held by the Canvas.
      *
-     * This function provides the list of paint nodes, allowing users a direct opportunity to modify the scene tree.
+     * This function provides a list of paint nodes, allowing users to access scene-graph information.
      *
      * @warning Please avoid accessing the paints during Canvas update/draw. You can access them after calling sync().
-     * @see Canvas::sync()
+     * @see Canvas::push()
+     * @see Canvas::clear()
      *
-     * @note Experimental API
+     * @warning This is read-only. Do not modify the list.
+     * @note 1.0
      */
-    std::list<Paint*>& paints() noexcept;
+    const std::list<Paint*>& paints() const noexcept;
 
     /**
-     * @brief Passes drawing elements to the Canvas using Paint objects.
+     * @brief Adds a paint object to the root scene.
      *
-     * Only pushed paints in the canvas will be drawing targets.
-     * They are retained by the canvas until you call Canvas::clear().
+     * This function appends a paint object to root scene of the canvas. If the optional @p at
+     * is provided, the new paint object will be inserted immediately before the specified
+     * paint object in the root scene. If @p at is @c nullptr, the paint object will be added
+     * to the end of the root scene.
      *
-     * @param[in] paint A Paint object to be drawn.
+     * @param[in] target A pointer to the Paint object to be added into the root scene.
+     *                   This parameter must not be @c nullptr.
+     * @param[in] at A pointer to an existing Paint object in the root scene before which
+     *               the new paint object will be added. If @c nullptr, the new
+     *               paint object is added to the end of the root scene. The default is @c nullptr.
      *
-     * @retval Result::MemoryCorruption In case a @c nullptr is passed as the argument.
+     * @note The ownership of the @p paint object is transferred to the canvas upon addition.
+     * @note The rendering order of the paints is the same as the order as they were pushed. Consider sorting the paints before pushing them if you intend to use layering.
      *
-     * @note The rendering order of the paints is the same as the order as they were pushed into the canvas. Consider sorting the paints before pushing them if you intend to use layering.
      * @see Canvas::paints()
      * @see Canvas::clear()
      */
-    virtual Result push(Paint* paint) noexcept;
+    Result push(Paint* target, Paint* at = nullptr) noexcept;
 
     /**
      * @brief Clear the internal canvas resources that used for the drawing.
@@ -629,7 +684,24 @@ public:
      * @see Canvas::push()
      * @see Canvas::paints()
      */
-    virtual Result clear(bool paints = true, bool buffer = true) noexcept;
+    Result clear(bool paints = true, bool buffer = true) noexcept;
+
+    /**
+     * @brief Removes a paint object or all paint objects from the root scene.
+     *
+     * This function removes a specified paint object from the root scene. If no paint
+     * object is specified (i.e., the default @c nullptr is used), the function
+     * performs to clear all paints from the root scene.
+     *
+     * @param[in] paint A pointer to the Paint object to be removed from the root scene.
+     *                  If @c nullptr, remove all the paints from the root scene.
+     *
+     * @see Canvas::push()
+     * @see Canvas::paints()
+     *
+     * @since 1.0
+     */
+    Result remove(Paint* paint = nullptr) noexcept;
 
     /**
      * @brief Request the canvas to update the paint objects.
@@ -641,7 +713,7 @@ public:
      *
      * @note The Update behavior can be asynchronous if the assigned thread number is greater than zero.
      */
-    virtual Result update(Paint* paint = nullptr) noexcept;
+    Result update(Paint* paint = nullptr) noexcept;
 
     /**
      * @brief Requests the canvas to draw the Paint objects.
@@ -649,7 +721,7 @@ public:
      * @note Drawing can be asynchronous if the assigned thread number is greater than zero. To guarantee the drawing is done, call sync() afterwards.
      * @see Canvas::sync()
      */
-    virtual Result draw() noexcept;
+    Result draw() noexcept;
 
     /**
      * @brief Sets the drawing region in the canvas.
@@ -671,7 +743,7 @@ public:
      * @note When resetting the target, the viewport will also be reset to the target size.
      * @since 0.15
      */
-    virtual Result viewport(int32_t x, int32_t y, int32_t w, int32_t h) noexcept;
+    Result viewport(int32_t x, int32_t y, int32_t w, int32_t h) noexcept;
 
     /**
      * @brief Guarantees that drawing task is finished.
@@ -683,7 +755,7 @@ public:
      *
      * @see Canvas::draw()
      */
-    virtual Result sync() noexcept;
+    Result sync() noexcept;
 
     _TVG_DECLARE_PRIVATE(Canvas);
 };
@@ -1359,44 +1431,55 @@ public:
     ~Scene();
 
     /**
-     * @brief Passes drawing elements to the Scene using Paint objects.
+     * @brief Inserts a paint object to the scene.
      *
-     * Only the paints pushed into the scene will be the drawn targets.
-     * The paints are retained by the scene until Scene::clear() is called.
+     * This function appends a paint object to the scene. If the optional @p at
+     * is provided, the new paint object will be inserted immediately before the specified
+     * paint object in the scene. If @p at is @c nullptr, the paint object will be added
+     * to the end of the scene.
      *
-     * @param[in] paint A Paint object to be drawn.
+     * @param[in] target A pointer to the Paint object to be added into the scene.
+     *                   This parameter must not be @c nullptr.
+     * @param[in] at A pointer to an existing Paint object in the scene before which
+     *               the new paint object will be added. If @c nullptr, the new
+     *               paint object is added to the end of the scene. The default is @c nullptr.
      *
+     * @note The ownership of the @p paint object is transferred to the scene upon addition.
      * @note The rendering order of the paints is the same as the order as they were pushed. Consider sorting the paints before pushing them if you intend to use layering.
      * @see Scene::paints()
-     * @see Scene::clear()
+     * @see Scene:remove()
      */
-    Result push(Paint* paint) noexcept;
+    Result push(Paint* target, Paint* at = nullptr) noexcept;
 
     /**
-     * @brief Returns the list of the paints that currently held by the Scene.
+     * @brief Returns the list of paints currently held by the Scene.
      *
-     * This function provides the list of paint nodes, allowing users a direct opportunity to modify the scene tree.
+     * This function provides a list of paint nodes, allowing users to access scene-graph information.
      *
-     * @warning Please avoid accessing the paints during Scene update/draw. You can access them after calling Canvas::sync().
-     * @see Canvas::sync()
-     * @see Scene::push(Paint* paint)
-     * @see Scene::clear()
+     * @see Scene::push()
+     * @see Scene:remove()
      *
-     * @note Experimental API
+     * @warning This is read-only. Do not modify the list.
+     * @since 1.0
      */
-    std::list<Paint*>& paints() noexcept;
+    const std::list<Paint*>& paints() const noexcept;
 
     /**
-     * @brief Sets the total number of the paints pushed into the scene to be zero.
-     * Depending on the value of the @p free argument, the paints are freed or not.
+     * @brief Removes a paint object or all paint objects from the scene.
      *
-     * @param[in] free If @c true, the memory occupied by paints is deallocated, otherwise it is not.
+     * This function removes a specified paint object from the scene. If no paint
+     * object is specified (i.e., the default @c nullptr is used), the function
+     * performs to clear all paints from the scene.
      *
-     * @warning If you don't free the paints they become dangled. They are supposed to be reused, otherwise you are responsible for their lives. Thus please use the @p free argument only when you know how it works, otherwise it's not recommended.
+     * @param[in] paint A pointer to the Paint object to be removed from the scene.
+     *                  If @c nullptr, remove all the paints from the scene.
      *
-     * @since 0.2
+     * @see Scene::push()
+     * @see Scene::paints()
+     *
+     * @since 1.0
      */
-    Result clear(bool free = true) noexcept;
+    Result remove(Paint* paint = nullptr) noexcept;
 
     /**
      * @brief Apply a post-processing effect to the scene.
@@ -1700,6 +1783,7 @@ public:
      * @param[in] id The GL target ID, usually indicating the FBO ID. A value of @c 0 specifies the main surface.
      * @param[in] w The width (in pixels) of the raster image.
      * @param[in] h The height (in pixels) of the raster image.
+     * @param[in] cs Specifies how the pixel values should be interpreted. Currently, it only allows @c ColorSpace::ABGR8888S as @c GL_RGBA8.
      *
      * @retval Result::InsufficientCondition if the canvas is performing rendering. Please ensure the canvas is synced.
      * @retval Result::NonSupport In case the gl engine is not supported.
@@ -1707,10 +1791,9 @@ public:
      * @see Canvas::viewport()
      * @see Canvas::sync()
      *
-     * @note Currently, this only allows the GL_RGBA8 color space format.
      * @note Experimental API
     */
-    Result target(int32_t id, uint32_t w, uint32_t h) noexcept;
+    Result target(int32_t id, uint32_t w, uint32_t h, ColorSpace cs) noexcept;
 
     /**
      * @brief Creates a new GlCanvas object.
@@ -1742,11 +1825,13 @@ public:
     /**
      * @brief Sets the drawing target for the rasterization.
      *
-     * @param[in] instance WGPUInstance, context for all other wgpu objects.
-     * @param[in] surface WGPUSurface, handle to a presentable surface.
-     * @param[in] w The width of the surface.
-     * @param[in] h The height of the surface.
      * @param[in] device WGPUDevice, a desired handle for the wgpu device. If it is @c nullptr, ThorVG will assign an appropriate device internally.
+     * @param[in] instance WGPUInstance, context for all other wgpu objects.
+     * @param[in] target Either WGPUSurface or WGPUTexture, serving as handles to a presentable surface or texture.
+     * @param[in] w The width of the target.
+     * @param[in] h The height of the target.
+     * @param[in] cs Specifies how the pixel values should be interpreted. Currently, it only allows @c ColorSpace::ABGR8888S as @c WGPUTextureFormat_RGBA8Unorm.
+     * @param[in] type @c 0: surface, @c 1: texture are used as pesentable target.
      *
      * @retval Result::InsufficientCondition if the canvas is performing rendering. Please ensure the canvas is synced.
      * @retval Result::NonSupport In case the wg engine is not supported.
@@ -1756,7 +1841,7 @@ public:
      * @see Canvas::viewport()
      * @see Canvas::sync()
      */
-    Result target(void* instance, void* surface, uint32_t w, uint32_t h, void* device = nullptr) noexcept;
+    Result target(void* device, void* instance, void* target, uint32_t w, uint32_t h, ColorSpace cs, int type = 0) noexcept;
 
     /**
      * @brief Creates a new WgCanvas object.
@@ -2084,7 +2169,7 @@ public:
      *
      * @note Experimental API
      */
-    Result set(const Picture* picture, std::function<bool(const Paint* paint, void* data)> func, void* data) noexcept;
+    Result set(Picture* picture, std::function<bool(const Paint* paint, void* data)> func, void* data) noexcept;
 
     /**
      * @brief Generate a unique ID (hash key) from a given name.

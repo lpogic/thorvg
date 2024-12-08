@@ -159,6 +159,7 @@ static LoadModule* _find(FileType type)
 }
 
 
+#ifdef THORVG_FILE_IO_SUPPORT
 static LoadModule* _findByPath(const char* filename)
 {
     auto ext = strExtension(filename);
@@ -173,6 +174,7 @@ static LoadModule* _findByPath(const char* filename)
     if (!strcmp(ext, "otf") || !strcmp(ext, "otc")) return _find(FileType::Ttf);
     return nullptr;
 }
+#endif
 
 
 static FileType _convert(const char* mimeType)
@@ -204,14 +206,11 @@ static LoadModule* _findFromCache(const char* filename)
 {
     ScopedLock lock(key);
 
-    auto loader = _activeLoaders.head;
-
-    while (loader) {
+    INLIST_FOREACH(_activeLoaders, loader) {
         if (loader->pathcache && !strcmp(loader->hashpath, filename)) {
             ++loader->sharing;
             return loader;
         }
-        loader = loader->next;
     }
     return nullptr;
 }
@@ -223,16 +222,13 @@ static LoadModule* _findFromCache(const char* data, uint32_t size, const char* m
     if (type == FileType::Unknown) return nullptr;
 
     ScopedLock lock(key);
-    auto loader = _activeLoaders.head;
-
     auto key = HASH_KEY(data);
 
-    while (loader) {
+    INLIST_FOREACH(_activeLoaders, loader) {
         if (loader->type == type && loader->hashkey == key) {
             ++loader->sharing;
             return loader;
         }
-        loader = loader->next;
     }
     return nullptr;
 }
@@ -251,15 +247,12 @@ bool LoaderMgr::init()
 
 bool LoaderMgr::term()
 {
-    auto loader = _activeLoaders.head;
-
     //clean up the remained font loaders which is globally used.
-    while (loader && loader->type == FileType::Ttf) {
+    INLIST_SAFE_FOREACH(_activeLoaders, loader) {
+        if (loader->type != FileType::Ttf) break;
         auto ret = loader->close();
-        auto tmp = loader;
-        loader = loader->next;
-        _activeLoaders.remove(tmp);
-        if (ret) delete(tmp);
+        _activeLoaders.remove(loader);
+        if (ret) delete(loader);
     }
     return true;
 }
@@ -281,6 +274,7 @@ bool LoaderMgr::retrieve(LoadModule* loader)
 
 LoadModule* LoaderMgr::loader(const char* filename, bool* invalid)
 {
+#ifdef THORVG_FILE_IO_SUPPORT
     *invalid = false;
 
     //TODO: svg & lottie is not sharable.
@@ -324,6 +318,7 @@ LoadModule* LoaderMgr::loader(const char* filename, bool* invalid)
         }
     }
     *invalid = true;
+#endif
     return nullptr;
 }
 
@@ -336,14 +331,11 @@ bool LoaderMgr::retrieve(const char* filename)
 
 LoadModule* LoaderMgr::loader(const char* key)
 {
-    auto loader = _activeLoaders.head;
-
-    while (loader) {
+    INLIST_FOREACH(_activeLoaders, loader) {
         if (loader->pathcache && strstr(loader->hashpath, key)) {
             ++loader->sharing;
             return loader;
         }
-        loader = loader->next;
     }
     return nullptr;
 }

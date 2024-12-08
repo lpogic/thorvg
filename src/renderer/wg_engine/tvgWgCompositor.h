@@ -35,8 +35,8 @@ struct WgCompose: RenderCompositor
 class WgCompositor
 {
 private:
-    // pipelines (external handle, do not release)
-    WgPipelines* pipelines{};
+    // pipelines
+    WgPipelines pipelines{};
     // global stencil/depth buffer handles
     WGPUTexture texDepthStencil{};
     WGPUTextureView texViewDepthStencil{};
@@ -65,6 +65,7 @@ private:
 public:
     void initialize(WgContext& context, uint32_t width, uint32_t height);
     void release(WgContext& context);
+    void resize(WgContext& context, uint32_t width, uint32_t height);
 
     // render passes workflow
     void beginRenderPass(WGPUCommandEncoder encoder, WgRenderStorage* target, bool clear, WGPUColor clearColor = { 0.0, 0.0, 0.0, 0.0 });

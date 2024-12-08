@@ -50,14 +50,13 @@ private:
     Array<WgMeshData*> mPool;
     Array<WgMeshData*> mList;
 public:
+    static WgMeshDataPool* gMeshDataPool;
     WgMeshData* allocate(WgContext& context);
     void free(WgContext& context, WgMeshData* meshData);
     void release(WgContext& context);
 };
 
 struct WgMeshDataGroup {
-    static WgMeshDataPool* gMeshDataPool;
-
     Array<WgMeshData*> meshes{};
     
     void append(WgContext& context, const WgVertexBuffer& vertexBuffer);
@@ -70,7 +69,7 @@ struct WgImageData {
     WGPUTexture texture{};
     WGPUTextureView textureView{};
 
-    void update(WgContext& context, RenderSurface* surface);
+    void update(WgContext& context, const RenderSurface* surface);
     void release(WgContext& context);
 };
 
@@ -90,15 +89,12 @@ struct WgRenderSettings
     WgRenderRasterType rasterType{};
     bool skip{};
 
-    void update(WgContext& context, const Fill* fill, const uint8_t* color, const RenderUpdateFlag flags);
+    void update(WgContext& context, const Fill* fill, const RenderColor& c, const RenderUpdateFlag flags);
     void release(WgContext& context);
 };
 
 struct WgRenderDataPaint
 {
-    // global strokes generator. single instance
-    static WgVertexBufferInd* gStrokesGenerator;
-
     WGPUBuffer bufferModelMat{};
     WGPUBuffer bufferBlendSettings{};
     WGPUBindGroup bindGroupPaint{};
@@ -146,7 +142,7 @@ private:
     Array<WgRenderDataShape*> mList;
 public:
     WgRenderDataShape* allocate(WgContext& context);
-    void free(WgContext& context, WgRenderDataShape* dataShape);
+    void free(WgContext& context, WgRenderDataShape* renderData);
     void release(WgContext& context);
 };
 
@@ -156,8 +152,19 @@ struct WgRenderDataPicture: public WgRenderDataPaint
     WgImageData imageData{};
     WgMeshData meshData{};
 
+    void updateSurface(WgContext& context, const RenderSurface* surface);
     void release(WgContext& context) override;
     Type type() override { return Type::Picture; };
+};
+
+class WgRenderDataPicturePool {
+private:
+    Array<WgRenderDataPicture*> mPool;
+    Array<WgRenderDataPicture*> mList;
+public:
+    WgRenderDataPicture* allocate(WgContext& context);
+    void free(WgContext& context, WgRenderDataPicture* dataPicture);
+    void release(WgContext& context);
 };
 
 #endif // _TVG_WG_RENDER_DATA_H_

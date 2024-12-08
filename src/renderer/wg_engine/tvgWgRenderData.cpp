@@ -165,7 +165,8 @@ void WgMeshDataPool::release(WgContext& context)
     mList.clear();
 }
 
-WgMeshDataPool* WgMeshDataGroup::gMeshDataPool = nullptr;
+WgMeshDataPool gMeshDataPoolInstance;
+WgMeshDataPool* WgMeshDataPool::gMeshDataPool = &gMeshDataPoolInstance;
 
 //***********************************************************************
 // WgMeshDataGroup
@@ -174,7 +175,7 @@ WgMeshDataPool* WgMeshDataGroup::gMeshDataPool = nullptr;
 void WgMeshDataGroup::append(WgContext& context, const WgVertexBuffer& vertexBuffer)
 {
     assert(vertexBuffer.vcount >= 3);
-    meshes.push(gMeshDataPool->allocate(context));
+    meshes.push(WgMeshDataPool::gMeshDataPool->allocate(context));
     meshes.last()->update(context, vertexBuffer);
 }
 
@@ -182,14 +183,14 @@ void WgMeshDataGroup::append(WgContext& context, const WgVertexBuffer& vertexBuf
 void WgMeshDataGroup::append(WgContext& context, const WgVertexBufferInd& vertexBufferInd)
 {
     assert(vertexBufferInd.vcount >= 3);
-    meshes.push(gMeshDataPool->allocate(context));
+    meshes.push(WgMeshDataPool::gMeshDataPool->allocate(context));
     meshes.last()->update(context, vertexBufferInd);
 }
 
 
 void WgMeshDataGroup::append(WgContext& context, const Point pmin, const Point pmax)
 {
-    meshes.push(gMeshDataPool->allocate(context));
+    meshes.push(WgMeshDataPool::gMeshDataPool->allocate(context));
     meshes.last()->bbox(context, pmin, pmax);
 }
 
@@ -197,7 +198,7 @@ void WgMeshDataGroup::append(WgContext& context, const Point pmin, const Point p
 void WgMeshDataGroup::release(WgContext& context)
 {
     for (uint32_t i = 0; i < meshes.count; i++)
-        gMeshDataPool->free(context, meshes[i]);
+        WgMeshDataPool::gMeshDataPool->free(context, meshes[i]);
     meshes.clear();
 };
 
@@ -206,20 +207,21 @@ void WgMeshDataGroup::release(WgContext& context)
 // WgImageData
 //***********************************************************************
 
-void WgImageData::update(WgContext& context, RenderSurface* surface)
+void WgImageData::update(WgContext& context, const RenderSurface* surface)
 {
-    release(context);
-    assert(surface);
-    texture = context.createTexture(surface->w, surface->h, WGPUTextureFormat_RGBA8Unorm);
-    assert(texture);
-    textureView = context.createTextureView(texture);
-    assert(textureView);
-    // update texture data
-    WGPUImageCopyTexture imageCopyTexture{ .texture = texture };
-    WGPUTextureDataLayout textureDataLayout{ .bytesPerRow = 4 * surface->w, .rowsPerImage = surface->h };
-    WGPUExtent3D writeSize{ .width = surface->w, .height = surface->h, .depthOrArrayLayers = 1 };
-    wgpuQueueWriteTexture(context.queue, &imageCopyTexture, surface->data, 4 * surface->w * surface->h, &textureDataLayout, &writeSize);
-    wgpuQueueSubmit(context.queue, 0, nullptr);
+    // get appropriate texture format from color space
+    WGPUTextureFormat texFormat = WGPUTextureFormat_BGRA8Unorm;
+    if (surface->cs == ColorSpace::ABGR8888S)
+        texFormat = WGPUTextureFormat_RGBA8Unorm;
+    if (surface->cs == ColorSpace::Grayscale8)
+        texFormat = WGPUTextureFormat_R8Unorm;
+    // allocate new texture handle
+    bool texHandleChanged = context.allocateTexture(texture, surface->w, surface->h, texFormat, surface->data);
+    // update texture view of texture handle was changed
+    if (texHandleChanged) {
+        context.releaseTextureView(textureView);
+        textureView = context.createTextureView(texture);
+    }
 };
 
 
@@ -233,7 +235,7 @@ void WgImageData::release(WgContext& context)
 // WgRenderSettings
 //***********************************************************************
 
-void WgRenderSettings::update(WgContext& context, const Fill* fill, const uint8_t* color, const RenderUpdateFlag flags)
+void WgRenderSettings::update(WgContext& context, const Fill* fill, const RenderColor& c, const RenderUpdateFlag flags)
 {
     // setup fill properties
     if ((flags & (RenderUpdateFlag::Gradient)) && fill) {
@@ -265,28 +267,28 @@ void WgRenderSettings::update(WgContext& context, const Fill* fill, const uint8_
             if (fill->spread() == FillSpread::Reflect) sampler = context.samplerLinearMirror;
             if (fill->spread() == FillSpread::Repeat) sampler = context.samplerLinearRepeat;
             // update bind group
-            context.pipelines->layouts.releaseBindGroup(bindGroupGradient);
-            bindGroupGradient = context.pipelines->layouts.createBindGroupTexSampledBuff2Un(
+            context.layouts.releaseBindGroup(bindGroupGradient);
+            bindGroupGradient = context.layouts.createBindGroupTexSampledBuff2Un(
                 sampler, texViewGradient, bufferGroupGradient, bufferGroupTransfromGrad);
         }
         skip = false;
-    } else if ((flags & (RenderUpdateFlag::Color)) && !fill) {
+    } else if ((flags & RenderUpdateFlag::Color) && !fill) {
         rasterType = WgRenderRasterType::Solid;
-        WgShaderTypeSolidColor solidColor(color);
+        WgShaderTypeVec4f solidColor(c);
         if (context.allocateBufferUniform(bufferGroupSolid, &solidColor, sizeof(solidColor))) {
-            context.pipelines->layouts.releaseBindGroup(bindGroupSolid);
-            bindGroupSolid = context.pipelines->layouts.createBindGroupBuffer1Un(bufferGroupSolid);
+            context.layouts.releaseBindGroup(bindGroupSolid);
+            bindGroupSolid = context.layouts.createBindGroupBuffer1Un(bufferGroupSolid);
         }
         fillType = WgRenderSettingsType::Solid;
-        skip = (color[3] == 0);
+        skip = (c.a == 0);
     }
 };
 
 
 void WgRenderSettings::release(WgContext& context)
 {
-    context.pipelines->layouts.releaseBindGroup(bindGroupSolid);
-    context.pipelines->layouts.releaseBindGroup(bindGroupGradient);
+    context.layouts.releaseBindGroup(bindGroupSolid);
+    context.layouts.releaseBindGroup(bindGroupGradient);
     context.releaseBuffer(bufferGroupSolid);
     context.releaseBuffer(bufferGroupGradient);
     context.releaseBuffer(bufferGroupTransfromGrad);
@@ -298,11 +300,9 @@ void WgRenderSettings::release(WgContext& context)
 // WgRenderDataPaint
 //***********************************************************************
 
-WgVertexBufferInd* WgRenderDataPaint::gStrokesGenerator = nullptr;
-
 void WgRenderDataPaint::release(WgContext& context)
 {
-    context.pipelines->layouts.releaseBindGroup(bindGroupPaint);
+    context.layouts.releaseBindGroup(bindGroupPaint);
     context.releaseBuffer(bufferModelMat);
     context.releaseBuffer(bufferBlendSettings);
     clips.clear();
@@ -312,12 +312,12 @@ void WgRenderDataPaint::release(WgContext& context)
 void WgRenderDataPaint::update(WgContext& context, const tvg::Matrix& transform, tvg::ColorSpace cs, uint8_t opacity)
 {
     WgShaderTypeMat4x4f modelMat(transform);
-    WgShaderTypeBlendSettings blendSettings(cs, opacity);
+    WgShaderTypeVec4f blendSettings(cs, opacity);
     bool bufferModelMatChanged = context.allocateBufferUniform(bufferModelMat, &modelMat, sizeof(modelMat));
     bool bufferBlendSettingsChanged = context.allocateBufferUniform(bufferBlendSettings, &blendSettings, sizeof(blendSettings));
     if (bufferModelMatChanged || bufferBlendSettingsChanged) {
-        context.pipelines->layouts.releaseBindGroup(bindGroupPaint);
-        bindGroupPaint = context.pipelines->layouts.createBindGroupBuffer2Un(bufferModelMat, bufferBlendSettings);
+        context.layouts.releaseBindGroup(bindGroupPaint);
+        bindGroupPaint = context.layouts.createBindGroupBuffer2Un(bufferModelMat, bufferBlendSettings);
     }
 }
 
@@ -455,7 +455,8 @@ void WgRenderDataShape::updateMeshes(WgContext &context, const RenderShape &rsha
 void WgRenderDataShape::proceedStrokes(WgContext context, const RenderStroke* rstroke, float tbeg, float tend, const WgVertexBuffer& buff)
 {
     assert(rstroke);
-    gStrokesGenerator->reset(buff.tscale);
+    static WgVertexBufferInd strokesGenerator;
+    strokesGenerator.reset(buff.tscale);
     // trim -> dash -> stroke
     if ((tbeg != 0.0f) || (tend != 1.0f)) {
         if (tbeg == tend) return;
@@ -464,17 +465,17 @@ void WgRenderDataShape::proceedStrokes(WgContext context, const RenderStroke* rs
         trimed_buff.trim(buff, tbeg, tend);
         trimed_buff.updateDistances();
         // trim ->dash -> stroke
-        if (rstroke->dashPattern) gStrokesGenerator->appendStrokesDashed(trimed_buff, rstroke);
+        if (rstroke->dashPattern) strokesGenerator.appendStrokesDashed(trimed_buff, rstroke);
         // trim -> stroke
-        else gStrokesGenerator->appendStrokes(trimed_buff, rstroke);
+        else strokesGenerator.appendStrokes(trimed_buff, rstroke);
     } else
     // dash -> stroke
     if (rstroke->dashPattern) {
-        gStrokesGenerator->appendStrokesDashed(buff, rstroke);
+        strokesGenerator.appendStrokesDashed(buff, rstroke);
     // stroke
     } else
-        gStrokesGenerator->appendStrokes(buff, rstroke);
-    appendStroke(context, *gStrokesGenerator);
+        strokesGenerator.appendStrokes(buff, rstroke);
+    appendStroke(context, strokesGenerator);
 }
 
 
@@ -506,26 +507,26 @@ void WgRenderDataShape::release(WgContext& context)
 
 WgRenderDataShape* WgRenderDataShapePool::allocate(WgContext& context)
 {
-    WgRenderDataShape* dataShape{};
+    WgRenderDataShape* renderData{};
     if (mPool.count > 0) {
-        dataShape = mPool.last();
+        renderData = mPool.last();
         mPool.pop();
     } else {
-        dataShape = new WgRenderDataShape();
-        mList.push(dataShape);
+        renderData = new WgRenderDataShape();
+        mList.push(renderData);
     }
-    return dataShape;
+    return renderData;
 }
 
 
-void WgRenderDataShapePool::free(WgContext& context, WgRenderDataShape* dataShape)
+void WgRenderDataShapePool::free(WgContext& context, WgRenderDataShape* renderData)
 {
-    dataShape->meshGroupShapes.release(context);
-    dataShape->meshGroupShapesBBox.release(context);
-    dataShape->meshGroupStrokes.release(context);
-    dataShape->meshGroupStrokesBBox.release(context);
-    dataShape->clips.clear();
-    mPool.push(dataShape);
+    renderData->meshGroupShapes.release(context);
+    renderData->meshGroupShapesBBox.release(context);
+    renderData->meshGroupStrokes.release(context);
+    renderData->meshGroupStrokesBBox.release(context);
+    renderData->clips.clear();
+    mPool.push(renderData);
 }
 
 
@@ -543,10 +544,59 @@ void WgRenderDataShapePool::release(WgContext& context)
 // WgRenderDataPicture
 //***********************************************************************
 
+void WgRenderDataPicture::updateSurface(WgContext& context, const RenderSurface* surface)
+{
+    // upoate mesh data
+    meshData.imageBox(context, surface->w, surface->h);
+    // update texture data
+    imageData.update(context, surface);
+    // update texture bind group
+    context.layouts.releaseBindGroup(bindGroupPicture);
+    bindGroupPicture = context.layouts.createBindGroupTexSampled(
+        context.samplerLinearRepeat, imageData.textureView
+    );
+}
+
+
 void WgRenderDataPicture::release(WgContext& context)
 {
-    meshData.release(context);
+    context.layouts.releaseBindGroup(bindGroupPicture);
     imageData.release(context);
-    context.pipelines->layouts.releaseBindGroup(bindGroupPicture);
+    meshData.release(context);
     WgRenderDataPaint::release(context);
+}
+
+//***********************************************************************
+// WgRenderDataPicturePool
+//***********************************************************************
+
+WgRenderDataPicture* WgRenderDataPicturePool::allocate(WgContext& context)
+{
+    WgRenderDataPicture* renderData{};
+    if (mPool.count > 0) {
+        renderData = mPool.last();
+        mPool.pop();
+    } else {
+        renderData = new WgRenderDataPicture();
+        mList.push(renderData);
+    }
+    return renderData;
+}
+
+
+void WgRenderDataPicturePool::free(WgContext& context, WgRenderDataPicture* renderData)
+{
+    renderData->clips.clear();
+    mPool.push(renderData);
+}
+
+
+void WgRenderDataPicturePool::release(WgContext& context)
+{
+    for (uint32_t i = 0; i < mList.count; i++) {
+        mList[i]->release(context);
+        delete mList[i];
+    }
+    mPool.clear();
+    mList.clear();
 }

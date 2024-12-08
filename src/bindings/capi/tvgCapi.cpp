@@ -102,17 +102,17 @@ TVG_API Tvg_Result tvg_swcanvas_set_target(Tvg_Canvas* canvas, uint32_t* buffer,
 }
 
 
-TVG_API Tvg_Result tvg_glcanvas_set_target(Tvg_Canvas* canvas, int32_t id, uint32_t w, uint32_t h)
+TVG_API Tvg_Result tvg_glcanvas_set_target(Tvg_Canvas* canvas, int32_t id, uint32_t w, uint32_t h, Tvg_Colorspace cs)
 {
     if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<GlCanvas*>(canvas)->target(id, w, h);
+    return (Tvg_Result) reinterpret_cast<GlCanvas*>(canvas)->target(id, w, h, static_cast<ColorSpace>(cs));
 }
 
 
-TVG_API Tvg_Result tvg_wgcanvas_set_target(Tvg_Canvas* canvas, void* instance, void* surface, uint32_t w, uint32_t h, void* device)
+TVG_API Tvg_Result tvg_wgcanvas_set_target(Tvg_Canvas* canvas, void* device, void* instance, void* target, uint32_t w, uint32_t h, Tvg_Colorspace cs, int type)
 {
     if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<WgCanvas*>(canvas)->target(instance, surface, w, h, device);
+    return (Tvg_Result) reinterpret_cast<WgCanvas*>(canvas)->target(device, instance, target, w, h, static_cast<ColorSpace>(cs), type);
 }
 
 
@@ -123,10 +123,23 @@ TVG_API Tvg_Result tvg_canvas_push(Tvg_Canvas* canvas, Tvg_Paint* paint)
 }
 
 
+TVG_API Tvg_Result tvg_canvas_push_at(Tvg_Canvas* canvas, Tvg_Paint* paint, Tvg_Paint* at)
+{
+    if (!canvas || !paint || !at) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->push((Paint*)paint, (Paint*) at);
+}
+
+
 TVG_API Tvg_Result tvg_canvas_clear(Tvg_Canvas* canvas, bool paints, bool buffer)
 {
     if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
     return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->clear(paints, buffer);
+}
+
+TVG_API Tvg_Result tvg_canvas_remove(Tvg_Canvas* canvas, Tvg_Paint* paint)
+{
+    if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->remove((Paint*) paint);
 }
 
 
@@ -174,6 +187,27 @@ TVG_API Tvg_Result tvg_paint_del(Tvg_Paint* paint)
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
     delete(reinterpret_cast<Paint*>(paint));
     return TVG_RESULT_SUCCESS;
+}
+
+
+TVG_API uint8_t tvg_paint_ref(Tvg_Paint* paint)
+{
+    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<Paint*>(paint)->ref();
+}
+
+
+TVG_API uint8_t tvg_paint_unref(Tvg_Paint* paint, bool free)
+{
+    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<Paint*>(paint)->unref(free);
+}
+
+
+TVG_API uint8_t tvg_paint_get_ref(const Tvg_Paint* paint)
+{
+    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<const Paint*>(paint)->refCnt();
 }
 
 
@@ -703,10 +737,17 @@ TVG_API Tvg_Result tvg_scene_push(Tvg_Paint* scene, Tvg_Paint* paint)
 }
 
 
-TVG_API Tvg_Result tvg_scene_clear(Tvg_Paint* scene, bool free)
+TVG_API Tvg_Result tvg_scene_push_at(Tvg_Paint* scene, Tvg_Paint* paint, Tvg_Paint* at)
+{
+    if (!scene || !paint || !at) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push((Paint*)paint, (Paint*)at);
+}
+
+
+TVG_API Tvg_Result tvg_scene_remove(Tvg_Paint* scene, Tvg_Paint* paint)
 {
     if (!scene) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Scene*>(scene)->clear(free);
+    return (Tvg_Result) reinterpret_cast<Scene*>(scene)->remove((Paint*)paint);
 }
 
 

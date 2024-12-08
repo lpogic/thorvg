@@ -30,52 +30,52 @@ WgRenderer::WgRenderer()
 WgRenderer::~WgRenderer()
 {
     release();
-    mContext.release();
 }
 
 
 void WgRenderer::initialize()
 {
-    mPipelines.initialize(mContext);
-    WgMeshDataGroup::gMeshDataPool = new WgMeshDataPool();
-    WgRenderDataShape::gStrokesGenerator = new WgVertexBufferInd();
 }
 
 
 void WgRenderer::release()
 {
+    // check for general context availability
+    if (!mContext.queue) return;
+
+    // dispose stored objects
     disposeObjects();
-    mStorageRoot.release(mContext);
-    mRenderStoragePool.release(mContext);
+
+    // clear render data paint pools
     mRenderDataShapePool.release(mContext);
-    delete WgRenderDataShape::gStrokesGenerator;
-    WgMeshDataGroup::gMeshDataPool->release(mContext);
-    delete WgMeshDataGroup::gMeshDataPool;
+    mRenderDataPicturePool.release(mContext);
+    WgMeshDataPool::gMeshDataPool->release(mContext);
+
+    // clear render storage pool
+    mRenderStoragePool.release(mContext);
+
+    // clear rendering tree stacks
     mCompositorStack.clear();
     mRenderStorageStack.clear();
-    mPipelines.release(mContext);
-    if (gpuOwner) {
-        if (device) wgpuDeviceRelease(device);
-        device = nullptr;
-        if (adapter) wgpuAdapterRelease(adapter);
-        adapter = nullptr;
-        gpuOwner = false;
-    }
-    releaseSurfaceTexture();
+    mRenderStorageRoot.release(mContext);
+
+    // release context handles
+    mCompositor.release(mContext);
+    mContext.release();
+
+    // release gpu handles
+    clearTargets();
 }
 
 
 void WgRenderer::disposeObjects()
 {
-    if (mDisposeRenderDatas.count == 0) return;
-
-    for (auto p = mDisposeRenderDatas.begin(); p < mDisposeRenderDatas.end(); p++) {
-        auto renderData = (WgRenderDataPaint*)(*p);
+    for (uint32_t i = 0; i < mDisposeRenderDatas.count; i++) {
+        WgRenderDataPaint* renderData = (WgRenderDataPaint*)mDisposeRenderDatas[i];
         if (renderData->type() == Type::Shape) {
             mRenderDataShapePool.free(mContext, (WgRenderDataShape*)renderData);
         } else {
-            renderData->release(mContext);
-            delete renderData;
+            mRenderDataPicturePool.free(mContext, (WgRenderDataPicture*)renderData);
         }
     }
     mDisposeRenderDatas.clear();
@@ -119,7 +119,7 @@ RenderData WgRenderer::prepare(RenderSurface* surface, RenderData data, const Ma
     // get or create render data shape
     auto renderDataPicture = (WgRenderDataPicture*)data;
     if (!renderDataPicture)
-        renderDataPicture = new WgRenderDataPicture();
+        renderDataPicture = mRenderDataPicturePool.allocate(mContext);
 
     // update paint settings
     renderDataPicture->viewport = mViewport;
@@ -130,13 +130,7 @@ RenderData WgRenderer::prepare(RenderSurface* surface, RenderData data, const Ma
 
     // update image data
     if (flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Image)) {
-        mContext.pipelines->layouts.releaseBindGroup(renderDataPicture->bindGroupPicture);
-        renderDataPicture->meshData.release(mContext);
-        renderDataPicture->meshData.imageBox(mContext, surface->w, surface->h);
-        renderDataPicture->imageData.update(mContext, surface);
-        renderDataPicture->bindGroupPicture = mContext.pipelines->layouts.createBindGroupTexSampled(
-            mContext.samplerLinearRepeat, renderDataPicture->imageData.textureView
-        );
+        renderDataPicture->updateSurface(mContext, surface);
     }
 
     // store clips data
@@ -149,7 +143,7 @@ bool WgRenderer::preRender()
 {
     // push rot render storage to the render tree stack
     assert(mRenderStorageStack.count == 0);
-    mRenderStorageStack.push(&mStorageRoot);
+    mRenderStorageStack.push(&mRenderStorageRoot);
     // create command encoder for drawing
     WGPUCommandEncoderDescriptor commandEncoderDesc{};
     mCommandEncoder = wgpuDeviceCreateCommandEncoder(mContext.device, &commandEncoderDesc);
@@ -193,6 +187,7 @@ bool WgRenderer::postRender()
 
 
 void WgRenderer::dispose(RenderData data) {
+    if (!mContext.queue) return;
     auto renderData = (WgRenderDataPaint*)data;
     if (renderData) {
         ScopedLock lock(mDisposeKey);
@@ -260,20 +255,26 @@ void WgRenderer::releaseSurfaceTexture()
 bool WgRenderer::sync()
 {
     disposeObjects();
-    if (!surface) return false;
 
-    releaseSurfaceTexture();
+    // if texture buffer used
+    WGPUTexture dstTexture = targetTexture;
+    if (surface) {
+        releaseSurfaceTexture();
+        wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
+        dstTexture = surfaceTexture.texture;
+    }
+    // there is no external dest buffer
+    if (!dstTexture) return false;
 
-    wgpuSurfaceGetCurrentTexture(surface, &surfaceTexture);
-
-    WGPUTextureView dstView = mContext.createTextureView(surfaceTexture.texture);
+    // get external dest buffer
+    WGPUTextureView dstTextureView = mContext.createTextureView(dstTexture);
 
     // create command encoder
     const WGPUCommandEncoderDescriptor commandEncoderDesc{};
     WGPUCommandEncoder commandEncoder = wgpuDeviceCreateCommandEncoder(mContext.device, &commandEncoderDesc);
 
     // show root offscreen buffer
-    mCompositor.blit(mContext, commandEncoder, &mStorageRoot, dstView);
+    mCompositor.blit(mContext, commandEncoder, &mRenderStorageRoot, dstTextureView);
 
     // release command encoder
     const WGPUCommandBufferDescriptor commandBufferDesc{};
@@ -281,73 +282,100 @@ bool WgRenderer::sync()
     wgpuQueueSubmit(mContext.queue, 1, &commandsBuffer);
     wgpuCommandBufferRelease(commandsBuffer);
     wgpuCommandEncoderRelease(commandEncoder);
-    mContext.releaseTextureView(dstView);
 
+    // release dest buffer view
+    mContext.releaseTextureView(dstTextureView);
     return true;
 }
 
 
-// target for native window handle
-bool WgRenderer::target(WGPUInstance instance, WGPUSurface surface, uint32_t w, uint32_t h, WGPUDevice device)
+// render target handle
+bool WgRenderer::target(WGPUDevice device, WGPUInstance instance, void* target, uint32_t width, uint32_t height, int type)
 {
-    gpuOwner = false;
-    this->device = device;
-    if (!this->device) {
-        // request adapter
-        const WGPURequestAdapterOptions requestAdapterOptions { .nextInChain = nullptr, .compatibleSurface = surface, .powerPreference = WGPUPowerPreference_HighPerformance, .forceFallbackAdapter = false };
-        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) { *((WGPUAdapter*)pUserData) = adapter; };
-        wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &this->adapter);
-
-        // get adapter and surface properties
-        WGPUFeatureName featureNames[32]{};
-        size_t featuresCount = wgpuAdapterEnumerateFeatures(this->adapter, featureNames);
-
-        // request device
-        const WGPUDeviceDescriptor deviceDesc { .nextInChain = nullptr, .label = "The device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
-        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const * message, void * pUserData) { *((WGPUDevice*)pUserData) = device; };
-        wgpuAdapterRequestDevice(this->adapter, &deviceDesc, onDeviceRequestEnded, &this->device);
-        gpuOwner = true;
+    // release all existing handles
+    if (!instance || !device || !target) {
+        // release all handles
+        release();
+        return true;
     }
 
-    mContext.initialize(instance, this->device);
-    initialize();
-    target(surface, w, h);
-    mRenderStoragePool.initialize(mContext, w, h);
-    mStorageRoot.initialize(mContext, w, h);
-    mCompositor.initialize(mContext, w, h);
+    // can not initialize renderer, give up
+    if (!instance || !device || !target || !width || !height)
+        return false;
+
+    // device or instance was changed, need to recreate all instances
+    if ((mContext.device != device) || (mContext.instance != instance)) {
+        // release all handles
+        release();
+        // initialize base rendering handles
+        mContext.initialize(instance, device);
+    // release render targets only
+    } else if (mRenderStorageRoot.texView) {
+        mRenderStoragePool.release(mContext);
+        mRenderStorageRoot.release(mContext);
+        mCompositor.release(mContext);
+        clearTargets();
+    }
+
+    // initialize render tree instances
+    mRenderStoragePool.initialize(mContext, width, height);
+    mRenderStorageRoot.initialize(mContext, width, height);
+    mCompositor.initialize(mContext, width, height);
+
+    // store target properties
+    mTargetSurface.stride = width;
+    mTargetSurface.w = width;
+    mTargetSurface.h = height;
+
+    // configure surface (must be called after context creation)
+    if (type == 0) {
+        surface = (WGPUSurface)target;
+        surfaceConfigure(surface, mContext, width, height);
+    } else targetTexture = (WGPUTexture)target;
+
     return true;
 }
 
-bool WgRenderer::target(WGPUSurface surface, uint32_t w, uint32_t h) {
+
+void WgRenderer::clearTargets()
+{
+    releaseSurfaceTexture();
+    if (surface) wgpuSurfaceUnconfigure(surface);
+    targetTexture = nullptr;
+    surface = nullptr;
+    mTargetSurface.stride = 0;
+    mTargetSurface.w = 0;
+    mTargetSurface.h = 0;
+
+}
+
+
+bool WgRenderer::surfaceConfigure(WGPUSurface surface, WgContext& context, uint32_t width, uint32_t height)
+{
     // store target surface properties
     this->surface = surface;
-    mTargetSurface.stride = w;
-    mTargetSurface.w = w;
-    mTargetSurface.h = h;
-    if (w == 0 || h == 0) return false;
-    if (!surface) return true;
+    if (width == 0 || height == 0 || !surface) return false;
 
+    // setup surface configuration
     WGPUSurfaceConfiguration surfaceConfiguration {
-        .device = mContext.device,
-        .format = mContext.preferredFormat,
+        .device = context.device,
+        .format = context.preferredFormat,
         .usage = WGPUTextureUsage_RenderAttachment,
     #ifdef __EMSCRIPTEN__
         .alphaMode = WGPUCompositeAlphaMode_Premultiplied,
     #endif
-        .width = w, .height = h,
-    #ifdef __EMSCRIPTEN__
+        .width = width,
+        .height = height,
+    #ifndef __EMSCRIPTEN__
         .presentMode = WGPUPresentMode_Fifo,
-    #else
-        .presentMode = WGPUPresentMode_Immediate
     #endif
     };
     wgpuSurfaceConfigure(surface, &surfaceConfiguration);
-
     return true;
 }
 
 
-RenderCompositor* WgRenderer::target(TVG_UNUSED const RenderRegion& region, TVG_UNUSED ColorSpace cs)
+RenderCompositor* WgRenderer::target(const RenderRegion& region, TVG_UNUSED ColorSpace cs, TVG_UNUSED CompositionFlag flags)
 {
     mCompositorStack.push(new WgCompose);
     mCompositorStack.last()->aabb = region;
@@ -369,7 +397,7 @@ bool WgRenderer::beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_
     mRenderStorageStack.push(storage);
     // begin newly added render pass
     WGPUColor color{};
-    if ((method == MaskMethod::None) && (opacity != 255)) color = { 1.0, 1.0, 1.0, 0.0 };
+    if ((compose->method == MaskMethod::None) && (compose->blend != BlendMethod::Normal)) color = { 1.0, 1.0, 1.0, 0.0 };
     mCompositor.beginRenderPass(mCommandEncoder, mRenderStorageStack.last(), true, color);
     return true;
 }
@@ -424,7 +452,7 @@ bool WgRenderer::prepare(TVG_UNUSED RenderEffect* effect)
 }
 
 
-bool WgRenderer::effect(TVG_UNUSED RenderCompositor* cmp, TVG_UNUSED const RenderEffect* effect, TVG_UNUSED bool direct)
+bool WgRenderer::effect(TVG_UNUSED RenderCompositor* cmp, TVG_UNUSED const RenderEffect* effect, TVG_UNUSED uint8_t opacity, TVG_UNUSED bool direct)
 {
     TVGLOG("WG_ENGINE", "SceneEffect(%d) is not supported", (int)effect->type);
     return false;

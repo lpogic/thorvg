@@ -23,7 +23,7 @@
 #ifndef _TVG_WG_PIPELINES_H_
 #define _TVG_WG_PIPELINES_H_
 
-#include "tvgWgBindGroups.h"
+#include "tvgWgCommon.h"
 
 class WgPipelines {
 private:
@@ -91,9 +91,6 @@ public:
     WGPURenderPipeline scene_compose[11]{};
     // pipeline blit
     WGPURenderPipeline blit{};
-public:
-    // layouts
-    WgBindGroupLayouts layouts;
 private:
     void releaseGraphicHandles(WgContext& context);
 private:
@@ -104,10 +101,8 @@ private:
         const WGPUShaderModule shaderModule, const char* vsEntryPoint, const char* fsEntryPoint,
         const WGPUPipelineLayout pipelineLayout,
         const WGPUVertexBufferLayout *vertexBufferLayouts, const uint32_t vertexBufferLayoutsCount,
-        const WGPUColorWriteMaskFlags writeMask, const WGPUTextureFormat colorTargetFormat,
-        const WGPUCompareFunction stencilFunctionFrnt, const WGPUStencilOperation stencilOperationFrnt,
-        const WGPUCompareFunction stencilFunctionBack, const WGPUStencilOperation stencilOperationBack,
-        const WGPUCompareFunction depthCompare, WGPUBool depthWriteEnabled, const WGPUMultisampleState multisampleState, const WGPUBlendState blendState);
+        const WGPUColorWriteMaskFlags writeMask, const WGPUTextureFormat colorTargetFormat, const WGPUBlendState blendState,
+        const WGPUDepthStencilState depthStencilState, const WGPUMultisampleState multisampleState);
     WGPUComputePipeline createComputePipeline(
         WGPUDevice device, const char* pipelineLabel,
         const WGPUShaderModule shaderModule, const char* entryPoint,
@@ -116,6 +111,14 @@ private:
     void releaseRenderPipeline(WGPURenderPipeline& renderPipeline);
     void releasePipelineLayout(WGPUPipelineLayout& pipelineLayout);
     void releaseShaderModule(WGPUShaderModule& shaderModule);
+
+    WGPUDepthStencilState makeDepthStencilState(
+        const WGPUCompareFunction depthCompare, WGPUBool depthWriteEnabled,
+        const WGPUCompareFunction stencilFunctionFrnt, const WGPUStencilOperation stencilOperationFrnt);
+    WGPUDepthStencilState makeDepthStencilState(
+        const WGPUCompareFunction depthCompare, WGPUBool depthWriteEnabled,
+        const WGPUCompareFunction stencilFunctionFrnt, const WGPUStencilOperation stencilOperationFrnt,
+        const WGPUCompareFunction stencilFunctionBack, const WGPUStencilOperation stencilOperationBack);
 public:
     void initialize(WgContext& context);
     void release(WgContext& context);

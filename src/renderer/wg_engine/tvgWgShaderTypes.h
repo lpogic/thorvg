@@ -43,22 +43,15 @@ struct WgShaderTypeMat4x4f
 };
 
 // vec4f
-struct WgShaderTypeBlendSettings
+struct WgShaderTypeVec4f
 {
-    float settings[4]{};
+    float vec[4]{};
 
-    WgShaderTypeBlendSettings() {};
-    WgShaderTypeBlendSettings(const ColorSpace colorSpace, uint8_t o);
+    WgShaderTypeVec4f() {};
+    WgShaderTypeVec4f(const ColorSpace colorSpace, uint8_t o);
+    WgShaderTypeVec4f(const RenderColor& c);
     void update(const ColorSpace colorSpace, uint8_t o);
-};
-
-// vec4f
-struct WgShaderTypeSolidColor
-{
-    float color[4]{};
-
-    WgShaderTypeSolidColor(const uint8_t* c);
-    void update(const uint8_t* c);
+    void update(const RenderColor& c);
 };
 
 // sampler, texture, vec4f

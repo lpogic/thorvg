@@ -45,21 +45,18 @@ public:
     bool clear() override;
     bool sync() override;
 
-    bool target(WGPUInstance instance, WGPUSurface surface, uint32_t w, uint32_t h, WGPUDevice device);
-    bool target(WGPUSurface surface, uint32_t w, uint32_t h);
+    bool target(WGPUDevice device, WGPUInstance instance, void* target, uint32_t width, uint32_t height, int type = 0);
 
-    RenderCompositor* target(const RenderRegion& region, ColorSpace cs) override;
+    RenderCompositor* target(const RenderRegion& region, ColorSpace cs, CompositionFlag flags) override;
     bool beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity) override;
     bool endComposite(RenderCompositor* cmp) override;
 
     bool prepare(RenderEffect* effect) override;
-    bool effect(RenderCompositor* cmp, const RenderEffect* effect, bool direct) override;
+    bool effect(RenderCompositor* cmp, const RenderEffect* effect, uint8_t opacity, bool direct) override;
 
     static WgRenderer* gen();
     static bool init(uint32_t threads);
     static bool term();
-
-    WGPUSurface surface{}; // external handle
 
 private:
     WgRenderer();
@@ -69,31 +66,39 @@ private:
     void disposeObjects();
     void releaseSurfaceTexture();
 
-    WGPUSurfaceTexture surfaceTexture{};
-
-    WGPUCommandEncoder mCommandEncoder{};
-    WgRenderDataShapePool mRenderDataShapePool;
+    void clearTargets();
+    bool surfaceConfigure(WGPUSurface surface, WgContext& context, uint32_t width, uint32_t height);
 
     // render tree stacks
-    WgRenderStorage mStorageRoot;
+    WgRenderStorage mRenderStorageRoot;
     Array<WgCompose*> mCompositorStack;
     Array<WgRenderStorage*> mRenderStorageStack;
+
+    // render storage pool
     WgRenderStoragePool mRenderStoragePool;
 
+    // render data paint pools
+    WgRenderDataShapePool mRenderDataShapePool;
+    WgRenderDataPicturePool mRenderDataPicturePool;
+
+    // rendering context
     WgContext mContext;
-    WgPipelines mPipelines;
     WgCompositor mCompositor;
 
+    // rendering states
     RenderSurface mTargetSurface;
     BlendMethod mBlendMethod{};
     RenderRegion mViewport{};
 
+    // disposable data list
     Array<RenderData> mDisposeRenderDatas{};
     Key mDisposeKey{};
 
-    WGPUAdapter adapter{};
-    WGPUDevice device{};
-    bool gpuOwner{};
+    // gpu handles
+    WGPUCommandEncoder mCommandEncoder{};
+    WGPUTexture targetTexture{}; // external handle
+    WGPUSurfaceTexture surfaceTexture{};
+    WGPUSurface surface{};  // external handle
 };
 
 #endif /* _TVG_WG_RENDERER_H_ */

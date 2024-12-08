@@ -82,12 +82,12 @@ public:
     bool sync() override;
     bool clear() override;
 
-    RenderCompositor* target(const RenderRegion& region, ColorSpace cs) override;
+    RenderCompositor* target(const RenderRegion& region, ColorSpace cs, CompositionFlag flags) override;
     bool beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity) override;
     bool endComposite(RenderCompositor* cmp) override;
 
     bool prepare(RenderEffect* effect) override;
-    bool effect(RenderCompositor* cmp, const RenderEffect* effect, bool direct) override;
+    bool effect(RenderCompositor* cmp, const RenderEffect* effect, uint8_t opacity, bool direct) override;
 
     static GlRenderer* gen();
     static int init(TVG_UNUSED uint32_t threads);
@@ -99,7 +99,7 @@ private:
     ~GlRenderer();
 
     void initShaders();
-    void drawPrimitive(GlShape& sdata, uint8_t r, uint8_t g, uint8_t b, uint8_t a, RenderUpdateFlag flag, int32_t depth);
+    void drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdateFlag flag, int32_t depth);
     void drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFlag flag, int32_t depth);
     void drawClip(Array<RenderData>& clips);
 

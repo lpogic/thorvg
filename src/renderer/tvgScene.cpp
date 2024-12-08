@@ -67,25 +67,23 @@ Type Scene::type() const noexcept
 }
 
 
-Result Scene::push(Paint* paint) noexcept
+Result Scene::push(Paint* target, Paint* at) noexcept
 {
-    if (!paint) return Result::MemoryCorruption;
-    PP(paint)->ref();
-    pImpl->paints.push_back(paint);
+    if (!target) return Result::InvalidArguments;
+    target->ref();
 
-    return Result::Success;
+    return pImpl->insert(target, at);
 }
 
 
-Result Scene::clear(bool free) noexcept
+Result Scene::remove(Paint* paint) noexcept
 {
-    pImpl->clear(free);
-
-    return Result::Success;
+    if (paint) return pImpl->remove(paint);
+    else return pImpl->clearPaints();
 }
 
 
-list<Paint*>& Scene::paints() noexcept
+const list<Paint*>& Scene::paints() const noexcept
 {
     return pImpl->paints;
 }

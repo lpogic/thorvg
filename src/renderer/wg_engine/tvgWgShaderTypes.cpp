@@ -24,9 +24,9 @@
 #include <cassert>
 #include "tvgMath.h"
 
-///////////////////////////////////////////////////////////////////////////////
-// shader types
-///////////////////////////////////////////////////////////////////////////////
+//************************************************************************
+// WgShaderTypeMat4x4f
+//************************************************************************
 
 WgShaderTypeMat4x4f::WgShaderTypeMat4x4f()
 {
@@ -85,34 +85,40 @@ void WgShaderTypeMat4x4f::update(size_t w, size_t h)
     mat[12] = -1.0f;     mat[13] = +1.0f;     mat[14] = +0.0f; mat[15] = +1.0f;
 }
 
+//************************************************************************
+// WgShaderTypeVec4f
+//************************************************************************
 
-WgShaderTypeBlendSettings::WgShaderTypeBlendSettings(const ColorSpace colorSpace, uint8_t o)
+WgShaderTypeVec4f::WgShaderTypeVec4f(const ColorSpace colorSpace, uint8_t o)
 {
     update(colorSpace, o);
 }
 
 
-void WgShaderTypeBlendSettings::update(const ColorSpace colorSpace, uint8_t o)
-{
-    settings[0] = (uint32_t)colorSpace;
-    settings[3] = o / 255.0f;
-}
-
-
-WgShaderTypeSolidColor::WgShaderTypeSolidColor(const uint8_t* c)
+WgShaderTypeVec4f::WgShaderTypeVec4f(const RenderColor& c)
 {
     update(c);
 }
 
 
-void WgShaderTypeSolidColor::update(const uint8_t* c)
+void WgShaderTypeVec4f::update(const ColorSpace colorSpace, uint8_t o)
 {
-    color[0] = c[0] / 255.0f; // red
-    color[1] = c[1] / 255.0f; // green
-    color[2] = c[2] / 255.0f; // blue
-    color[3] = c[3] / 255.0f; // alpha
+    vec[0] = (uint32_t)colorSpace;
+    vec[3] = o / 255.0f;
 }
 
+
+void WgShaderTypeVec4f::update(const RenderColor& c)
+{
+    vec[0] = c.r / 255.0f; // red
+    vec[1] = c.g / 255.0f; // green
+    vec[2] = c.b / 255.0f; // blue
+    vec[3] = c.a / 255.0f; // alpha
+}
+
+//************************************************************************
+// WgShaderTypeGradient
+//************************************************************************
 
 void WgShaderTypeGradient::update(const LinearGradient* linearGradient)
 {
@@ -171,12 +177,13 @@ void WgShaderTypeGradient::updateTexData(const Fill::ColorStop* stops, uint32_t 
         }
     }
     // tail
-    range_s = uint32_t(sstops.last().offset * (WG_TEXTURE_GRADIENT_SIZE-1));
+    const tvg::Fill::ColorStop& colorStopLast = sstops.last();
+    range_s = uint32_t(colorStopLast.offset * (WG_TEXTURE_GRADIENT_SIZE-1));
     range_e = WG_TEXTURE_GRADIENT_SIZE;
     for (uint32_t ti = range_s; ti < range_e; ti++) {
-        texData[ti * 4 + 0] = sstops[stopCnt-1].r;
-        texData[ti * 4 + 1] = sstops[stopCnt-1].g;
-        texData[ti * 4 + 2] = sstops[stopCnt-1].b;
-        texData[ti * 4 + 3] = sstops[stopCnt-1].a;
+        texData[ti * 4 + 0] = colorStopLast.r;
+        texData[ti * 4 + 1] = colorStopLast.g;
+        texData[ti * 4 + 2] = colorStopLast.b;
+        texData[ti * 4 + 3] = colorStopLast.a;
     }
 }

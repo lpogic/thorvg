@@ -25,7 +25,10 @@
 #include <emscripten/bind.h>
 #include "tvgPicture.h"
 #ifdef THORVG_WG_RASTER_SUPPORT
-    #include <webgpu/webgpu.h>
+    #include <emscripten/html5_webgpu.h>
+#endif
+#ifdef THORVG_GL_RASTER_SUPPORT
+    #include <emscripten/html5_webgl.h>
 #endif
 
 using namespace emscripten;
@@ -150,7 +153,55 @@ struct TvgWgEngine : TvgEngineMethod
     void resize(Canvas* canvas, int w, int h) override
     {
     #ifdef THORVG_WG_RASTER_SUPPORT
-        static_cast<WgCanvas*>(canvas)->target(instance, surface, w, h, device);
+        static_cast<WgCanvas*>(canvas)->target(device, instance, surface, w, h, ColorSpace::ABGR8888S);
+    #endif
+    }
+};
+
+struct TvgGLEngine : TvgEngineMethod
+{
+    uintptr_t context = 0;
+    ~TvgGLEngine() override
+    {
+    #ifdef THORVG_GL_RASTER_SUPPORT
+        if (context) {
+            Initializer::term(tvg::CanvasEngine::Gl);
+            emscripten_webgl_destroy_context(context);
+            context = 0;
+        }
+    #endif
+    }
+
+    Canvas* init(string& selector) override
+    {
+    #ifdef THORVG_GL_RASTER_SUPPORT
+        EmscriptenWebGLContextAttributes attrs{};
+        attrs.alpha = true;
+        attrs.depth = false;
+        attrs.stencil = false;
+        attrs.premultipliedAlpha = true;
+        attrs.failIfMajorPerformanceCaveat = false;
+        attrs.majorVersion = 2;
+        attrs.minorVersion = 0;
+        attrs.enableExtensionsByDefault = true;
+
+        context = emscripten_webgl_create_context(selector.c_str(), &attrs);
+        if (context == 0) return nullptr;
+
+        emscripten_webgl_make_context_current(context);
+    #endif
+
+        if (Initializer::init(0, tvg::CanvasEngine::Gl) != Result::Success) return nullptr;
+
+        return GlCanvas::gen();
+    }
+
+    void resize(Canvas* canvas, int w, int h) override
+    {
+    #ifdef THORVG_GL_RASTER_SUPPORT
+        emscripten_webgl_make_context_current(context);
+
+        static_cast<GlCanvas*>(canvas)->target(0, w, h, ColorSpace::ABGR8888S);
     #endif
     }
 };
@@ -171,6 +222,7 @@ public:
         errorMsg = NoError;
 
         if (engine == "sw") this->engine = new TvgSwEngine;
+        else if (engine == "gl") this->engine = new TvgGLEngine;
         else if (engine == "wg") this->engine = new TvgWgEngine;
 
         if (!this->engine) {
@@ -229,9 +281,6 @@ public:
             errorMsg = "Invalid data";
             return false;
         }
-
-        //FIXME: remove this copy, save with a file passing.
-        this->data = data; //back up for saving
 
         canvas->clear(true);
 
@@ -350,15 +399,15 @@ public:
     }
 
     // Saver methods
-    bool save(string mimetype)
+    bool save(string data, string mimetype)
     {
-        if (mimetype == "gif") return save2Gif();
+        if (mimetype == "gif") return save2Gif(data);
 
         errorMsg = "Invalid mimetype";
         return false;
     }
 
-    bool save2Gif()
+    bool save2Gif(string data)
     {
         errorMsg = NoError;
 
@@ -427,7 +476,6 @@ private:
     Canvas*                canvas = nullptr;
     Animation*             animation = nullptr;
     TvgEngineMethod*       engine = nullptr;
-    string                 data;
     uint32_t               width = 0;
     uint32_t               height = 0;
     float                  psize[2];         //picture size
