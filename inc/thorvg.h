@@ -467,10 +467,6 @@ public:
      */
     uint32_t id = 0;
 
-    // THORVG_GUI_PATH
-
-    Result markTransformed() noexcept;
-
     _TVG_DECLARE_PRIVATE(Paint);
 };
 
