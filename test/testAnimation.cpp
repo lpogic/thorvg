@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -301,26 +301,26 @@ TEST_CASE("Animation Segment", "[tvgAnimation]")
     //Get current segment before segment
     REQUIRE(animation->segment(&begin, &end) == Result::Success);
     REQUIRE(begin == 0.0f);
-    REQUIRE(end == 1.0f);
+    REQUIRE(end == animation->totalFrame());
 
     //Segment by range
     REQUIRE(animation->segment(0.25, 0.5) == Result::Success);
 
     //Get current segment
     REQUIRE(animation->segment(&begin, &end) == Result::Success);
-    REQUIRE(begin == 0.25);
-    REQUIRE(end == 0.5);
+    REQUIRE(begin == 0.25f);
+    REQUIRE(end == 0.5f);
 
     //Get only segment begin
     REQUIRE(animation->segment(&begin) == Result::Success);
-    REQUIRE(begin == 0.25);
+    REQUIRE(begin == 0.25f);
 
     //Get only segment end
     REQUIRE(animation->segment(nullptr, &end) == Result::Success);
-    REQUIRE(end == 0.5);
+    REQUIRE(end == 0.5f);
 
     //Segment by invalid range
-    REQUIRE(animation->segment(-0.5, 1.5) == Result::InvalidArguments);
+    REQUIRE(animation->segment(1.5, -0.5) == Result::InvalidArguments);
 
     REQUIRE(Initializer::term() == Result::Success);
 }

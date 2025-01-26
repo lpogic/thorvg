@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -30,9 +30,10 @@
 struct LottieParser : LookaheadParserHandler
 {
 public:
-    LottieParser(const char *str, const char* dirName) : LookaheadParserHandler(str)
+    LottieParser(const char *str, const char* dirName, bool expressions) : LookaheadParserHandler(str)
     {
         this->dirName = dirName;
+        this->expressions = expressions;
     }
 
     bool parse();
@@ -44,16 +45,15 @@ public:
     LottieComposition* comp = nullptr;
     const char* dirName = nullptr;       //base resource directory
     char* slots = nullptr;
+    bool expressions = false;            //support expressions?
 
 private:
     RGB24 getColor(const char *str);
-    MaskMethod getMatteType();
     FillRule getFillRule();
-    StrokeCap getStrokeCap();
-    StrokeJoin getStrokeJoin();
     MaskMethod getMaskMethod(bool inversed);
     LottieInterpolator* getInterpolator(const char* key, Point& in, Point& out);
     LottieEffect* getEffect(int type);
+    LottieExpression* getExpression(char* code, LottieComposition* comp, LottieLayer* layer, LottieObject* object, LottieProperty* property);
 
     void getInterpolatorPoint(Point& pt);
     void getPathSet(LottiePathSet& path);
@@ -98,8 +98,13 @@ private:
     LottieFont* parseFont();
     LottieMarker* parseMarker();
 
-    void parseGaussianBlur(LottieGaussianBlur* effect);
-    void parseDropShadow(LottieDropShadow* effect);
+    void parseEffect(LottieEffect* effect, void(LottieParser::*func)(LottieEffect*, int));
+    void parseStroke(LottieEffect* effect, int idx);
+    void parseTritone(LottieEffect* effect, int idx);
+    void parseTint(LottieEffect* effect, int idx);
+    void parseFill(LottieEffect* effect, int idx);
+    void parseGaussianBlur(LottieEffect* effect, int idx);
+    void parseDropShadow(LottieEffect* effect, int idx);
 
     bool parseDirection(LottieShape* shape, const char* key);
     bool parseCommon(LottieObject* obj, const char* key);

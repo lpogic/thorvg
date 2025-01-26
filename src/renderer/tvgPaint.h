@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,8 @@
 #include "tvgRender.h"
 #include "tvgMath.h"
 
+#define PAINT(A) PIMPL(A, Paint)
+
 namespace tvg
 {
     enum ContextFlag : uint8_t {Default = 0, FastTrack = 1};
@@ -51,6 +53,8 @@ namespace tvg
         Mask* maskData = nullptr;
         Paint* clipper = nullptr;
         RenderMethod* renderer = nullptr;
+        RenderData rd = nullptr;
+
         struct {
             Matrix m;                 //input matrix
             Matrix cm;                //multipled parents matrix
@@ -68,7 +72,7 @@ namespace tvg
                 m.e31 = 0.0f;
                 m.e32 = 0.0f;
                 m.e33 = 1.0f;
-                tvg::scale(&m, scale, scale);
+                tvg::scale(&m, {scale, scale});
                 tvg::rotate(&m, degree);
             }
         } tr;
@@ -83,14 +87,45 @@ namespace tvg
             reset();
         }
 
-        ~Impl()
+        virtual ~Impl()
         {
             if (maskData) {
                 maskData->target->unref();
                 free(maskData);
             }
+
             if (clipper) clipper->unref();
-            if (renderer && (renderer->unref() == 0)) delete(renderer);
+
+            if (renderer) {
+                if (rd) renderer->dispose(rd);
+                if (renderer->unref() == 0) delete(renderer);
+            }
+        }
+
+        uint8_t ref()
+        {
+            if (refCnt == UINT8_MAX) TVGERR("RENDERER", "Reference Count Overflow!");
+            else ++refCnt;
+            return refCnt;
+        }
+
+        uint8_t unref(bool free)
+        {
+            if (refCnt > 0) --refCnt;
+            else TVGERR("RENDERER", "Corrupted Reference Count!");
+
+            if (free && refCnt == 0) {
+                //TODO: use the global dismiss function?
+                delete(paint);
+                return 0;
+            }
+
+            return refCnt;
+        }
+
+        void update(RenderUpdateFlag flag)
+        {
+            renderFlag |= flag;
         }
 
         bool transform(const Matrix& m)
@@ -143,16 +178,87 @@ namespace tvg
             return true;
         }
 
+        MaskMethod mask(const Paint** target) const
+        {
+            if (maskData) {
+                if (target) *target = maskData->target;
+                return maskData->method;
+            } else {
+                if (target) *target = nullptr;
+                return MaskMethod::None;
+            }
+        }
+
+        void reset()
+        {
+            if (clipper) {
+                clipper->unref();
+                clipper = nullptr;
+            }
+
+            if (maskData) {
+                maskData->target->unref();
+                free(maskData);
+                maskData = nullptr;
+            }
+
+            tvg::identity(&tr.m);
+            tr.degree = 0.0f;
+            tr.scale = 1.0f;
+            tr.overriding = false;
+
+            blendMethod = BlendMethod::Normal;
+            renderFlag = RenderUpdateFlag::None;
+            ctxFlag = ContextFlag::Default;
+            opacity = 255;
+            paint->id = 0;
+        }
+
+        bool rotate(float degree)
+        {
+            if (tr.overriding) return false;
+            if (tvg::equal(degree, tr.degree)) return true;
+            tr.degree = degree;
+            renderFlag |= RenderUpdateFlag::Transform;
+
+            return true;
+        }
+
+        bool scale(float factor)
+        {
+            if (tr.overriding) return false;
+            if (tvg::equal(factor, tr.scale)) return true;
+            tr.scale = factor;
+            renderFlag |= RenderUpdateFlag::Transform;
+
+            return true;
+        }
+
+        bool translate(float x, float y)
+        {
+            if (tr.overriding) return false;
+            if (tvg::equal(x, tr.m.e13) && tvg::equal(y, tr.m.e23)) return true;
+            tr.m.e13 = x;
+            tr.m.e23 = y;
+            renderFlag |= RenderUpdateFlag::Transform;
+
+            return true;
+        }
+
+        void blend(BlendMethod method)
+        {
+            if (blendMethod != method) {
+                blendMethod = method;
+                renderFlag |= RenderUpdateFlag::Blend;
+            }
+        }
+
         RenderRegion bounds(RenderMethod* renderer) const;
         Iterator* iterator();
-        bool rotate(float degree);
-        bool scale(float factor);
-        bool translate(float x, float y);
         bool bounds(float* x, float* y, float* w, float* h, bool transformed, bool stroking, bool origin = false);
         RenderData update(RenderMethod* renderer, const Matrix& pm, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag pFlag, bool clipper = false);
         bool render(RenderMethod* renderer);
         Paint* duplicate(Paint* ret = nullptr);
-        void reset();
     };
 }
 

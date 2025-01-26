@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2024 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -71,6 +71,11 @@ struct Example
     virtual void populate(const char* path) {}
     virtual ~Example() {}
 
+    float timestamp()
+    {
+        return float(SDL_GetTicks()) * 0.001f;
+    }
+
     void scandir(const char* path)
     {
         char buf[PATH_MAX];
@@ -137,6 +142,7 @@ struct Window
     bool needResize = false;
     bool needDraw = false;
     bool initialized = false;
+    bool clearBuffer = false;
     bool print = false;
 
     Window(tvg::CanvasEngine engine, Example* example, uint32_t width, uint32_t height, uint32_t threadsCnt)
@@ -170,7 +176,7 @@ struct Window
     bool draw()
     {
         //Draw the contents to the Canvas
-        if (verify(canvas->draw())) {
+        if (verify(canvas->draw(clearBuffer))) {
             verify(canvas->sync());
             return true;
         }
@@ -293,7 +299,7 @@ struct SwWindow : Window
         if (!surface) return;
 
         //Set the canvas target and draw on it.
-        verify(static_cast<tvg::SwCanvas*>(canvas)->target((uint32_t*)surface->pixels, surface->w, surface->pitch / 4, surface->h, tvg::ColorSpace::ARGB8888));
+        verify(static_cast<tvg::SwCanvas*>(canvas)->target((uint32_t*)surface->pixels, surface->pitch / 4, surface->w, surface->h, tvg::ColorSpace::ARGB8888));
     }
 
     void refresh() override
@@ -348,7 +354,7 @@ struct GlWindow : Window
     void resize() override
     {
         //Set the canvas target and draw on it.
-        verify(static_cast<tvg::GlCanvas*>(canvas)->target(0, width, height, tvg::ColorSpace::ABGR8888S));
+        verify(static_cast<tvg::GlCanvas*>(canvas)->target(context, 0, width, height, tvg::ColorSpace::ABGR8888S));
     }
 
     void refresh() override
@@ -525,7 +531,7 @@ bool verify(tvg::Result result, string failMsg)
 }
 
 
-int main(Example* example, int argc, char **argv, uint32_t width = 800, uint32_t height = 800, uint32_t threadsCnt = 4, bool print = false)
+int main(Example* example, int argc, char **argv, bool clearBuffer = false, uint32_t width = 800, uint32_t height = 800, uint32_t threadsCnt = 4, bool print = false)
 {
     auto engine = tvg::CanvasEngine::Sw;
 
@@ -544,6 +550,7 @@ int main(Example* example, int argc, char **argv, uint32_t width = 800, uint32_t
         window = unique_ptr<Window>(new WgWindow(example, width, height, threadsCnt));
     }
 
+    window->clearBuffer = clearBuffer;
     window->print = print;
 
     if (window->ready()) {

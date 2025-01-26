@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -102,10 +102,10 @@ TVG_API Tvg_Result tvg_swcanvas_set_target(Tvg_Canvas* canvas, uint32_t* buffer,
 }
 
 
-TVG_API Tvg_Result tvg_glcanvas_set_target(Tvg_Canvas* canvas, int32_t id, uint32_t w, uint32_t h, Tvg_Colorspace cs)
+TVG_API Tvg_Result tvg_glcanvas_set_target(Tvg_Canvas* canvas, void* context, int32_t id, uint32_t w, uint32_t h, Tvg_Colorspace cs)
 {
     if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<GlCanvas*>(canvas)->target(id, w, h, static_cast<ColorSpace>(cs));
+    return (Tvg_Result) reinterpret_cast<GlCanvas*>(canvas)->target(context, id, w, h, static_cast<ColorSpace>(cs));
 }
 
 
@@ -123,18 +123,12 @@ TVG_API Tvg_Result tvg_canvas_push(Tvg_Canvas* canvas, Tvg_Paint* paint)
 }
 
 
-TVG_API Tvg_Result tvg_canvas_push_at(Tvg_Canvas* canvas, Tvg_Paint* paint, Tvg_Paint* at)
+TVG_API Tvg_Result tvg_canvas_push_at(Tvg_Canvas* canvas, Tvg_Paint* target, Tvg_Paint* at)
 {
-    if (!canvas || !paint || !at) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->push((Paint*)paint, (Paint*) at);
+    if (!canvas || !target || !at) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->push((Paint*)target, (Paint*) at);
 }
 
-
-TVG_API Tvg_Result tvg_canvas_clear(Tvg_Canvas* canvas, bool paints, bool buffer)
-{
-    if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->clear(paints, buffer);
-}
 
 TVG_API Tvg_Result tvg_canvas_remove(Tvg_Canvas* canvas, Tvg_Paint* paint)
 {
@@ -157,10 +151,10 @@ TVG_API Tvg_Result tvg_canvas_update_paint(Tvg_Canvas* canvas, Tvg_Paint* paint)
 }
 
 
-TVG_API Tvg_Result tvg_canvas_draw(Tvg_Canvas* canvas)
+TVG_API Tvg_Result tvg_canvas_draw(Tvg_Canvas* canvas, bool clear)
 {
     if (!canvas) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->draw();
+    return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->draw(clear);
 }
 
 
@@ -379,18 +373,10 @@ TVG_API Tvg_Result tvg_shape_append_path(Tvg_Paint* paint, const Tvg_Path_Comman
 }
 
 
-TVG_API Tvg_Result tvg_shape_get_path_coords(const Tvg_Paint* paint, const Tvg_Point** pts, uint32_t* cnt)
+TVG_API Tvg_Result tvg_shape_get_path(const Tvg_Paint* paint, const Tvg_Path_Command** cmds, uint32_t* cmdsCnt, const Tvg_Point** pts, uint32_t* ptsCnt)
 {
-    if (!paint || !pts || !cnt) return TVG_RESULT_INVALID_ARGUMENT;
-    *cnt = reinterpret_cast<const Shape*>(paint)->pathCoords((const Point**)pts);
-    return TVG_RESULT_SUCCESS;
-}
-
-
-TVG_API Tvg_Result tvg_shape_get_path_commands(const Tvg_Paint* paint, const Tvg_Path_Command** cmds, uint32_t* cnt)
-{
-    if (!paint || !cmds || !cnt) return TVG_RESULT_INVALID_ARGUMENT;
-    *cnt = reinterpret_cast<const Shape*>(paint)->pathCommands((const PathCommand**)cmds);
+    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<const Shape*>(paint)->path((const PathCommand**)cmds, cmdsCnt, (const Point**)pts, ptsCnt);
     return TVG_RESULT_SUCCESS;
 }
 
@@ -516,7 +502,7 @@ TVG_API Tvg_Result tvg_shape_set_fill_color(Tvg_Paint* paint, uint8_t r, uint8_t
 TVG_API Tvg_Result tvg_shape_get_fill_color(const Tvg_Paint* paint, uint8_t* r, uint8_t* g, uint8_t* b, uint8_t* a)
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
-    return (Tvg_Result) reinterpret_cast<const Shape*>(paint)->fillColor(r, g, b, a);
+    return (Tvg_Result) reinterpret_cast<const Shape*>(paint)->fill(r, g, b, a);
 }
 
 

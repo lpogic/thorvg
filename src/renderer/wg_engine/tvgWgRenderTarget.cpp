@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -83,9 +83,9 @@ void WgRenderStoragePool::initialize(WgContext& context, uint32_t width, uint32_
 
 void WgRenderStoragePool::release(WgContext& context)
 {
-    for (uint32_t i = 0; i < list.count; i++) {
-       list[i]->release(context);
-       delete list[i];
+    ARRAY_FOREACH(p, list) {
+       (*p)->release(context);
+       delete(*p);
     }
     list.clear();
     pool.clear();

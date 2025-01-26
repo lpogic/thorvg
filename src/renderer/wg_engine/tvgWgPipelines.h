@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -46,7 +46,7 @@ private:
     WGPUShaderModule shader_scene_compose{};
     // shader blit
     WGPUShaderModule shader_blit{};
-private:
+
     // layouts helpers
     WGPUPipelineLayout layout_stencil{};
     WGPUPipelineLayout layout_depth{};
@@ -66,7 +66,7 @@ private:
     WGPUPipelineLayout layout_blit{};
 public:
     // pipelines stencil markup
-    WGPURenderPipeline winding{};
+    WGPURenderPipeline nonzero{};
     WGPURenderPipeline evenodd{};
     WGPURenderPipeline direct{};
     // pipelines clip path markup
@@ -93,7 +93,6 @@ public:
     WGPURenderPipeline blit{};
 private:
     void releaseGraphicHandles(WgContext& context);
-private:
     WGPUShaderModule createShaderModule(WGPUDevice device, const char* label, const char* code);
     WGPUPipelineLayout createPipelineLayout(WGPUDevice device, const WGPUBindGroupLayout* bindGroupLayouts, const uint32_t bindGroupLayoutsCount);
     WGPURenderPipeline createRenderPipeline(

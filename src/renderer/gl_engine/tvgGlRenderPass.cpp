@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,10 +21,9 @@
  * SOFTWARE.
  */
 
-#include "tvgMath.h"
+#include "tvgGlCommon.h"
 #include "tvgGlRenderPass.h"
 #include "tvgGlRenderTask.h"
-#include "tvgGlGeometry.h"
 
 GlRenderPass::GlRenderPass(GlRenderTarget* fbo): mFbo(fbo), mTasks(), mDrawDepth(0) {}
 
@@ -41,9 +40,7 @@ GlRenderPass::~GlRenderPass()
 {
     if (mTasks.empty()) return;
 
-    for(uint32_t i = 0; i < mTasks.count; i++) {
-        delete mTasks[i];
-    }
+    ARRAY_FOREACH(p, mTasks) delete(*p);
 
     mTasks.clear();
 }
@@ -59,7 +56,7 @@ void GlRenderPass::getMatrix(float *dst, const Matrix &matrix) const
 
     Matrix postMatrix{};
     identity(&postMatrix);
-    translate(&postMatrix, -vp.x, -vp.y);
+    translate(&postMatrix, {(float)-vp.x, (float)-vp.y});
 
     auto m = postMatrix * matrix;
 

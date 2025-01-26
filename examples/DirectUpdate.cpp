@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -86,9 +86,6 @@ struct UserExample : tvgexam::Example
     bool update(tvg::Canvas* canvas, uint32_t elapsed) override
     {
         if (!canvas) return false;
-
-        //clear buffer and redraw!
-        if (!tvgexam::verify(canvas->clear(false))) return false;
 
         auto progress = tvgexam::progress(elapsed, 2.0f, true);  //play time 2 sec.
 

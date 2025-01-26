@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2024 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,24 +26,16 @@
 #include "tvgAnimation.h"
 
 
-/************************************************************************/
-/* Internal Class Implementation                                        */
-/************************************************************************/
-
-/************************************************************************/
-/* External Class Implementation                                        */
-/************************************************************************/
-
-LottieAnimation::~LottieAnimation()
+LottieAnimation::LottieAnimation()
 {
 }
 
 
 Result LottieAnimation::override(const char* slot) noexcept
 {
-    if (!pImpl->picture->pImpl->loader) return Result::InsufficientCondition;
+    if (!PICTURE(pImpl->picture)->loader) return Result::InsufficientCondition;
 
-    if (static_cast<LottieLoader*>(pImpl->picture->pImpl->loader)->override(slot)) return Result::Success;
+    if (static_cast<LottieLoader*>(PICTURE(pImpl->picture)->loader)->override(slot)) return Result::Success;
 
     return Result::InvalidArguments;
 }
@@ -51,24 +43,24 @@ Result LottieAnimation::override(const char* slot) noexcept
 
 Result LottieAnimation::segment(const char* marker) noexcept
 {
-    auto loader = pImpl->picture->pImpl->loader;
+    auto loader = PICTURE(pImpl->picture)->loader;
     if (!loader) return Result::InsufficientCondition;
 
     if (!marker) {
-        static_cast<FrameModule*>(loader)->segment(0.0f, 1.0f);
+        static_cast<LottieLoader*>(loader)->segment(0.0f, FLT_MAX);
         return Result::Success;
     }
     
     float begin, end;
     if (!static_cast<LottieLoader*>(loader)->segment(marker, begin, end)) return Result::InvalidArguments;
 
-    return static_cast<Animation*>(this)->segment(begin, end);
+    return static_cast<LottieLoader*>(loader)->segment(begin, end);
 }
 
 
 uint32_t LottieAnimation::markersCnt() noexcept
 {
-    auto loader = pImpl->picture->pImpl->loader;
+    auto loader = PICTURE(pImpl->picture)->loader;
     if (!loader) return 0;
     return static_cast<LottieLoader*>(loader)->markersCnt();
 }
@@ -76,7 +68,7 @@ uint32_t LottieAnimation::markersCnt() noexcept
 
 const char* LottieAnimation::marker(uint32_t idx) noexcept
 {
-    auto loader = pImpl->picture->pImpl->loader;
+    auto loader = PICTURE(pImpl->picture)->loader;
     if (!loader) return nullptr;
     return static_cast<LottieLoader*>(loader)->markers(idx);
 }

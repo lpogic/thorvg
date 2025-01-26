@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,37 +24,21 @@
 #include "tvgText.h"
 
 
-/************************************************************************/
-/* Internal Class Implementation                                        */
-/************************************************************************/
-
-
-
-/************************************************************************/
-/* External Class Implementation                                        */
-/************************************************************************/
-
-
-Text::Text() : pImpl(new Impl(this))
+Text::Text()
 {
-}
-
-
-Text::~Text()
-{
-    delete(pImpl);
+    pImpl = new Impl(this);
 }
 
 
 Result Text::text(const char* text) noexcept
 {
-    return pImpl->text(text);
+    return TEXT(this)->text(text);
 }
 
 
 Result Text::font(const char* name, float size, const char* style) noexcept
 {
-    return pImpl->font(name, size, style);
+    return TEXT(this)->font(name, size, style);
 }
 
 
@@ -103,13 +87,13 @@ Result Text::unload(const char* filename) noexcept
 
 Result Text::fill(uint8_t r, uint8_t g, uint8_t b) noexcept
 {
-    return pImpl->shape->fill(r, g, b);
+    return TEXT(this)->shape->fill(r, g, b);
 }
 
 
 Result Text::fill(Fill* f) noexcept
 {
-    return pImpl->shape->fill(f);
+    return TEXT(this)->shape->fill(f);
 }
 
 

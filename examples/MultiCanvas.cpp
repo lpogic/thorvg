@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -43,11 +43,8 @@ void content(tvg::Canvas* canvas)
     bg->fill(255, 255, 255);
     canvas->push(bg);
 
-    char buf[PATH_MAX];
-    snprintf(buf, sizeof(buf), EXAMPLE_DIR"/svg/logo.svg");
-
     auto picture = tvg::Picture::gen();
-    if (!tvgexam::verify(picture->load(buf))) return;
+    if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/svg/logo.svg"))) return;
 
     float scale;
     float shiftX = 0.0f, shiftY = 0.0f;
@@ -218,7 +215,7 @@ void runGl()
         auto canvas = unique_ptr<tvg::GlCanvas>(tvg::GlCanvas::gen());
 
         // Pass the framebuffer id to the GlCanvas
-        tvgexam::verify(canvas->target(glFbo.fbo, SIZE, SIZE, tvg::ColorSpace::ABGR8888S));
+        tvgexam::verify(canvas->target(context, glFbo.fbo, SIZE, SIZE, tvg::ColorSpace::ABGR8888S));
 
         content(canvas.get());
         if (tvgexam::verify(canvas->draw())) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,7 @@ void LottieLoader::run(unsigned tid)
         builder->update(comp, frameNo);
     //initial loading
     } else {
-        LottieParser parser(content, dirName);
+        LottieParser parser(content, dirName, builder->expressions());
         if (!parser.parse()) return;
         {
             ScopedLock lock(key);
@@ -97,8 +97,7 @@ bool LottieLoader::header()
         if (comp) {
             w = static_cast<float>(comp->w);
             h = static_cast<float>(comp->h);
-            frameDuration = comp->duration();
-            frameCnt = comp->frameCnt();
+            segmentEnd = frameCnt = comp->frameCnt();
             frameRate = comp->frameRate;
             return true;
         } else {
@@ -190,10 +189,9 @@ bool LottieLoader::header()
         return false;
     }
 
-    frameCnt = (endFrame - startFrame);
-    frameDuration = frameCnt / frameRate;
+    segmentEnd = frameCnt = (endFrame - startFrame);
 
-    TVGLOG("LOTTIE", "info: frame rate = %f, duration = %f size = %f x %f", frameRate, frameDuration, w, h);
+    TVGLOG("LOTTIE", "info: frame rate = %f, duration = %f size = %f x %f", frameRate, frameCnt / frameRate, w, h);
 
     return true;
 }
@@ -234,11 +232,7 @@ bool LottieLoader::open(const char* path)
 
     auto content = (char*)(malloc(sizeof(char) * size + 1));
     fseek(f, 0, SEEK_SET);
-    auto ret = fread(content, sizeof(char), size, f);
-    if (ret < size) {
-        fclose(f);
-        return false;
-    }
+    size = fread(content, sizeof(char), size, f);
     content[size] = '\0';
 
     fclose(f);
@@ -264,9 +258,8 @@ bool LottieLoader::resize(Paint* paint, float w, float h)
     paint->transform(m);
 
     //apply the scale to the base clipper
-    const Paint* clipper;
-    paint->mask(&clipper);
-    if (clipper) const_cast<Paint*>(clipper)->transform(m);
+    auto clipper = PAINT(paint)->clipper;
+    if (clipper) clipper->transform(m);
 
     return true;
 }
@@ -305,19 +298,19 @@ bool LottieLoader::override(const char* slots, bool byDefault)
         auto temp = byDefault ? slots : strdup(slots);
 
         //parsing slot json
-        LottieParser parser(temp, dirName);
+        LottieParser parser(temp, dirName, builder->expressions());
         parser.comp = comp;
 
         auto idx = 0;
         auto succeed = false;
         while (auto sid = parser.sid(idx == 0)) {
             auto applied = false;
-            for (auto s = comp->slots.begin(); s < comp->slots.end(); ++s) {
-                if (strcmp((*s)->sid, sid)) continue;
-                if (parser.apply(*s, byDefault)) succeed = applied = true;
+            ARRAY_FOREACH(p, comp->slots) {
+                if (strcmp((*p)->sid, sid)) continue;
+                if (parser.apply(*p, byDefault)) succeed = applied = true;
                 break;
             }
-            if (!applied) parser.skip(sid);
+            if (!applied) parser.skip();
             ++idx;
         }
         free((char*)temp);
@@ -326,8 +319,8 @@ bool LottieLoader::override(const char* slots, bool byDefault)
         return rebuild;
     //reset slots
     } else if (overridden) {
-        for (auto s = comp->slots.begin(); s < comp->slots.end(); ++s) {
-            (*s)->reset();
+        ARRAY_FOREACH(p, comp->slots) {
+            (*p)->reset();
         }
         overridden = false;
         rebuild = true;
@@ -360,13 +353,13 @@ bool LottieLoader::frame(float no)
 
 float LottieLoader::startFrame()
 {
-    return frameCnt * segmentBegin;
+    return segmentBegin;
 }
 
 
 float LottieLoader::totalFrame()
 {
-    return (segmentEnd - segmentBegin) * frameCnt;
+    return segmentEnd - segmentBegin;
 }
 
 
@@ -378,8 +371,7 @@ float LottieLoader::curFrame()
 
 float LottieLoader::duration()
 {
-    if (segmentBegin == 0.0f && segmentEnd == 1.0f) return frameDuration;
-    return frameCnt * (segmentEnd - segmentBegin) / frameRate;
+    return (segmentEnd - segmentBegin) / frameRate;
 }
 
 
@@ -405,14 +397,28 @@ const char* LottieLoader::markers(uint32_t index)
 }
 
 
+Result LottieLoader::segment(float begin, float end)
+{
+    if (begin < 0.0f) begin = 0.0f;
+    if (end > frameCnt) end = frameCnt;
+
+    if (begin > end) return Result::InvalidArguments;
+
+    segmentBegin = begin;
+    segmentEnd = end;
+
+    return Result::Success;
+}
+
+
 bool LottieLoader::segment(const char* marker, float& begin, float& end)
 {
     if (!ready() || comp->markers.count == 0) return false;
 
-    for (auto m = comp->markers.begin(); m < comp->markers.end(); ++m) {
-        if (!strcmp(marker, (*m)->name)) {
-            begin = (*m)->time / frameCnt;
-            end = ((*m)->time + (*m)->duration) / frameCnt;
+    ARRAY_FOREACH(p, comp->markers) {
+        if (!strcmp(marker, (*p)->name)) {
+            begin = (*p)->time;
+            end = (*p)->time + (*p)->duration;
             return true;
         }
     }

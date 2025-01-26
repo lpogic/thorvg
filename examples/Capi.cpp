@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -73,14 +73,11 @@ void contents()
 //////2. Solid transformed shape
     //Set a shape
     const Tvg_Path_Command* cmds;
-    uint32_t cmdCnt;
     const Tvg_Point* pts;
-    uint32_t ptsCnt;
+    uint32_t cmdCnt, ptsCnt;
+    tvg_shape_get_path(shape1, &cmds, &cmdCnt, &pts, &ptsCnt);
 
     Tvg_Paint* shape2 = tvg_shape_new();
-    tvg_shape_get_path_commands(shape1, &cmds, &cmdCnt);
-    tvg_shape_get_path_coords(shape1, &pts, &ptsCnt);
-
     tvg_shape_append_path(shape2, cmds, cmdCnt, pts, ptsCnt);
     tvg_shape_set_fill_color(shape2, 255, 255, 255, 128);
 
@@ -332,9 +329,6 @@ int main(int argc, char **argv)
             }
         }
 
-        //Clear the canvas
-        tvg_canvas_clear(canvas, false, true);
-
         //Update the animation
         if (animation) {
             float duration, totalFrame;
@@ -345,7 +339,7 @@ int main(int argc, char **argv)
 
         //Draw the canvas
         tvg_canvas_update(canvas);
-        tvg_canvas_draw(canvas);
+        tvg_canvas_draw(canvas, true);
         tvg_canvas_sync(canvas);
 
         SDL_UpdateWindowSurface(window);

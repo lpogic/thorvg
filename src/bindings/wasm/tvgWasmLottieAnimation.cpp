@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,32 +41,60 @@ static const char* NoError = "None";
     static WGPUInstance instance{};
     static WGPUAdapter adapter{};
     static WGPUDevice device{};
+    static bool adapterRequested = false;
+    static bool deviceRequested = false;
+    static bool initializationFailed = false;
 #endif
 
-void init()
+// 0: success, 1: fail, 2: wait for async request
+int init()
 {
 #ifdef THORVG_WG_RASTER_SUPPORT
+    if (initializationFailed) return 1;
+
     //Init WebGPU
     if (!instance) instance = wgpuCreateInstance(nullptr);
 
     // request adapter
     if (!adapter) {
+        if (adapterRequested) return 2;
+
         const WGPURequestAdapterOptions requestAdapterOptions { .nextInChain = nullptr, .powerPreference = WGPUPowerPreference_HighPerformance, .forceFallbackAdapter = false };
-        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) { *((WGPUAdapter*)pUserData) = adapter; };
+        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* pUserData) { 
+            if (status != WGPURequestAdapterStatus_Success) {
+                initializationFailed = true;
+                return;
+            }
+            *((WGPUAdapter*)pUserData) = adapter;
+        };
         wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &adapter);
-        while (!adapter) emscripten_sleep(10);
+
+        adapterRequested = true;
+        return 2;
     }
 
     // request device
+    if (deviceRequested) return device == nullptr ? 2 : 0;
+
     WGPUFeatureName featureNames[32]{};
     size_t featuresCount = wgpuAdapterEnumerateFeatures(adapter, featureNames);
     if (!device) {
         const WGPUDeviceDescriptor deviceDesc { .nextInChain = nullptr, .label = "The device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
-        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const * message, void * pUserData) { *((WGPUDevice*)pUserData) = device; };
+        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* pUserData) {
+            if (status != WGPURequestDeviceStatus_Success) {
+                initializationFailed = true;
+                return;
+            }
+            *((WGPUDevice*)pUserData) = device; 
+        };
         wgpuAdapterRequestDevice(adapter, &deviceDesc, onDeviceRequestEnded, &device);
-        while (!device) emscripten_sleep(10);
+
+        deviceRequested = true;
+        return 2;
     }
 #endif
+
+    return 0;
 }
 
 void term()
@@ -160,7 +188,7 @@ struct TvgWgEngine : TvgEngineMethod
 
 struct TvgGLEngine : TvgEngineMethod
 {
-    uintptr_t context = 0;
+    intptr_t context = 0;
     ~TvgGLEngine() override
     {
     #ifdef THORVG_GL_RASTER_SUPPORT
@@ -199,9 +227,7 @@ struct TvgGLEngine : TvgEngineMethod
     void resize(Canvas* canvas, int w, int h) override
     {
     #ifdef THORVG_GL_RASTER_SUPPORT
-        emscripten_webgl_make_context_current(context);
-
-        static_cast<GlCanvas*>(canvas)->target(0, w, h, ColorSpace::ABGR8888S);
+        static_cast<GlCanvas*>(canvas)->target((void*)context, 0, w, h, ColorSpace::ABGR8888S);
     #endif
     }
 };
@@ -282,7 +308,7 @@ public:
             return false;
         }
 
-        canvas->clear(true);
+        canvas->remove();
 
         delete(animation);
         animation = Animation::gen();
@@ -323,7 +349,7 @@ public:
 
         if (!updated) return engine->output(width, height);
 
-        if (canvas->draw() != Result::Success) {
+        if (canvas->draw(true) != Result::Success) {
             errorMsg = "draw() fail";
             return val(typed_memory_view<uint8_t>(0, nullptr));
         }
@@ -340,8 +366,6 @@ public:
         if (!updated) return true;
 
         errorMsg = NoError;
-
-        this->canvas->clear(false);
 
         if (canvas->update() != Result::Success) {
             errorMsg = "update() fail";

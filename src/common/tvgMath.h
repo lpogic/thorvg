@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2021 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -69,10 +69,11 @@ static inline bool equal(float a, float b)
 
 
 template <typename T>
-static inline void clamp(T& v, const T& min, const T& max)
+static inline constexpr const T& clamp(const T& v, const T& min, const T& max)
 {
-    if (v < min) v = min;
-    else if (v > max) v = max;
+    if (v < min) return min;
+    else if (v > max) return max;
+    return v;
 }
 
 /************************************************************************/
@@ -113,38 +114,38 @@ static inline void identity(Matrix* m)
 }
 
 
-static inline void scale(Matrix* m, float sx, float sy)
+static inline void scale(Matrix* m, const Point& p)
 {
-    m->e11 *= sx;
-    m->e22 *= sy;
+    m->e11 *= p.x;
+    m->e22 *= p.y;
 }
 
 
-static inline void scaleR(Matrix* m, float x, float y)
+static inline void scaleR(Matrix* m, const Point& p)
 {
-    if (x != 1.0f) {
-        m->e11 *= x;
-        m->e21 *= x;
+    if (p.x != 1.0f) {
+        m->e11 *= p.x;
+        m->e21 *= p.x;
     }
-    if (y != 1.0f) {
-        m->e22 *= y;
-        m->e12 *= y;
+    if (p.y != 1.0f) {
+        m->e22 *= p.y;
+        m->e12 *= p.y;
     }
 }
 
 
-static inline void translate(Matrix* m, float x, float y)
+static inline void translate(Matrix* m, const Point& p)
 {
-    m->e13 += x;
-    m->e23 += y;
+    m->e13 += p.x;
+    m->e23 += p.y;
 }
 
 
-static inline void translateR(Matrix* m, float x, float y)
+static inline void translateR(Matrix* m, const Point& p)
 {
-    if (x == 0.0f && y == 0.0f) return;
-    m->e13 += (x * m->e11 + y * m->e12);
-    m->e23 += (x * m->e21 + y * m->e22);
+    if (p.x == 0.0f && p.y == 0.0f) return;
+    m->e13 += (p.x * m->e11 + p.y * m->e12);
+    m->e23 += (p.x * m->e21 + p.y * m->e22);
 }
 
 

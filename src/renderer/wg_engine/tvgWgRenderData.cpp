@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -157,9 +157,9 @@ void WgMeshDataPool::free(WgContext& context, WgMeshData* meshData)
 
 void WgMeshDataPool::release(WgContext& context)
 {
-    for (uint32_t i = 0; i < mList.count; i++) {
-        mList[i]->release(context);
-        delete mList[i];
+    ARRAY_FOREACH(p, mList) {
+        (*p)->release(context);
+        delete(*p);
     }
     mPool.clear();
     mList.clear();
@@ -197,8 +197,8 @@ void WgMeshDataGroup::append(WgContext& context, const Point pmin, const Point p
 
 void WgMeshDataGroup::release(WgContext& context)
 {
-    for (uint32_t i = 0; i < meshes.count; i++)
-        WgMeshDataPool::gMeshDataPool->free(context, meshes[i]);
+    ARRAY_FOREACH(p, meshes)
+        WgMeshDataPool::gMeshDataPool->free(context, *p);
     meshes.clear();
 };
 
@@ -324,16 +324,16 @@ void WgRenderDataPaint::update(WgContext& context, const tvg::Matrix& transform,
 
 void WgRenderDataPaint::updateClips(tvg::Array<tvg::RenderData> &clips) {
     this->clips.clear();
-    for (uint32_t i = 0; i < clips.count; i++)
-        if (clips[i])
-            this->clips.push((WgRenderDataPaint*)clips[i]);
+    ARRAY_FOREACH(p, clips) {
+        this->clips.push((WgRenderDataPaint*)(*p));
+    }
 }
 
 //***********************************************************************
 // WgRenderDataShape
 //***********************************************************************
 
-void WgRenderDataShape::appendShape(WgContext context, const WgVertexBuffer& vertexBuffer)
+void WgRenderDataShape::appendShape(WgContext& context, const WgVertexBuffer& vertexBuffer)
 {
     if (vertexBuffer.vcount < 3) return;
     Point pmin{}, pmax{};
@@ -344,7 +344,7 @@ void WgRenderDataShape::appendShape(WgContext context, const WgVertexBuffer& ver
 }
 
 
-void WgRenderDataShape::appendStroke(WgContext context, const WgVertexBufferInd& vertexBufferInd)
+void WgRenderDataShape::appendStroke(WgContext& context, const WgVertexBufferInd& vertexBufferInd)
 {
     if (vertexBufferInd.vcount < 3) return;
     Point pmin{}, pmax{};
@@ -376,7 +376,7 @@ void WgRenderDataShape::updateAABB(const Matrix& tr) {
 }
 
 
-void WgRenderDataShape::updateMeshes(WgContext &context, const RenderShape &rshape, const Matrix& tr)
+void WgRenderDataShape::updateMeshes(WgContext& context, const RenderShape &rshape, const Matrix& tr)
 {
     releaseMeshes(context);
     strokeFirst = rshape.stroke ? rshape.stroke->strokeFirst : false;
@@ -452,7 +452,7 @@ void WgRenderDataShape::updateMeshes(WgContext &context, const RenderShape &rsha
 }
 
 
-void WgRenderDataShape::proceedStrokes(WgContext context, const RenderStroke* rstroke, float tbeg, float tend, const WgVertexBuffer& buff)
+void WgRenderDataShape::proceedStrokes(WgContext& context, const RenderStroke* rstroke, float tbeg, float tend, const WgVertexBuffer& buff)
 {
     assert(rstroke);
     static WgVertexBufferInd strokesGenerator;
@@ -479,7 +479,7 @@ void WgRenderDataShape::proceedStrokes(WgContext context, const RenderStroke* rs
 }
 
 
-void WgRenderDataShape::releaseMeshes(WgContext &context)
+void WgRenderDataShape::releaseMeshes(WgContext& context)
 {
     meshGroupStrokesBBox.release(context);
     meshGroupStrokes.release(context);
@@ -532,9 +532,9 @@ void WgRenderDataShapePool::free(WgContext& context, WgRenderDataShape* renderDa
 
 void WgRenderDataShapePool::release(WgContext& context)
 {
-    for (uint32_t i = 0; i < mList.count; i++) {
-        mList[i]->release(context);
-        delete mList[i];
+    ARRAY_FOREACH(p, mList) {
+        (*p)->release(context);
+        delete(*p);
     }
     mPool.clear();
     mList.clear();
@@ -593,9 +593,9 @@ void WgRenderDataPicturePool::free(WgContext& context, WgRenderDataPicture* rend
 
 void WgRenderDataPicturePool::release(WgContext& context)
 {
-    for (uint32_t i = 0; i < mList.count; i++) {
-        mList[i]->release(context);
-        delete mList[i];
+    ARRAY_FOREACH(p, mList) {
+        (*p)->release(context);
+        delete(*p);
     }
     mPool.clear();
     mList.clear();

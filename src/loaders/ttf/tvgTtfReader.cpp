@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,7 @@
 
 #ifdef _WIN32
     #include <malloc.h>
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__ZEPHYR__)
     #include <alloca.h>
 #else
     #include <stdlib.h>
@@ -479,8 +479,8 @@ bool TtfReader::convert(Shape* shape, TtfGlyphMetrics& gmetrics, const Point& of
     if (!this->points(outline, flags, pts, ptsCnt, offset + kerning)) return false;
 
     //generate tvg paths.
-    auto& pathCmds = P(shape)->rs.path.cmds;
-    auto& pathPts = P(shape)->rs.path.pts;
+    auto& pathCmds = SHAPE(shape)->rs.path.cmds;
+    auto& pathPts = SHAPE(shape)->rs.path.pts;
     pathCmds.reserve(ptsCnt);
     pathPts.reserve(ptsCnt);
 

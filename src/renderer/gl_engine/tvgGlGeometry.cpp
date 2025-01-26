@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,14 +20,10 @@
  * SOFTWARE.
  */
 
+#include "tvgGlCommon.h"
 #include "tvgGlGpuBuffer.h"
-#include "tvgGlGeometry.h"
 #include "tvgGlTessellator.h"
 #include "tvgGlRenderTask.h"
-
-GlGeometry::~GlGeometry()
-{
-}
 
 bool GlGeometry::tesselate(const RenderShape& rshape, RenderUpdateFlag flag)
 {
@@ -35,13 +31,9 @@ bool GlGeometry::tesselate(const RenderShape& rshape, RenderUpdateFlag flag)
         fillVertex.clear();
         fillIndex.clear();
 
-
         BWTessellator bwTess{&fillVertex, &fillIndex};
-
         bwTess.tessellate(&rshape, mMatrix);
-
         mFillRule = rshape.rule;
-
         mBounds = bwTess.bounds();
     }
 
@@ -51,7 +43,6 @@ bool GlGeometry::tesselate(const RenderShape& rshape, RenderUpdateFlag flag)
 
         Stroker stroke{&strokeVertex, &strokeIndex, mMatrix};
         stroke.stroke(&rshape);
-
         mBounds = stroke.bounds();
     }
 
@@ -123,10 +114,7 @@ void GlGeometry::disableVertex(uint32_t location)
 
 bool GlGeometry::draw(GlRenderTask* task, GlStageBuffer* gpuBuffer, RenderUpdateFlag flag)
 {
-
-    if (flag == RenderUpdateFlag::None) {
-        return false;
-    }
+    if (flag == RenderUpdateFlag::None) return false;
 
     Array<float>* vertexBuffer = nullptr;
     Array<uint32_t>* indexBuffer = nullptr;
@@ -187,7 +175,7 @@ GlStencilMode GlGeometry::getStencilMode(RenderUpdateFlag flag)
     if (flag & RenderUpdateFlag::GradientStroke) return GlStencilMode::Stroke;
     if (flag & RenderUpdateFlag::Image) return GlStencilMode::None;
 
-    if (mFillRule == FillRule::Winding) return GlStencilMode::FillWinding;
+    if (mFillRule == FillRule::NonZero) return GlStencilMode::FillNonZero;
     if (mFillRule == FillRule::EvenOdd) return GlStencilMode::FillEvenOdd;
 
     return GlStencilMode::None;
@@ -220,10 +208,7 @@ RenderRegion GlGeometry::getBounds() const
             static_cast<int32_t>(ceil(right - floor(left))),
             static_cast<int32_t>(ceil(bottom - floor(top))),
         };
-        if (bounds.w < 0 || bounds.h < 0) {
-            return mBounds;
-        } else {
-            return bounds;
-        }
+        if (bounds.w < 0 || bounds.h < 0) return mBounds;
+        else return bounds;
     }
 }

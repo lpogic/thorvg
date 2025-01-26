@@ -43,11 +43,15 @@
 
 #define _TVG_DECLARE_PRIVATE(A) \
     struct Impl; \
-    Impl* pImpl; \
 protected: \
     A(const A&) = delete; \
     const A& operator=(const A&) = delete; \
     A()
+
+#define _TVG_DECLARE_PRIVATE_BASE(A) \
+    _TVG_DECLARE_PRIVATE(A); \
+public: \
+    Impl* pImpl
 
 #define _TVG_DISABLE_CTOR(A) \
     A() = delete; \
@@ -120,8 +124,8 @@ enum class PathCommand : uint8_t
 enum class StrokeCap : uint8_t
 {
     Square = 0, ///< The stroke is extended in both end-points of a sub-path by a rectangle, with the width equal to the stroke width and the length equal to the half of the stroke width. For zero length sub-paths the square is rendered with the size of the stroke width.
-    Round,      ///< The stroke is extended in both end-points of a sub-path by a half circle, with a radius equal to the half of a stroke width. For zero length sub-paths a full circle is rendered.
-    Butt        ///< The stroke ends exactly at each of the two end-points of a sub-path. For zero length sub-paths no stroke is rendered.
+    Butt,       ///< The stroke ends exactly at each of the two end-points of a sub-path. For zero length sub-paths no stroke is rendered.
+    Round       ///< The stroke is extended in both end-points of a sub-path by a half circle, with a radius equal to the half of a stroke width. For zero length sub-paths a full circle is rendered.
 };
 
 
@@ -131,8 +135,8 @@ enum class StrokeCap : uint8_t
 enum class StrokeJoin : uint8_t
 {
     Bevel = 0, ///< The outer corner of the joined path segments is bevelled at the join point. The triangular region of the corner is enclosed by a straight line between the outer corners of each stroke.
-    Round,     ///< The outer corner of the joined path segments is rounded. The circular region is centered at the join point.
-    Miter      ///< The outer corner of the joined path segments is spiked. The spike is created by extension beyond the join point of the outer edges of the stroke until they intersect. In case the extension goes beyond the limit, the join style is converted to the Bevel style.
+    Miter,     ///< The outer corner of the joined path segments is spiked. The spike is created by extension beyond the join point of the outer edges of the stroke until they intersect. In case the extension goes beyond the limit, the join style is converted to the Bevel style.
+    Round      ///< The outer corner of the joined path segments is rounded. The circular region is centered at the join point.
 };
 
 
@@ -152,7 +156,7 @@ enum class FillSpread : uint8_t
  */
 enum class FillRule : uint8_t
 {
-    Winding = 0, ///< A line from the point to a location outside the shape is drawn. The intersections of the line with the path segment of the shape are counted. Starting from zero, if the path segment of the shape crosses the line clockwise, one is added, otherwise one is subtracted. If the resulting sum is non zero, the point is inside the shape.
+    NonZero = 0, ///< A line from the point to a location outside the shape is drawn. The intersections of the line with the path segment of the shape are counted. Starting from zero, if the path segment of the shape crosses the line clockwise, one is added, otherwise one is subtracted. If the resulting sum is non zero, the point is inside the shape.
     EvenOdd      ///< A line from the point to a location outside the shape is drawn and its intersections with the path segments of the shape are counted. If the number of intersections is an odd number, the point is inside the shape.
 };
 
@@ -226,7 +230,10 @@ enum class SceneEffect : uint8_t
 {
     ClearAll = 0,      ///< Reset all previously applied scene effects, restoring the scene to its original state.
     GaussianBlur,      ///< Apply a blur effect with a Gaussian filter. Param(3) = {sigma(float)[> 0], direction(int)[both: 0 / horizontal: 1 / vertical: 2], border(int)[duplicate: 0 / wrap: 1], quality(int)[0 - 100]}
-    DropShadow         ///< Apply a drop shadow effect with a Gaussian Blur filter. Param(8) = {color_R(int)[0 - 255], color_G(int)[0 - 255], color_B(int)[0 - 255], opacity(int)[0 - 255], angle(float)[0 - 360], distance(float), blur_sigma(float)[> 0], quality(int)[0 - 100]}
+    DropShadow,        ///< Apply a drop shadow effect with a Gaussian Blur filter. Param(8) = {color_R(int)[0 - 255], color_G(int)[0 - 255], color_B(int)[0 - 255], opacity(int)[0 - 255], angle(float)[0 - 360], distance(float), blur_sigma(float)[> 0], quality(int)[0 - 100]}
+    Fill,              ///< Override the scene content color with a given fill information (Experimental API). Param(5) = {color_R(int)[0 - 255], color_G(int)[0 - 255], color_B(int)[0 - 255], opacity(int)[0 - 255]}
+    Tint,              ///< Tinting the current scene color with a given black, white color paramters (Experimental API). Param(7) = {black_R(int)[0 - 255], black_G(int)[0 - 255], black_B(int)[0 - 255], white_R(int)[0 - 255], white_G(int)[0 - 255], white_B(int)[0 - 255], intensity(float)[0 - 100]}
+    Tritone            ///< Apply a tritone color effect to the scene using three color parameters for shadows, midtones, and highlights (Experimental API). Param(9) = {Shadow_R(int)[0 - 255], Shadow_G(int)[0 - 255], Shadow_B(int)[0 - 255], Midtone_R(int)[0 - 255], Midtone_G(int)[0 - 255], Midtone_B(int)[0 - 255], Highlight_R(int)[0 - 255], Highlight_G(int)[0 - 255], Highlight_B(int)[0 - 255]}
 };
 
 
@@ -514,7 +521,7 @@ public:
      */
     uint32_t id = 0;
 
-    _TVG_DECLARE_PRIVATE(Paint);
+    _TVG_DECLARE_PRIVATE_BASE(Paint);
 };
 
 
@@ -615,7 +622,7 @@ public:
      */
     virtual Type type() const noexcept = 0;
 
-    _TVG_DECLARE_PRIVATE(Fill);
+    _TVG_DECLARE_PRIVATE_BASE(Fill);
 };
 
 
@@ -632,7 +639,6 @@ public:
 class TVG_API Canvas
 {
 public:
-    Canvas(RenderMethod*);
     virtual ~Canvas();
 
     /**
@@ -642,7 +648,7 @@ public:
      *
      * @warning Please avoid accessing the paints during Canvas update/draw. You can access them after calling sync().
      * @see Canvas::push()
-     * @see Canvas::clear()
+     * @see Canvas::remove()
      *
      * @warning This is read-only. Do not modify the list.
      * @note 1.0
@@ -667,24 +673,9 @@ public:
      * @note The rendering order of the paints is the same as the order as they were pushed. Consider sorting the paints before pushing them if you intend to use layering.
      *
      * @see Canvas::paints()
-     * @see Canvas::clear()
+     * @see Canvas::remove()
      */
     Result push(Paint* target, Paint* at = nullptr) noexcept;
-
-    /**
-     * @brief Clear the internal canvas resources that used for the drawing.
-     *
-     * This API sets the total number of paints pushed into the canvas to zero.
-     * Depending on the value of the @p paints argument, the paints are either freed or retained.
-     * So if you need to update paint properties while maintaining the existing scene structure, you can set @p paints = false.
-     *
-     * @param[in] paints If @c true, the memory occupied by paints is deallocated; otherwise, the paints will be retained on the canvas.
-     * @param[in] buffer If @c true, the canvas target buffer is cleared with a zero value.
-     *
-     * @see Canvas::push()
-     * @see Canvas::paints()
-     */
-    Result clear(bool paints = true, bool buffer = true) noexcept;
 
     /**
      * @brief Removes a paint object or all paint objects from the root scene.
@@ -716,12 +707,18 @@ public:
     Result update(Paint* paint = nullptr) noexcept;
 
     /**
-     * @brief Requests the canvas to draw the Paint objects.
+     * @brief Requests the canvas to render Paint objects.
      *
-     * @note Drawing can be asynchronous if the assigned thread number is greater than zero. To guarantee the drawing is done, call sync() afterwards.
+     * @param[in] clear If @c true, clears the target buffer to zero before drawing.
+     *
+     * @note Clearing the buffer is unnecessary if the canvas will be fully covered 
+     *       with opaque content, which can improve performance.
+     * @note Drawing may be asynchronous if the thread count is greater than zero. 
+     *       To ensure drawing is complete, call sync() afterwards.
+     *
      * @see Canvas::sync()
      */
-    Result draw() noexcept;
+    Result draw(bool clear = false) noexcept;
 
     /**
      * @brief Sets the drawing region in the canvas.
@@ -757,7 +754,7 @@ public:
      */
     Result sync() noexcept;
 
-    _TVG_DECLARE_PRIVATE(Canvas);
+    _TVG_DECLARE_PRIVATE_BASE(Canvas);
 };
 
 
@@ -772,8 +769,6 @@ public:
 class TVG_API LinearGradient final : public Fill
 {
 public:
-    ~LinearGradient();
-
     /**
      * @brief Sets the linear gradient bounds.
      *
@@ -836,8 +831,6 @@ public:
 class TVG_API RadialGradient final : public Fill
 {
 public:
-    ~RadialGradient();
-
     /**
      * @brief Sets the radial gradient attributes.
      *
@@ -914,8 +907,6 @@ public:
 class TVG_API Shape final : public Paint
 {
 public:
-    ~Shape();
-
     /**
      * @brief Resets the shape path.
      *
@@ -1145,7 +1136,7 @@ public:
     /**
      * @brief Sets the fill rule for the Shape object.
      *
-     * @param[in] r The fill rule value. The default value is @c FillRule::Winding.
+     * @param[in] r The fill rule value. The default value is @c FillRule::NonZero.
      */
     Result fill(FillRule r) noexcept;
 
@@ -1159,22 +1150,21 @@ public:
     Result order(bool strokeFirst) noexcept;
 
     /**
-     * @brief Gets the commands data of the path.
+     * @brief Retrieves the current path data of the shape.
      *
-     * @param[out] cmds The pointer to the array of the commands from the path.
+     * This function provides access to the shape's path data, including the commands
+     * and points that define the path.
      *
-     * @return The length of the @p cmds array when succeed, zero otherwise.
+     * @param[out] cmds Pointer to the array of commands representing the path.
+     *                  Can be @c nullptr if this information is not needed.
+     * @param[out] cmdsCnt Pointer to the variable that receives the number of commands in the @p cmds array.
+     *                     Can be @c nullptr if this information is not needed.
+     * @param[out] pts Pointer to the array of two-dimensional points that define the path.
+     *                 Can be @c nullptr if this information is not needed.
+     * @param[out] ptsCnt Pointer to the variable that receives the number of points in the @p pts array.
+     *                    Can be @c nullptr if this information is not needed.
      */
-    uint32_t pathCommands(const PathCommand** cmds) const noexcept;
-
-    /**
-     * @brief Gets the points values of the path.
-     *
-     * @param[out] pts The pointer to the array of the two-dimensional points from the path.
-     *
-     * @return The length of the @p pts array when succeed, zero otherwise.
-     */
-    uint32_t pathCoords(const Point** pts) const noexcept;
+    Result path(const PathCommand** cmds, uint32_t* cmdsCnt, const Point** pts, uint32_t* ptsCnt) const noexcept;
 
     /**
      * @brief Gets the pointer to the gradient fill of the shape.
@@ -1192,7 +1182,7 @@ public:
      * @param[out] a The alpha channel value in the range [0 ~ 255], where 0 is completely transparent and 255 is opaque.
      *
      */
-    Result fillColor(uint8_t* r, uint8_t* g, uint8_t* b, uint8_t* a = nullptr) const noexcept;
+    Result fill(uint8_t* r, uint8_t* g, uint8_t* b, uint8_t* a = nullptr) const noexcept;
 
     /**
      * @brief Gets the fill rule value.
@@ -1295,8 +1285,6 @@ public:
 class TVG_API Picture final : public Paint
 {
 public:
-    ~Picture();
-
     /**
      * @brief Loads a picture data directly from a file.
      *
@@ -1428,8 +1416,6 @@ public:
 class TVG_API Scene final : public Paint
 {
 public:
-    ~Scene();
-
     /**
      * @brief Inserts a paint object to the scene.
      *
@@ -1527,8 +1513,6 @@ public:
 class TVG_API Text final : public Paint
 {
 public:
-    ~Text();
-
     /**
      * @brief Sets the font properties for the text.
      *
@@ -1780,6 +1764,7 @@ public:
      * This function specifies the drawing target where the rasterization will occur. It can target
      * a specific framebuffer object (FBO) or the main surface.
      *
+     * @param[in] context The GL context assigning to the current canvas rendering.
      * @param[in] id The GL target ID, usually indicating the FBO ID. A value of @c 0 specifies the main surface.
      * @param[in] w The width (in pixels) of the raster image.
      * @param[in] h The height (in pixels) of the raster image.
@@ -1793,7 +1778,7 @@ public:
      *
      * @note Experimental API
     */
-    Result target(int32_t id, uint32_t w, uint32_t h, ColorSpace cs) noexcept;
+    Result target(void* context, int32_t id, uint32_t w, uint32_t h, ColorSpace cs) noexcept;
 
     /**
      * @brief Creates a new GlCanvas object.
@@ -1921,11 +1906,10 @@ public:
  *
  * @since 0.13
  */
-
 class TVG_API Animation
 {
 public:
-    ~Animation();
+    virtual ~Animation();
 
     /**
      * @brief Specifies the current frame in the animation.
@@ -1940,7 +1924,6 @@ public:
      *       Values less than 0.001 may be disregarded and may not be accurately retained by the Animation.
      *
      * @see totalFrame()
-     *
      */
     Result frame(float no) noexcept;
 
@@ -1954,7 +1937,6 @@ public:
      * @return A picture instance that is tied to this animation.
      *
      * @warning The picture instance is owned by Animation. It should not be deleted manually.
-     *
      */
     Picture* picture() const noexcept;
 
@@ -1965,9 +1947,8 @@ public:
      *
      * @note If the Picture is not properly configured, this function will return 0.
      *
-     * @see Animation::frame(float no)
+     * @see Animation::frame()
      * @see Animation::totalFrame()
-     *
      */
     float curFrame() const noexcept;
 
@@ -1978,7 +1959,6 @@ public:
      *
      * @note Frame numbering starts from 0.
      * @note If the Picture is not properly configured, this function will return 0.
-     *
      */
     float totalFrame() const noexcept;
 
@@ -1988,7 +1968,6 @@ public:
      * @return The duration of the animation in seconds.
      *
      * @note If the Picture is not properly configured, this function will return 0.
-     *
      */
     float duration() const noexcept;
 
@@ -2000,30 +1979,33 @@ public:
      * After setting, the number of animation frames and the playback time are calculated
      * by mapping the playback segment as the entire range.
      *
-     * @param[in] begin segment start.
-     * @param[in] end segment end.
+     * @param[in] begin segment begin frame.
+     * @param[in] end segment end frame.
      *
      * @retval Result::InsufficientCondition In case the animation is not loaded.
+     * @retval Result::InvalidArguments If the @p begin is higher than @p end.
      * @retval Result::NonSupport When it's not animatable.
      *
-     * @note Animation allows a range from 0.0 to 1.0. @p end should not be higher than @p begin.
+     * @note Animation allows a range from 0.0 to the total frame. @p end should not be higher than @p begin.
      * @note If a marker has been specified, its range will be disregarded.
-     * @see LottieAnimation::segment(const char* marker)
      *
-     * @note Experimental API
+     * @see LottieAnimation::segment(const char* marker)
+     * @see Animation::totalFrame()
+     *
+     * @since 1.0
      */
     Result segment(float begin, float end) noexcept;
 
     /**
-     * @brief Gets the current segment.
+     * @brief Gets the current segment range information.
      *
-     * @param[out] begin segment start.
-     * @param[out] end segment end.
+     * @param[out] begin segment begin frame.
+     * @param[out] end segment end frame.
      *
      * @retval Result::InsufficientCondition In case the animation is not loaded.
      * @retval Result::NonSupport When it's not animatable.
      *
-     * @note Experimental API
+     * @since 1.0
      */
     Result segment(float* begin, float* end = nullptr) noexcept;
 
@@ -2031,11 +2013,10 @@ public:
      * @brief Creates a new Animation object.
      *
      * @return A new Animation object.
-     *
      */
     static Animation* gen() noexcept;
 
-    _TVG_DECLARE_PRIVATE(Animation);
+    _TVG_DECLARE_PRIVATE_BASE(Animation);
 };
 
 
@@ -2138,7 +2119,7 @@ public:
      */
     static Saver* gen() noexcept;
 
-    _TVG_DECLARE_PRIVATE(Saver);
+    _TVG_DECLARE_PRIVATE_BASE(Saver);
 };
 
 
@@ -2161,7 +2142,7 @@ public:
     /**
      * @brief Set the access function for traversing the Picture scene tree nodes.
      *
-     * @param[in] picture The picture node to traverse the internal scene-tree.
+     * @param[in] paint The paint node to traverse the internal scene-tree.
      * @param[in] func The callback function calling for every paint nodes of the Picture.
      * @param[in] data Data passed to the @p func as its argument.
      *
@@ -2169,7 +2150,7 @@ public:
      *
      * @note Experimental API
      */
-    Result set(Picture* picture, std::function<bool(const Paint* paint, void* data)> func, void* data) noexcept;
+    Result set(Paint* paint, std::function<bool(const Paint* paint, void* data)> func, void* data) noexcept;
 
     /**
      * @brief Generate a unique ID (hash key) from a given name.
@@ -2194,7 +2175,7 @@ public:
      */
     static Accessor* gen() noexcept;
 
-    _TVG_DECLARE_PRIVATE(Accessor);
+    _TVG_DECLARE_PRIVATE_BASE(Accessor);
 };
 
 /** @}*/

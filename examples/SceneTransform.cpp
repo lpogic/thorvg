@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,7 @@ struct UserExample : tvgexam::Example
     {
         if (!canvas) return false;
 
-        if (!tvgexam::verify(canvas->clear())) return false;
+        if (!tvgexam::verify(canvas->remove())) return false;
 
         auto progress = tvgexam::progress(elapsed, 2.0f, true);  //play time 2 sec.
 
@@ -129,5 +129,5 @@ struct UserExample : tvgexam::Example
 
 int main(int argc, char **argv)
 {
-    return tvgexam::main(new UserExample, argc, argv);
+    return tvgexam::main(new UserExample, argc, argv, true);
 }

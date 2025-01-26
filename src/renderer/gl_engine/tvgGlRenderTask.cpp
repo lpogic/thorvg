@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,9 +24,6 @@
 #include "tvgGlProgram.h"
 #include "tvgGlRenderPass.h"
 
-/************************************************************************/
-/* External Class Implementation                                        */
-/************************************************************************/
 
 GlRenderTask::GlRenderTask(GlProgram* program, GlRenderTask* other): mProgram(program)
 {
@@ -169,10 +166,7 @@ GlComposeTask::GlComposeTask(GlProgram* program, GLuint target, GlRenderTarget* 
 
 GlComposeTask::~GlComposeTask()
 {
-    for(uint32_t i = 0; i < mTasks.count; i++) {
-        delete mTasks[i];
-    }
-
+    ARRAY_FOREACH(p, mTasks) delete(*p);
     mTasks.clear();
 }
 
@@ -194,8 +188,8 @@ void GlComposeTask::run()
         GL_CHECK(glDepthMask(0));
     }
 
-    for(uint32_t i = 0; i < mTasks.count; i++) {
-        mTasks[i]->run();
+    ARRAY_FOREACH(p, mTasks) {
+        (*p)->run();
     }
 
 #if defined(THORVG_GL_TARGET_GLES)

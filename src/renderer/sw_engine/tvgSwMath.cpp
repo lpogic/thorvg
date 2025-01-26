@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -245,7 +245,6 @@ void mathSplitCubic(SwPoint* base)
 void mathSplitLine(SwPoint* base)
 {
     base[2] = base[1];
-
     base[1].x = (base[0].x + base[1].x) >> 1;
     base[1].y = (base[0].y + base[1].y) >> 1;
 }
@@ -278,9 +277,6 @@ bool mathClipBBox(const SwBBox& clipper, SwBBox& clippee)
     clippee.max.y = (clippee.max.y < clipper.max.y) ? clippee.max.y : clipper.max.y;
     clippee.min.x = (clippee.min.x > clipper.min.x) ? clippee.min.x : clipper.min.x;
     clippee.min.y = (clippee.min.y > clipper.min.y) ? clippee.min.y : clipper.min.y;
-
-    //Check valid region
-    if (clippee.max.x - clippee.min.x < 1 && clippee.max.y - clippee.min.y < 1) return false;
 
     //Check boundary
     if (clippee.min.x >= clipper.max.x || clippee.min.y >= clipper.max.y ||

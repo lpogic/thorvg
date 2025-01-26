@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,8 +28,7 @@
 class GlProgram
 {
 public:
-    static std::unique_ptr<GlProgram> gen(std::shared_ptr<GlShader> shader);
-    GlProgram(std::shared_ptr<GlShader> shader);
+    GlProgram(const char* vertSrc, const char* fragSrc);
     ~GlProgram();
 
     void load();
@@ -49,11 +48,8 @@ public:
     void setUniform4x4Value(int32_t location, int count, const float* values);
 
 private:
-
-    void linkProgram(std::shared_ptr<GlShader> shader);
     uint32_t mProgramObj;
     static uint32_t mCurrentProgram;
-
 };
 
 #endif /* _TVG_GL_PROGRAM_H_ */

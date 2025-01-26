@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2024 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,11 +38,8 @@ struct UserExample : tvgexam::Example
         bg->fill(255, 255, 255);       //r, g, b
         canvas->push(bg);
 
-        char buf[PATH_MAX];
-        snprintf(buf, sizeof(buf), EXAMPLE_DIR"/svg/logo.svg");
-
         auto picture = tvg::Picture::gen();
-        if (!tvgexam::verify(picture->load(buf))) return false;
+        if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/svg/logo.svg"))) return false;
 
         float scale;
         float shiftX = 0.0f, shiftY = 0.0f;

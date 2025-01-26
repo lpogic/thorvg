@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,8 +24,7 @@
 #define _TVG_GL_TESSELLATOR_H_
 
 #include <cstdint>
-#include "tvgGlGeometry.h"
-#include "tvgMath.h"
+#include "tvgGlCommon.h"
 
 namespace tvg
 {
@@ -61,9 +60,9 @@ private:
     Polygon *makePoly(Vertex* v, int32_t winding);
     void emitPoly(MonotonePolygon* poly);
     void emitTriangle(Vertex* p1, Vertex* p2, Vertex* p3);
-private:
-    FillRule fillRule = FillRule::Winding;
-    std::unique_ptr<ObjectHeap> pHeap;
+
+    FillRule fillRule = FillRule::NonZero;
+    ObjectHeap* pHeap;
     Array<VertexList*> outlines;
     VertexList* pMesh;
     Polygon* pPolygon;
@@ -79,7 +78,6 @@ class Stroker final
         Point firstPtDir;
         Point prevPt;
         Point prevPtDir;
-        bool hasMove = false;
     };
 public:
     Stroker(Array<float>* points, Array<uint32_t>* indices, const Matrix& matrix);
@@ -88,6 +86,7 @@ public:
     RenderRegion bounds() const;
 
 private:
+    void doTrimStroke(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count, bool simultaneous, float start, float end);
     void doStroke(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count);
     void doDashStroke(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count, uint32_t dash_count, const float* dash_pattern);
 
@@ -105,7 +104,9 @@ private:
     void strokeMiter(const Point& prev, const Point& curr, const Point& center);
     void strokeBevel(const Point& prev, const Point& curr, const Point& center);
     void strokeSquare(const Point& p, const Point& outDir);
+    void strokeSquarePoint(const Point& p);
     void strokeRound(const Point& p, const Point& outDir);
+    void strokeRoundPoint(const Point& p);
 
     Array<float>* mResGlPoints;
     Array<uint32_t>* mResIndices;
@@ -133,7 +134,6 @@ private:
     void lineTo(const Point& pt);
     void cubicTo(const Point& pt1, const Point& pt2, const Point& pt3);
 
-private:
     Array<PathCommand>* mCmds;
     Array<Point>* mPts;
     uint32_t mDashCount;

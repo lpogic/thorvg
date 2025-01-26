@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -33,35 +33,53 @@ uint32_t GlProgram::mCurrentProgram = 0;
 /* External Class Implementation                                        */
 /************************************************************************/
 
-unique_ptr<GlProgram> GlProgram::gen(std::shared_ptr<GlShader> shader)
+GlProgram::GlProgram(const char* vertSrc, const char* fragSrc)
 {
-    return make_unique<GlProgram>(shader);
-}
+    auto shader = GlShader(vertSrc, fragSrc);
 
+    // Create the program object
+    uint32_t progObj = glCreateProgram();
+    assert(progObj);
 
-GlProgram::GlProgram(std::shared_ptr<GlShader> shader)
-{
-    linkProgram(shader);
+    glAttachShader(progObj, shader.getVertexShader());
+    glAttachShader(progObj, shader.getFragmentShader());
+
+    // Link the program
+    glLinkProgram(progObj);
+
+    // Check the link status
+    GLint linked;
+    glGetProgramiv(progObj, GL_LINK_STATUS, &linked);
+
+    if (!linked) {
+        GLint infoLen = 0;
+        glGetProgramiv(progObj, GL_INFO_LOG_LENGTH, &infoLen);
+        if (infoLen > 0)
+        {
+            auto infoLog = static_cast<char*>(malloc(sizeof(char) * infoLen));
+            glGetProgramInfoLog(progObj, infoLen, NULL, infoLog);
+            TVGERR("GL_ENGINE", "Error linking shader: %s", infoLog);
+            free(infoLog);
+
+        }
+        glDeleteProgram(progObj);
+        progObj = 0;
+        assert(0);
+    }
+    mProgramObj = progObj;
 }
 
 
 GlProgram::~GlProgram()
 {
-    if (mCurrentProgram == mProgramObj)
-    {
-        unload();
-    }
+    if (mCurrentProgram == mProgramObj) unload();
     glDeleteProgram(mProgramObj);
 }
 
 
 void GlProgram::load()
 {
-    if (mCurrentProgram == mProgramObj)
-    {
-        return;
-    }
-
+    if (mCurrentProgram == mProgramObj) return;
     mCurrentProgram = mProgramObj;
     GL_CHECK(glUseProgram(mProgramObj));
 
@@ -149,40 +167,3 @@ void GlProgram::setUniform4x4Value(int32_t location, int count, const float* val
 {
     GL_CHECK(glUniformMatrix4fv(location, count, GL_FALSE, &values[0]));
 }
-
-void GlProgram::linkProgram(std::shared_ptr<GlShader> shader)
-{
-    GLint linked;
-
-    // Create the program object
-    uint32_t progObj = glCreateProgram();
-    assert(progObj);
-
-    glAttachShader(progObj, shader->getVertexShader());
-    glAttachShader(progObj, shader->getFragmentShader());
-
-    // Link the program
-    glLinkProgram(progObj);
-
-    // Check the link status
-    glGetProgramiv(progObj, GL_LINK_STATUS, &linked);
-
-    if (!linked)
-    {
-        GLint infoLen = 0;
-        glGetProgramiv(progObj, GL_INFO_LOG_LENGTH, &infoLen);
-        if (infoLen > 0)
-        {
-            auto infoLog = static_cast<char*>(malloc(sizeof(char) * infoLen));
-            glGetProgramInfoLog(progObj, infoLen, NULL, infoLog);
-            TVGERR("GL_ENGINE", "Error linking shader: %s", infoLog);
-            free(infoLog);
-
-        }
-        glDeleteProgram(progObj);
-        progObj = 0;
-        assert(0);
-    }
-    mProgramObj = progObj;
-}
-

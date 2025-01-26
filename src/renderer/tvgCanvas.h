@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,10 +34,9 @@ struct Canvas::Impl
     RenderRegion vport = {0, 0, INT32_MAX, INT32_MAX};
     Status status = Status::Synced;
 
-    Impl(RenderMethod* pRenderer) : scene(Scene::gen()), renderer(pRenderer)
+    Impl() : scene(Scene::gen())
     {
         scene->ref();
-        renderer->ref();
     }
 
     ~Impl()
@@ -63,28 +62,11 @@ struct Canvas::Impl
         return update(target, true);
     }
 
-    Result clear(bool paints, bool buffer)
-    {
-        auto ret = Result::Success;
-
-        if (status == Status::Drawing) return Result::InsufficientCondition;
-
-        //Clear render target
-        if (buffer && !renderer->clear()) {
-            ret = Result::InsufficientCondition;
-        }
-
-        if (paints) scene->remove();
-
-        return ret;
-    }
-
     Result remove(Paint* paint)
     {
         if (status == Status::Drawing) return Result::InsufficientCondition;
         return scene->remove(paint);
     }
-
 
     Result update(Paint* paint, bool force)
     {
@@ -94,24 +76,33 @@ struct Canvas::Impl
 
         auto m = Matrix{1, 0, 0, 0, 1, 0, 0, 0, 1};
 
-        if (paint) P(paint)->update(renderer, m, clips, 255, flag);
-        else PP(scene)->update(renderer, m, clips, 255, flag);
+        if (!renderer->preUpdate()) return Result::InsufficientCondition;
+
+        if (paint) PAINT(paint)->update(renderer, m, clips, 255, flag);
+        else PAINT(scene)->update(renderer, m, clips, 255, flag);
+
+        if (!renderer->postUpdate()) return Result::InsufficientCondition;
 
         status = Status::Updating;
         return Result::Success;
     }
 
-    Result draw()
+    Result draw(bool clear)
     {
-        if (status == Status::Drawing || scene->paints().empty()) return Result::InsufficientCondition;
+        if (status == Status::Drawing) return Result::InsufficientCondition;
+
+        if (clear && !renderer->clear()) return Result::InsufficientCondition;
+
+        if (scene->paints().empty()) return Result::InsufficientCondition;
 
         if (status == Status::Damaged) update(nullptr, false);
 
         if (!renderer->preRender()) return Result::InsufficientCondition;
 
-        if (!PP(scene)->render(renderer) || !renderer->postRender()) return Result::InsufficientCondition;
+        if (!PAINT(scene)->render(renderer) || !renderer->postRender()) return Result::InsufficientCondition;
 
         status = Status::Drawing;
+
         return Result::Success;
     }
 

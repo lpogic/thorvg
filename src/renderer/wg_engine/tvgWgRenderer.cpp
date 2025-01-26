@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -70,8 +70,8 @@ void WgRenderer::release()
 
 void WgRenderer::disposeObjects()
 {
-    for (uint32_t i = 0; i < mDisposeRenderDatas.count; i++) {
-        WgRenderDataPaint* renderData = (WgRenderDataPaint*)mDisposeRenderDatas[i];
+    ARRAY_FOREACH(p, mDisposeRenderDatas) {
+        auto renderData = (WgRenderDataPaint*)(*p);
         if (renderData->type() == Type::Shape) {
             mRenderDataShapePool.free(mContext, (WgRenderDataShape*)renderData);
         } else {
@@ -188,11 +188,8 @@ bool WgRenderer::postRender()
 
 void WgRenderer::dispose(RenderData data) {
     if (!mContext.queue) return;
-    auto renderData = (WgRenderDataPaint*)data;
-    if (renderData) {
-        ScopedLock lock(mDisposeKey);
-        mDisposeRenderDatas.push(data);
-    }
+    ScopedLock lock(mDisposeKey);
+    mDisposeRenderDatas.push(data);
 }
 
 
@@ -239,6 +236,7 @@ const RenderSurface* WgRenderer::mainSurface()
 
 bool WgRenderer::clear()
 {
+    //TODO: clear the current target buffer only if clear() is called
     return true;
 }
 
@@ -307,31 +305,51 @@ bool WgRenderer::target(WGPUDevice device, WGPUInstance instance, void* target, 
     if ((mContext.device != device) || (mContext.instance != instance)) {
         // release all handles
         release();
+
         // initialize base rendering handles
         mContext.initialize(instance, device);
-    // release render targets only
-    } else if (mRenderStorageRoot.texView) {
-        mRenderStoragePool.release(mContext);
-        mRenderStorageRoot.release(mContext);
-        mCompositor.release(mContext);
-        clearTargets();
+
+        // initialize render tree instances
+        mRenderStoragePool.initialize(mContext, width, height);
+        mRenderStorageRoot.initialize(mContext, width, height);
+        mCompositor.initialize(mContext, width, height);
+
+        // store target properties
+        mTargetSurface.stride = width;
+        mTargetSurface.w = width;
+        mTargetSurface.h = height;
+
+        // configure surface (must be called after context creation)
+        if (type == 0) {
+            surface = (WGPUSurface)target;
+            surfaceConfigure(surface, mContext, width, height);
+        } else targetTexture = (WGPUTexture)target;
+        return true;
     }
 
-    // initialize render tree instances
-    mRenderStoragePool.initialize(mContext, width, height);
-    mRenderStorageRoot.initialize(mContext, width, height);
-    mCompositor.initialize(mContext, width, height);
+    // update retnder targets dimentions
+    if ((mTargetSurface.w != width) || (mTargetSurface.h != height)) {
+        // release render tagets
+        mRenderStoragePool.release(mContext);
+        mRenderStorageRoot.release(mContext);
+        clearTargets();
 
-    // store target properties
-    mTargetSurface.stride = width;
-    mTargetSurface.w = width;
-    mTargetSurface.h = height;
+        mRenderStoragePool.initialize(mContext, width, height);
+        mRenderStorageRoot.initialize(mContext, width, height);
+        mCompositor.resize(mContext, width, height);
 
-    // configure surface (must be called after context creation)
-    if (type == 0) {
-        surface = (WGPUSurface)target;
-        surfaceConfigure(surface, mContext, width, height);
-    } else targetTexture = (WGPUTexture)target;
+        // store target properties
+        mTargetSurface.stride = width;
+        mTargetSurface.w = width;
+        mTargetSurface.h = height;
+
+        // configure surface (must be called after context creation)
+        if (type == 0) {
+            surface = (WGPUSurface)target;
+            surfaceConfigure(surface, mContext, width, height);
+        } else targetTexture = (WGPUTexture)target;
+        return true;
+    }
 
     return true;
 }
@@ -445,17 +463,41 @@ bool WgRenderer::endComposite(RenderCompositor* cmp)
 }
 
 
-bool WgRenderer::prepare(TVG_UNUSED RenderEffect* effect)
+void WgRenderer::prepare(TVG_UNUSED RenderEffect* effect, TVG_UNUSED const Matrix& transform)
+{
+    //TODO: prepare the effect
+}
+
+
+bool WgRenderer::region(TVG_UNUSED RenderEffect* effect)
 {
     //TODO: Return if the current post effect requires the region expansion
     return false;
 }
 
 
-bool WgRenderer::effect(TVG_UNUSED RenderCompositor* cmp, TVG_UNUSED const RenderEffect* effect, TVG_UNUSED uint8_t opacity, TVG_UNUSED bool direct)
+bool WgRenderer::render(TVG_UNUSED RenderCompositor* cmp, TVG_UNUSED const RenderEffect* effect, TVG_UNUSED bool direct)
 {
     TVGLOG("WG_ENGINE", "SceneEffect(%d) is not supported", (int)effect->type);
     return false;
+}
+
+
+void WgRenderer::dispose(TVG_UNUSED RenderEffect* effect)
+{
+    //TODO: dispose the effect
+}
+
+
+bool WgRenderer::preUpdate()
+{
+    return true;
+}
+
+
+bool WgRenderer::postUpdate()
+{
+    return true;
 }
 
 

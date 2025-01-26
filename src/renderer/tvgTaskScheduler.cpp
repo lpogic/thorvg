@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -123,15 +123,15 @@ struct TaskSchedulerImpl
 
     ~TaskSchedulerImpl()
     {
-        for (auto tq = taskQueues.begin(); tq < taskQueues.end(); ++tq) {
-            (*tq)->complete();
+        ARRAY_FOREACH(p, taskQueues) {
+            (*p)->complete();
         }
-        for (auto thread = threads.begin(); thread < threads.end(); ++thread) {
-            (*thread)->join();
-            delete(*thread);
+        ARRAY_FOREACH(p, threads) {
+            (*p)->join();
+            delete(*p);
         }
-        for (auto tq = taskQueues.begin(); tq < taskQueues.end(); ++tq) {
-            delete(*tq);
+        ARRAY_FOREACH(p, taskQueues) {
+            delete(*p);
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -131,8 +131,6 @@ public:
             return 1;
         }
 
-        canvas->clear();
-
         //Background color if needed
         if (bgColor != 0xffffffff) {
             uint8_t r = (uint8_t)((bgColor & 0xff0000) >> 16);
@@ -148,7 +146,7 @@ public:
 
         //Drawing
         canvas->push(picture);
-        canvas->draw();
+        canvas->draw(true);
         canvas->sync();
 
         //Build Png

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,6 @@ public:
     uint32_t size = 0;                  //lottie data size
     float frameNo = 0.0f;               //current frame number
     float frameCnt = 0.0f;
-    float frameDuration = 0.0f;
     float frameRate = 0.0f;
 
     LottieBuilder* builder;
@@ -70,6 +69,7 @@ public:
     uint32_t markersCnt();
     const char* markers(uint32_t index);
     bool segment(const char* marker, float& begin, float& end);
+    Result segment(float begin, float end) override;
 
 private:
     bool ready();

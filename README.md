@@ -34,6 +34,7 @@ The following list shows primitives that are supported by ThorVG: <br />
 - **Composition**: various blending and masking
 - **Text**: unicode characters with horizontal text layout using scalable fonts (TTF)
 - **Images**: SVG, JPG, PNG, WebP, and raw bitmaps
+- **Effects**: blur, drop shadow, fill, tint, tritone and color replacement
 - **Animations**: Lottie
 
 <p align="center">
@@ -314,7 +315,7 @@ The result is:
 <br />
 ## Lottie
 
-ThorVG supports the most powerful Lottie Animation [features](https://lottiefiles.com/supported-features). Lottie is an industry standard, JSON-based vector animation file format that enables seamless distribution of animations on any platform, akin to shipping static assets. These files are compact and compatible with various devices, scaling up or down without pixelation. With Lottie, you can easily create, edit, test, collaborate, and distribute animations in a user-friendly manner. For more information, please visit [Lottie Animation Community](https://lottie.github.io/)' website. <br />
+ThorVG supports the most powerful Lottie Animation features ([see dotLottie Player](https://lottiefiles.com/supported-features)). Lottie is an industry standard, JSON-based vector animation file format that enables seamless distribution of animations on any platform, akin to shipping static assets. These files are compact and compatible with various devices, scaling up or down without pixelation. With Lottie, you can easily create, edit, test, collaborate, and distribute animations in a user-friendly manner. For more information, please visit [Lottie Animation Community](https://lottie.github.io/)' website. <br />
 <br />
 ThorVG offers great flexibility in building its binary. Besides serving as a general graphics engine, it can be configured as a compact Lottie animation playback library with specific build options:
 
@@ -528,7 +529,7 @@ ThorVG offers versatile support for image loading, accommodating both static and
 ## Contributors
 ThorVG stands as a purely open-source initiative. We are grateful to the individuals, organizations, and companies that have contributed to the development of the ThorVG project. The dedicated efforts of the individuals and entities listed below have enabled ThorVG to reach its current state.
 
-* [Individuals](https://github.com/thorvg/thorvg/blob/main/AUTHORS)
+* [Individuals](https://github.com/thorvg/thorvg/blob/main/CONTRIBUTORS)
 * [Canva Pty Ltd](https://www.canva.com/)
 * [LottieFiles](https://lottiefiles.com/) by Design Barn Inc.
 * Samsung Electronics Co., Ltd

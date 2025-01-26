@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -75,10 +75,7 @@ using Size = Point;
 
 uint16_t THORVG_VERSION_NUMBER();
 
-
-#define P(A) ((A)->pImpl)              //Access to pimpl.
-#define PP(A) (((Paint*)(A))->pImpl)   //Access to pimpl.
-
+#define PIMPL(INST, CLASS) ((CLASS::Impl*)INST->pImpl)   //Access to pimpl
 
 #define TVG_DELETE(PAINT) \
   if (PAINT->refCnt() == 0) delete(PAINT)

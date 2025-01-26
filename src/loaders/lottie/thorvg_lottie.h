@@ -20,18 +20,14 @@ namespace tvg
 class TVG_API LottieAnimation final : public Animation
 {
 public:
-    ~LottieAnimation();
-
     /**
      * @brief Override Lottie properties using slot data.
      *
      * @param[in] slot The Lottie slot data in JSON format to override, or @c nullptr to reset.
      *
-     * @retval Result::Success When succeed.
      * @retval Result::InsufficientCondition In case the animation is not loaded.
-     * @retval Result::InvalidArguments When the given parameter is invalid.
      *
-     * @note Experimental API
+     * @since 1.0
      */
     Result override(const char* slot) noexcept;
 
@@ -45,15 +41,13 @@ public:
     *
     * @param[in] marker The name of the segment marker.
     *
-    * @retval Result::Success When successful.
     * @retval Result::InsufficientCondition If the animation is not loaded.
-    * @retval Result::InvalidArguments When the given parameter is invalid.
     * @retval Result::NonSupport When it's not animatable.
     *
     * @note If a @c marker is specified, the previously set segment will be disregarded.
     * @note Set @c nullptr to reset the specified segment.
     * @see Animation::segment(float begin, float end)
-    * @note Experimental API
+    * @since 1.0
     */
     Result segment(const char* marker) noexcept;
 
@@ -63,7 +57,7 @@ public:
      * @retval The count of the markers, zero if there is no marker.
      * 
      * @see LottieAnimation::marker()
-     * @note Experimental API
+     * @since 1.0
      */
     uint32_t markersCnt() noexcept;
     
@@ -75,7 +69,7 @@ public:
      * @retval The name of marker when succeed, @c nullptr otherwise.
      * 
      * @see LottieAnimation::markersCnt()
-     * @note Experimental API
+     * @since 1.0
      */
     const char* marker(uint32_t idx) noexcept;
 
@@ -87,6 +81,8 @@ public:
      * @since 0.15
      */
     static LottieAnimation* gen() noexcept;
+
+    _TVG_DECLARE_PRIVATE(LottieAnimation);
 };
 
 } //namespace

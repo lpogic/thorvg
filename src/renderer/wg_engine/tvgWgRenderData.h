@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -125,12 +125,12 @@ struct WgRenderDataShape: public WgRenderDataPaint
     bool strokeFirst{};
     FillRule fillRule{};
 
-    void appendShape(WgContext context, const WgVertexBuffer& vertexBuffer);
-    void appendStroke(WgContext context, const WgVertexBufferInd& vertexBufferInd);
+    void appendShape(WgContext& context, const WgVertexBuffer& vertexBuffer);
+    void appendStroke(WgContext& context, const WgVertexBufferInd& vertexBufferInd);
     void updateBBox(Point pmin, Point pmax);
     void updateAABB(const Matrix& tr);
     void updateMeshes(WgContext& context, const RenderShape& rshape, const Matrix& tr);
-    void proceedStrokes(WgContext context, const RenderStroke* rstroke, float tbeg, float tend, const WgVertexBuffer& buff);
+    void proceedStrokes(WgContext& context, const RenderStroke* rstroke, float tbeg, float tend, const WgVertexBuffer& buff);
     void releaseMeshes(WgContext& context);
     void release(WgContext& context) override;
     Type type() override { return Type::Shape; };

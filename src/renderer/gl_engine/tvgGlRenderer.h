@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,8 +23,7 @@
 #ifndef _TVG_GL_RENDERER_H_
 #define _TVG_GL_RENDERER_H_
 
-#include <vector>
-
+#include "tvgArray.h"
 #include "tvgGlRenderTarget.h"
 #include "tvgGlRenderTask.h"
 #include "tvgGlGpuBuffer.h"
@@ -64,8 +63,10 @@ public:
         RT_None,
     };
 
+    bool preUpdate() override;
     RenderData prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper) override;
     RenderData prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags) override;
+    bool postUpdate() override;
     bool preRender() override;
     bool renderShape(RenderData data) override;
     bool renderImage(RenderData data) override;
@@ -78,7 +79,7 @@ public:
     ColorSpace colorSpace() override;
     const RenderSurface* mainSurface() override;
 
-    bool target(int32_t id, uint32_t w, uint32_t h);
+    bool target(void* context, int32_t id, uint32_t w, uint32_t h);
     bool sync() override;
     bool clear() override;
 
@@ -86,8 +87,10 @@ public:
     bool beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity) override;
     bool endComposite(RenderCompositor* cmp) override;
 
-    bool prepare(RenderEffect* effect) override;
-    bool effect(RenderCompositor* cmp, const RenderEffect* effect, uint8_t opacity, bool direct) override;
+    void prepare(RenderEffect* effect, const Matrix& transform) override;
+    bool region(RenderEffect* effect) override;
+    bool render(RenderCompositor* cmp, const RenderEffect* effect, bool direct) override;
+    void dispose(TVG_UNUSED RenderEffect* effect) override;
 
     static GlRenderer* gen();
     static int init(TVG_UNUSED uint32_t threads);
@@ -113,29 +116,30 @@ private:
     void prepareCmpTask(GlRenderTask* task, const RenderRegion& vp, uint32_t cmpWidth, uint32_t cmpHeight);
     void endRenderPass(RenderCompositor* cmp);
 
+    void flush();
     void clearDisposes();
+    void currentContext();
 
+    void* mContext = nullptr;
     RenderSurface surface;
     GLint mTargetFboId = 0;
     RenderRegion mViewport;
-    //TODO: remove all unique_ptr / replace the vector with tvg::Array
-    unique_ptr<GlStageBuffer> mGpuBuffer;
-    vector<std::unique_ptr<GlProgram>> mPrograms;
-    unique_ptr<GlRenderTarget> mRootTarget = {};
-    Array<GlRenderTargetPool*> mComposePool = {};
-    Array<GlRenderTargetPool*> mBlendPool = {};
-    vector<GlRenderPass> mRenderPassStack = {};
-    vector<unique_ptr<GlCompositor>> mComposeStack = {};
+    GlStageBuffer mGpuBuffer;
+    GlRenderTarget mRootTarget;
+    Array<GlProgram*> mPrograms;
+    Array<GlRenderTargetPool*> mComposePool;
+    Array<GlRenderTargetPool*> mBlendPool;
+    Array<GlRenderPass*> mRenderPassStack;
+    Array<GlCompositor*> mComposeStack;
 
     //Disposed resources. They should be released on synced call.
     struct {
-        Array<GLuint> textures = {};
+        Array<GLuint> textures;
         Key key;
     } mDisposed;
 
-    bool mClearBuffer = true;
-
     BlendMethod mBlendMethod = BlendMethod::Normal;
+    bool mClearBuffer = true;  //FIXME: clear buffer should be optional (default is false)
 };
 
 #endif /* _TVG_GL_RENDERER_H_ */

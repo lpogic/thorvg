@@ -62,24 +62,7 @@ private:
     
     // viewport utilities
     RenderRegion shrinkRenderRegion(RenderRegion& rect);
-public:
-    void initialize(WgContext& context, uint32_t width, uint32_t height);
-    void release(WgContext& context);
-    void resize(WgContext& context, uint32_t width, uint32_t height);
 
-    // render passes workflow
-    void beginRenderPass(WGPUCommandEncoder encoder, WgRenderStorage* target, bool clear, WGPUColor clearColor = { 0.0, 0.0, 0.0, 0.0 });
-    void endRenderPass();
-
-    // render shapes, images and scenes
-    void renderShape(WgContext& context, WgRenderDataShape* renderData, BlendMethod blendMethod);
-    void renderImage(WgContext& context, WgRenderDataPicture* renderData, BlendMethod blendMethod);
-    void renderScene(WgContext& context, WgRenderStorage* scene, WgCompose* compose);
-    void composeScene(WgContext& context, WgRenderStorage* src, WgRenderStorage* mask, WgCompose* compose);
-
-    // blit render storage to texture view (f.e. screen buffer)
-    void blit(WgContext& context, WGPUCommandEncoder encoder, WgRenderStorage* src, WGPUTextureView dstView);
-private:
     // shapes
     void drawShape(WgContext& context, WgRenderDataShape* renderData);
     void blendShape(WgContext& context, WgRenderDataShape* renderData, BlendMethod blendMethod);
@@ -98,9 +81,29 @@ private:
     // scenes
     void drawScene(WgContext& context, WgRenderStorage* scene, WgCompose* compose);
     void blendScene(WgContext& context, WgRenderStorage* src, WgCompose* compose);
-private:
+
     void renderClipPath(WgContext& context, WgRenderDataPaint* paint);
     void clearClipPath(WgContext& context, WgRenderDataPaint* paint);
+
+public:
+    void initialize(WgContext& context, uint32_t width, uint32_t height);
+    void initPools(WgContext& context);
+    void release(WgContext& context);
+    void releasePools(WgContext& context);
+    void resize(WgContext& context, uint32_t width, uint32_t height);
+
+    // render passes workflow
+    void beginRenderPass(WGPUCommandEncoder encoder, WgRenderStorage* target, bool clear, WGPUColor clearColor = { 0.0, 0.0, 0.0, 0.0 });
+    void endRenderPass();
+
+    // render shapes, images and scenes
+    void renderShape(WgContext& context, WgRenderDataShape* renderData, BlendMethod blendMethod);
+    void renderImage(WgContext& context, WgRenderDataPicture* renderData, BlendMethod blendMethod);
+    void renderScene(WgContext& context, WgRenderStorage* scene, WgCompose* compose);
+    void composeScene(WgContext& context, WgRenderStorage* src, WgRenderStorage* mask, WgCompose* compose);
+
+    // blit render storage to texture view (f.e. screen buffer)
+    void blit(WgContext& context, WGPUCommandEncoder encoder, WgRenderStorage* src, WGPUTextureView dstView);
 };
 
 #endif // _TVG_WG_COMPOSITOR_H_

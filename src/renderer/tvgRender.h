@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -129,6 +129,7 @@ struct RenderStroke
             dashPattern = nullptr;
         }
         dashCnt = rhs.dashCnt;
+        dashOffset = rhs.dashOffset;
         miterlimit = rhs.miterlimit;
         cap = rhs.cap;
         join = rhs.join;
@@ -180,7 +181,7 @@ struct RenderShape
     Fill *fill = nullptr;
     RenderColor color{};
     RenderStroke *stroke = nullptr;
-    FillRule rule = FillRule::Winding;
+    FillRule rule = FillRule::NonZero;
 
     ~RenderShape()
     {
@@ -260,12 +261,9 @@ struct RenderEffect
     RenderData rd = nullptr;
     RenderRegion extend = {0, 0, 0, 0};
     SceneEffect type;
-    bool invalid = false;
+    bool valid = false;
 
-    virtual ~RenderEffect()
-    {
-        free(rd);
-    }
+    virtual ~RenderEffect() {}
 };
 
 struct RenderEffectGaussianBlur : RenderEffect
@@ -301,12 +299,72 @@ struct RenderEffectDropShadow : RenderEffect
         inst->color[0] = va_arg(args, int);
         inst->color[1] = va_arg(args, int);
         inst->color[2] = va_arg(args, int);
-        inst->color[3] = std::min(va_arg(args, int), 255);
+        inst->color[3] = va_arg(args, int);
         inst->angle = (float) va_arg(args, double);
         inst->distance = (float) va_arg(args, double);
         inst->sigma = std::max((float) va_arg(args, double), 0.0f);
         inst->quality = std::min(va_arg(args, int), 100);
         inst->type = SceneEffect::DropShadow;
+        return inst;
+    }
+};
+
+struct RenderEffectFill : RenderEffect
+{
+    uint8_t color[4];  //rgba
+
+    static RenderEffectFill* gen(va_list& args)
+    {
+        auto inst = new RenderEffectFill;
+        inst->color[0] = va_arg(args, int);
+        inst->color[1] = va_arg(args, int);
+        inst->color[2] = va_arg(args, int);
+        inst->color[3] = va_arg(args, int);
+        inst->type = SceneEffect::Fill;
+        return inst;
+    }
+};
+
+struct RenderEffectTint : RenderEffect
+{
+    uint8_t black[3];  //rgb
+    uint8_t white[3];  //rgb
+    uint8_t intensity; //0 - 255
+
+    static RenderEffectTint* gen(va_list& args)
+    {
+        auto inst = new RenderEffectTint;
+        inst->black[0] = va_arg(args, int);
+        inst->black[1] = va_arg(args, int);
+        inst->black[2] = va_arg(args, int);
+        inst->white[0] = va_arg(args, int);
+        inst->white[1] = va_arg(args, int);
+        inst->white[2] = va_arg(args, int);
+        inst->intensity = (uint8_t)(va_arg(args, double) * 2.55);
+        inst->type = SceneEffect::Tint;
+        return inst;
+    }
+};
+
+struct RenderEffectTritone : RenderEffect
+{
+    uint8_t shadow[3];       //rgb
+    uint8_t midtone[3];      //rgb
+    uint8_t highlight[3];    //rgb
+
+    static RenderEffectTritone* gen(va_list& args)
+    {
+        auto inst = new RenderEffectTritone;
+        inst->shadow[0] = va_arg(args, int);
+        inst->shadow[1] = va_arg(args, int);
+        inst->shadow[2] = va_arg(args, int);
+        inst->midtone[0] = va_arg(args, int);
+        inst->midtone[1] = va_arg(args, int);
+        inst->midtone[2] = va_arg(args, int);
+        inst->highlight[0] = va_arg(args, int);
+        inst->highlight[1] = va_arg(args, int);
+        inst->highlight[2] = va_arg(args, int);
+        inst->type = SceneEffect::Tritone;
         return inst;
     }
 };
@@ -322,8 +380,10 @@ public:
     uint32_t unref();
 
     virtual ~RenderMethod() {}
+    virtual bool preUpdate() = 0;
     virtual RenderData prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper) = 0;
     virtual RenderData prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags) = 0;
+    virtual bool postUpdate() = 0;
     virtual bool preRender() = 0;
     virtual bool renderShape(RenderData data) = 0;
     virtual bool renderImage(RenderData data) = 0;
@@ -343,8 +403,10 @@ public:
     virtual bool beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity) = 0;
     virtual bool endComposite(RenderCompositor* cmp) = 0;
 
-    virtual bool prepare(RenderEffect* effect) = 0;
-    virtual bool effect(RenderCompositor* cmp, const RenderEffect* effect, uint8_t opacity, bool direct) = 0;
+    virtual void prepare(RenderEffect* effect, const Matrix& transform) = 0;
+    virtual bool region(RenderEffect* effect) = 0;
+    virtual bool render(RenderCompositor* cmp, const RenderEffect* effect, bool direct) = 0;
+    virtual void dispose(RenderEffect* effect) = 0;
 };
 
 static inline bool MASK_REGION_MERGING(MaskMethod method)

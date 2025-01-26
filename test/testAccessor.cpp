@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2022 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -66,7 +66,7 @@ TEST_CASE("Set", "[tvgAccessor]")
         if (paint->type() == Type::Shape) {
             auto shape = (tvg::Shape*) paint;
             uint8_t r, g, b;
-            shape->fillColor(&r, &g, &b);
+            shape->fill(&r, &g, &b);
             if (r == 37 && g == 47 && b == 53) {
                 shape->fill(0, 0, 255);
                 shape->id = Accessor::id("TestAccessor");

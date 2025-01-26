@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2024 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,7 @@
 struct UserExample : tvgexam::Example
 {
     unique_ptr<tvg::Animation> animation;
+    float begin = 0.0f;
 
     bool hitting(const tvg::Paint* paint, int32_t x, int32_t y, float segment1, float segment2)
     {
@@ -36,7 +37,8 @@ struct UserExample : tvgexam::Example
         tvgexam::verify(paint->bounds(&px, &py, &pw, &ph, true));
         if (x >= px && x <= px + pw && y >= py && y <= py + ph) {
             tvgexam::verify(animation->segment(segment1, segment2));
-            elapsed = 0.0f;
+            elapsed = 0;
+            begin = timestamp();
             return true;
         }
         return false;
@@ -48,32 +50,32 @@ struct UserExample : tvgexam::Example
 
         //pad1 touch?
         if (auto paint = picture->paint(tvg::Accessor::id("pad1"))) {
-            if (hitting(paint, x, y, 0.2222f, 0.3333f)) return true;
+            if (hitting(paint, x, y, 20.0f, 30.0f)) return true;
         }
 
         //pad3 touch?
         if (auto paint = picture->paint(tvg::Accessor::id("pad3"))) {
-            if (hitting(paint, x, y, 0.4444f, 0.5555f)) return true;
+            if (hitting(paint, x, y, 40.0f, 50.0f)) return true;
         }
 
         //pad5 touch?
         if (auto paint = picture->paint(tvg::Accessor::id("pad5"))) {
-            if (hitting(paint, x, y, 0.1111f, 0.2222f)) return true;
+            if (hitting(paint, x, y, 10.0f, 20.0f)) return true;
         }
 
         //pad7 touch?
         if (auto paint = picture->paint(tvg::Accessor::id("pad7"))) {
-            if (hitting(paint, x, y, 0.0000f, 0.1111f)) return true;
+            if (hitting(paint, x, y, 0.0f, 10.0f)) return true;
         }
 
         //pad9 touch?
         if (auto paint = picture->paint(tvg::Accessor::id("pad9"))) {
-            if (hitting(paint, x, y, 0.3333f, 0.4444f)) return true;
+            if (hitting(paint, x, y, 30.0f, 40.0f)) return true;
         }
 
         //bar touch?
         if (auto paint = picture->paint(tvg::Accessor::id("bar"))) {
-            if (hitting(paint, x, y, 0.6666f, 1.0f)) return true;
+            if (hitting(paint, x, y, 60.0f, 90.0f)) return true;
         }
 
         return false;
@@ -122,12 +124,13 @@ struct UserExample : tvgexam::Example
     {
         if (!canvas) return false;
 
-        auto progress = tvgexam::progress(elapsed, animation->duration());
+        auto progress = (timestamp() - begin) / animation->duration();
 
         //Default is a stopped motion
-        if (progress > 0.95f) {
+        if (progress > 1.0f) {
             animation->segment(0.0f, 0.0f);
-            elapsed = progress = 0.0f;
+            this->elapsed = 0;
+            progress = 0.0f;
         }
 
         //Update animation frame only when it's changed
@@ -145,5 +148,5 @@ struct UserExample : tvgexam::Example
 
 int main(int argc, char **argv)
 {
-    return tvgexam::main(new UserExample, argc, argv, 1024, 1024, 0);
+    return tvgexam::main(new UserExample, argc, argv, true, 1024, 1024, 0);
 }

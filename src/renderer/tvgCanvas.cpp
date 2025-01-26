@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,7 @@
 
 #include "tvgCanvas.h"
 
-/************************************************************************/
-/* External Class Implementation                                        */
-/************************************************************************/
-
-Canvas::Canvas(RenderMethod *pRenderer):pImpl(new Impl(pRenderer))
+Canvas::Canvas():pImpl(new Impl)
 {
 }
 
@@ -49,16 +45,10 @@ Result Canvas::push(Paint* target, Paint* at) noexcept
 }
 
 
-Result Canvas::clear(bool paints, bool buffer) noexcept
-{
-    return pImpl->clear(paints, buffer);
-}
-
-
-Result Canvas::draw() noexcept
+Result Canvas::draw(bool clear) noexcept
 {
     TVGLOG("RENDERER", "Draw S. -------------------------------- Canvas(%p)", this);
-    auto ret = pImpl->draw();
+    auto ret = pImpl->draw(clear);
     TVGLOG("RENDERER", "Draw E. -------------------------------- Canvas(%p)", this);
 
     return ret;
@@ -68,7 +58,6 @@ Result Canvas::draw() noexcept
 Result Canvas::update(Paint* paint) noexcept
 {
     TVGLOG("RENDERER", "Update S. ------------------------------ Canvas(%p)", this);
-
     if (pImpl->scene->paints().empty() || pImpl->status == Status::Drawing) return Result::InsufficientCondition;
     auto ret = pImpl->update(paint, false);
     TVGLOG("RENDERER", "Update E. ------------------------------ Canvas(%p)", this);

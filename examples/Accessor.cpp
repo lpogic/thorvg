@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2021 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ struct UserExample : tvgexam::Example
                 auto shape = (tvg::Shape*) paint;
                 //override color?
                 uint8_t r, g, b;
-                shape->fillColor(&r, &g, &b);
+                shape->fill(&r, &g, &b);
                 if (r == 255 && g == 180 && b == 0)
                     shape->fill(0, 0, 255);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2024 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@ public:
     WGPUBindGroupLayout layoutBuffer1Un{};
     WGPUBindGroupLayout layoutBuffer2Un{};
     WGPUBindGroupLayout layoutBuffer3Un{};
-public:
+
     WGPUBindGroup createBindGroupTexSampled(WGPUSampler sampler, WGPUTextureView texView);
     WGPUBindGroup createBindGroupTexSampledBuff1Un(WGPUSampler sampler, WGPUTextureView texView, WGPUBuffer buff);
     WGPUBindGroup createBindGroupTexSampledBuff2Un(WGPUSampler sampler, WGPUTextureView texView, WGPUBuffer buff0, WGPUBuffer buff1);
@@ -52,7 +52,7 @@ public:
     WGPUBindGroup createBindGroupBuffer3Un(WGPUBuffer buff0, WGPUBuffer buff1, WGPUBuffer buff2);
     void releaseBindGroup(WGPUBindGroup& bindGroup);
     void releaseBindGroupLayout(WGPUBindGroupLayout& bindGroupLayout);
-public:
+
     void initialize(WGPUDevice device);
     void release();
 };
