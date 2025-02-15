@@ -44,7 +44,8 @@ extern const char* cShaderSrc_Scene_Compose;
 // shaders blit
 extern const char* cShaderSrc_Blit;
 
-// compute shader sources: blend, compose and merge path
+// compute shader sources: effects
 extern const char* cShaderSrc_MergeMasks;
+extern const char* cShaderSrc_GaussianBlur;
 
 #endif // _TVG_WG_SHEDER_SRC_H_

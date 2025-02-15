@@ -419,16 +419,6 @@ TVG_API Tvg_Result tvg_engine_version(uint32_t* major, uint32_t* minor, uint32_t
 /* SwCanvas API                                                         */
 /************************************************************************/
 
-/**
- * @brief Enumeration specifying the methods of Memory Pool behavior policy.
- */
-typedef enum {
-    TVG_MEMPOOL_POLICY_DEFAULT = 0, ///< Default behavior that ThorVG is designed to.
-    TVG_MEMPOOL_POLICY_SHAREABLE,   ///< Memory Pool is shared among canvases.
-    TVG_MEMPOOL_POLICY_INDIVIDUAL   ///< Allocate designated memory pool that is used only by the current canvas instance.
-} Tvg_Mempool_Policy;
-
-
 /*!
 * @brief Creates a Canvas object.
 *
@@ -461,31 +451,6 @@ TVG_API Tvg_Canvas* tvg_swcanvas_create(void);
 */
 TVG_API Tvg_Result tvg_swcanvas_set_target(Tvg_Canvas* canvas, uint32_t* buffer, uint32_t stride, uint32_t w, uint32_t h, Tvg_Colorspace cs);
 
-
-/*!
-* @brief Sets the software engine memory pool behavior policy.
-*
-* ThorVG draws a lot of shapes, it allocates/deallocates a few chunk of memory
-* while processing rendering. It internally uses one shared memory pool
-* which can be reused among the canvases in order to avoid memory overhead.
-*
-* Thus ThorVG suggests using a memory pool policy to satisfy user demands,
-* if it needs to guarantee the thread-safety of the internal data access.
-*
-* @param[in] canvas The Tvg_Canvas object of which the Memory Pool behavior is to be specified.
-* @param[in] policy The method specifying the Memory Pool behavior. The default value is @c TVG_MEMPOOL_POLICY_DEFAULT.
-*
-* @return Tvg_Result enumeration.
-* @retval TVG_RESULT_INVALID_ARGUMENTS An invalid canvas pointer passed.
-* @retval TVG_RESULT_INSUFFICIENT_CONDITION The canvas contains some paints already.
-* @retval TVG_RESULT_NOT_SUPPORTED The software engine is not supported.
-*
-* @note When @c policy is set as @c TVG_MEMPOOL_POLICY_INDIVIDUAL, the current instance of canvas uses its own individual
-*       memory data, which is not shared with others. This is necessary when the canvas is accessed on a worker-thread.
-*
-* @warning It's not allowed after pushing any paints.
-*/
-TVG_API Tvg_Result tvg_swcanvas_set_mempool(Tvg_Canvas* canvas, Tvg_Mempool_Policy policy);
 
 /** \} */   // end defgroup ThorVGCapi_SwCanvas
 
@@ -1175,13 +1140,14 @@ TVG_API Tvg_Result tvg_shape_close(Tvg_Paint* paint);
 * @param[in] h The height of the rectangle.
 * @param[in] rx The x-axis radius of the ellipse defining the rounded corners of the rectangle.
 * @param[in] ry The y-axis radius of the ellipse defining the rounded corners of the rectangle.
+* @param[in] cw Specifies the path direction: @c true for clockwise, @c false for counterclockwise.
 *
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Paint pointer.
 *
 & @note For @p rx and @p ry greater than or equal to the half of @p w and the half of @p h, respectively, the shape become an ellipse.
 */
-TVG_API Tvg_Result tvg_shape_append_rect(Tvg_Paint* paint, float x, float y, float w, float h, float rx, float ry);
+TVG_API Tvg_Result tvg_shape_append_rect(Tvg_Paint* paint, float x, float y, float w, float h, float rx, float ry, bool cw);
 
 
 /*!
@@ -1198,11 +1164,12 @@ TVG_API Tvg_Result tvg_shape_append_rect(Tvg_Paint* paint, float x, float y, flo
 * @param[in] cy The vertical coordinate of the center of the ellipse.
 * @param[in] rx The x-axis radius of the ellipse.
 * @param[in] ry The y-axis radius of the ellipse.
+* @param[in] cw Specifies the path direction: @c true for clockwise, @c false for counterclockwise.
 *
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Paint pointer.
 */
-TVG_API Tvg_Result tvg_shape_append_circle(Tvg_Paint* paint, float cx, float cy, float rx, float ry);
+TVG_API Tvg_Result tvg_shape_append_circle(Tvg_Paint* paint, float cx, float cy, float rx, float ry, bool cw);
 
 
 /*!
@@ -2540,6 +2507,25 @@ TVG_API Tvg_Result tvg_lottie_animation_get_markers_cnt(Tvg_Animation* animation
 * @since 1.0
 */
 TVG_API Tvg_Result tvg_lottie_animation_get_marker(Tvg_Animation* animation, uint32_t idx, const char** name);
+
+
+/**
+ * @brief Interpolates between two frames over a specified duration.
+ *
+ * This method performs tweening, a process of generating intermediate frame
+ * between @p from and @p to based on the given @p progress.
+ *
+ * @param[in] animation The Tvg_Animation pointer to the Lottie animation object.
+ * @param[in] from The start frame number of the interpolation.
+ * @param[in] to The end frame number of the interpolation.
+ * @param[in] progress The current progress of the interpolation (range: 0.0 to 1.0).
+ *
+ * @return Tvg_Result enumeration.
+ * @retval TVG_RESULT_INSUFFICIENT_CONDITION In case the animation is not loaded.
+ *
+ * @note Experimental API
+ */
+TVG_API Tvg_Result tvg_lottie_animation_tween(Tvg_Animation* animation, float from, float to, float progress);
 
 
 /** \} */   // end addtogroup ThorVGCapi_LottieAnimation

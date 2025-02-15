@@ -111,7 +111,7 @@ static jerry_value_t _value(float frameNo, LottieProperty* property)
     switch (property->type) {
         case LottieProperty::Type::Point: {
             auto value = jerry_object();
-            auto pos = (*static_cast<LottiePoint*>(property))(frameNo);
+            auto pos = (*static_cast<LottieScalar*>(property))(frameNo);
             auto val1 = jerry_number(pos.x);
             auto val2 = jerry_number(pos.y);
             jerry_object_set_index(value, 0, val1);
@@ -133,7 +133,7 @@ static jerry_value_t _value(float frameNo, LottieProperty* property)
         }
         case LottieProperty::Type::Position: {
             auto value = jerry_object();
-            auto pos = (*static_cast<LottiePosition*>(property))(frameNo);
+            auto pos = (*static_cast<LottieVector*>(property))(frameNo);
             auto val1 = jerry_number(pos.x);
             auto val2 = jerry_number(pos.y);
             jerry_object_set_index(value, 0, val1);
@@ -691,7 +691,7 @@ static jerry_value_t _nearestKey(const jerry_call_info_t* info, const jerry_valu
     auto exp = static_cast<LottieExpression*>(jerry_object_get_native_ptr(info->function, nullptr));
     auto time = jerry_value_as_number(args[0]);
     auto frameNo = exp->comp->frameAtTime(time);
-    auto index = jerry_number(exp->property->nearest(frameNo));
+    auto index = jerry_number((float)exp->property->nearest(frameNo));
 
     auto obj = jerry_object();
     jerry_object_set_sz(obj, EXP_INDEX, index);
@@ -764,13 +764,13 @@ static jerry_value_t _velocityAtTime(const jerry_call_info_t* info, const jerry_
     //compute the velocity
     switch (exp->property->type) {
         case LottieProperty::Type::Point: {
-            auto prv = (*static_cast<LottiePoint*>(exp->property))(pframe);
-            auto cur = (*static_cast<LottiePoint*>(exp->property))(cframe);
+            auto prv = (*static_cast<LottieScalar*>(exp->property))(pframe);
+            auto cur = (*static_cast<LottieScalar*>(exp->property))(cframe);
             return _velocity(prv.x, cur.x, prv.y, cur.y, elapsed);
         }
         case LottieProperty::Type::Position: {
-            auto prv = (*static_cast<LottiePosition*>(exp->property))(pframe);
-            auto cur = (*static_cast<LottiePosition*>(exp->property))(cframe);
+            auto prv = (*static_cast<LottieVector*>(exp->property))(pframe);
+            auto cur = (*static_cast<LottieVector*>(exp->property))(cframe);
             return _velocity(prv.x, cur.x, prv.y, cur.y, elapsed);
         }
         case LottieProperty::Type::Float: {
@@ -800,13 +800,13 @@ static jerry_value_t _speedAtTime(const jerry_call_info_t* info, const jerry_val
     //compute the velocity
     switch (exp->property->type) {
         case LottieProperty::Type::Point: {
-            prv = (*static_cast<LottiePoint*>(exp->property))(pframe);
-            cur = (*static_cast<LottiePoint*>(exp->property))(cframe);
+            prv = (*static_cast<LottieScalar*>(exp->property))(pframe);
+            cur = (*static_cast<LottieScalar*>(exp->property))(cframe);
             break;
         }
         case LottieProperty::Type::Position: {
-            prv = (*static_cast<LottiePosition*>(exp->property))(pframe);
-            cur = (*static_cast<LottiePosition*>(exp->property))(cframe);
+            prv = (*static_cast<LottieVector*>(exp->property))(pframe);
+            cur = (*static_cast<LottieVector*>(exp->property))(cframe);
             break;
         }
         default: {
@@ -1080,7 +1080,7 @@ static void _buildProperty(float frameNo, jerry_value_t context, LottieExpressio
     jerry_object_set_sz(context, "nearestKey", nearestKey);
     jerry_value_free(nearestKey);
 
-    auto numKeys = jerry_number(exp->property->frameCnt());
+    auto numKeys = jerry_number((float)exp->property->frameCnt());
     jerry_object_set_sz(context, "numKeys", numKeys);
     jerry_value_free(numKeys);
 
@@ -1236,7 +1236,7 @@ void LottieExpressions::buildComp(jerry_value_t context, float frameNo, LottieLa
     jerry_object_set_native_ptr(layer, &freeCb, _expcontent(exp, frameNo, comp));
     jerry_value_free(layer);
 
-    auto numLayers = jerry_number(comp->children.count);
+    auto numLayers = jerry_number((float)comp->children.count);
     jerry_object_set_sz(context, "numLayers", numLayers);
     jerry_value_free(numLayers);
 }

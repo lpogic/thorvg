@@ -182,16 +182,16 @@ struct Edge : public Object
     // https://stackoverflow.com/questions/1560492/how-to-tell-whether-a-point-is-to-the-right-or-left-side-of-a-line
     // return > 0 means point in left
     // return < 0 means point in right
-    double sideDist(const Point& p);
+    float sideDist(const Point& p);
 
     bool isRightOf(const Point& p)
     {
-        return sideDist(p) < 0.0;
+        return sideDist(p) < 0.0f;
     }
 
     bool isLeftOf(const Point& p)
     {
-        return sideDist(p) > 0.0;
+        return sideDist(p) > 0.0f;
     }
 
     // https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
@@ -202,9 +202,9 @@ struct Edge : public Object
     void disconnect();
 
 private:
-    double le_a;
-    double le_b;
-    double le_c;
+    float le_a;
+    float le_b;
+    float le_c;
 };
 
 
@@ -403,14 +403,14 @@ Edge::Edge(Vertex *top, Vertex *bottom, int32_t winding)
     : top(top),
       bottom(bottom),
       winding(winding),
-      le_a(static_cast<double>(bottom->point.y) - top->point.y),
-      le_b(static_cast<double>(top->point.x) - bottom->point.x),
-      le_c(static_cast<double>(top->point.y) * bottom->point.x - static_cast<double>(top->point.x) * bottom->point.y)
+      le_a(bottom->point.y - top->point.y),
+      le_b(top->point.x - bottom->point.x),
+      le_c(top->point.y * bottom->point.x - top->point.x * bottom->point.y)
 {
 }
 
 
-double Edge::sideDist(const Point& p)
+float Edge::sideDist(const Point& p)
 {
     return le_a * p.x + le_b * p.y + le_c;
 }
@@ -431,22 +431,22 @@ bool Edge::intersect(Edge *other, Point* point)
     auto denom = le_a * other->le_b - le_b * other->le_a;
     if (tvg::zero(denom)) return false;
 
-    auto dx = static_cast<double>(other->top->point.x) - top->point.x;
-    auto dy = static_cast<double>(other->top->point.y) - top->point.y;
+    auto dx = other->top->point.x - top->point.x;
+    auto dy = other->top->point.y - top->point.y;
     auto s_number = dy * other->le_b + dx * other->le_a;
     auto t_number = dy * le_b + dx * le_a;
 
-    if (denom > 0.0 ? (s_number < 0.0 || s_number > denom || t_number < 0.0 || t_number > denom) : (s_number > 0.0 || s_number < denom || t_number > 0.0 || t_number < denom)) return false;
+    if (denom > 0.0f ? (s_number < 0.0f || s_number > denom || t_number < 0.0f || t_number > denom) : (s_number > 0.0f || s_number < denom || t_number > 0.0f || t_number < denom)) return false;
 
-    auto scale = 1.0 / denom;
-    point->x = nearbyintf(static_cast<float>(top->point.x - s_number * le_b * scale));
-    point->y = nearbyintf(static_cast<float>(top->point.y + s_number * le_a * scale));
+    auto scale = 1.0f / denom;
+    point->x = nearbyintf(top->point.x - s_number * le_b * scale);
+    point->y = nearbyintf(top->point.y + s_number * le_a * scale);
 
     if (std::isinf(point->x) || std::isinf(point->y)) return false;
-    if (std::abs(point->x - top->point.x) < 1e-6 && std::abs(point->y - top->point.y) < 1e-6) return false;
-    if (std::abs(point->x - bottom->point.x) < 1e-6 && std::abs(point->y - bottom->point.y) < 1e-6) return false;
-    if (std::abs(point->x - other->top->point.x) < 1e-6 && std::abs(point->y - other->top->point.y) < 1e-6) return false;
-    if (std::abs(point->x - other->bottom->point.x) < 1e-6 && std::abs(point->y - other->bottom->point.y) < 1e-6) return false;
+    if (fabsf(point->x - top->point.x) < 1e-6f && fabsf(point->y - top->point.y) < 1e-6f) return false;
+    if (fabsf(point->x - bottom->point.x) < 1e-6f && fabsf(point->y - bottom->point.y) < 1e-6f) return false;
+    if (fabsf(point->x - other->top->point.x) < 1e-6f && fabsf(point->y - other->top->point.y) < 1e-6f) return false;
+    if (fabsf(point->x - other->bottom->point.x) < 1e-6f && fabsf(point->y - other->bottom->point.y) < 1e-6f) return false;
 
     return true;
 }
@@ -454,9 +454,9 @@ bool Edge::intersect(Edge *other, Point* point)
 
 void Edge::recompute()
 {
-    le_a = static_cast<double>(bottom->point.y) - top->point.y;
-    le_b = static_cast<double>(top->point.x) - bottom->point.x;
-    le_c = static_cast<double>(top->point.y) * bottom->point.x - static_cast<double>(top->point.x) * bottom->point.y;
+    le_a = bottom->point.y - top->point.y;
+    le_b = top->point.x - bottom->point.x;
+    le_c = top->point.y * bottom->point.x - top->point.x * bottom->point.y;
 }
 
 
@@ -1488,12 +1488,12 @@ void Tessellator::emitPoly(MonotonePolygon *poly)
             return;
         }
 
-        double ax = static_cast<double>(curr->point.x) - prev->point.x;
-        double ay = static_cast<double>(curr->point.y) - prev->point.y;
-        double bx = static_cast<double>(next->point.x) - curr->point.x;
-        double by = static_cast<double>(next->point.y) - curr->point.y;
+        auto ax = curr->point.x - prev->point.x;
+        auto ay = curr->point.y - prev->point.y;
+        auto bx = next->point.x - curr->point.x;
+        auto by = next->point.y - curr->point.y;
 
-        if (ax * by - ay * bx >= 0.0) {
+        if (ax * by - ay * bx >= 0.0f) {
             emitTriangle(prev, curr, next);
             v->prev->next = v->next;
             v->next->prev = v->prev;
@@ -1541,26 +1541,26 @@ void Stroker::stroke(const RenderShape *rshape)
         mStrokeWidth = strokeWidth / mMatrix.e11;
     }
 
-    auto cmds = rshape->path.cmds.data;
-    auto cmdCnt = rshape->path.cmds.count;
-    auto pts = rshape->path.pts.data;
-    auto ptsCnt = rshape->path.pts.count;
+    PathCommand *cmds, *trimmedCmds = nullptr;
+    Point *pts, *trimmedPts = nullptr;
+    uint32_t cmdCnt = 0, ptsCnt = 0;
 
     if (rshape->strokeTrim()) {
-        auto begin = 0.0f;
-        auto end = 0.0f;
-        rshape->stroke->strokeTrim(begin, end);
+        RenderPath trimmedPath;
+        if (!rshape->stroke->trim.trim(rshape->path, trimmedPath)) return;
 
-        if (begin == end) return;
+        cmds = trimmedCmds = trimmedPath.cmds.data;
+        cmdCnt = trimmedPath.cmds.count;
+        pts = trimmedPts = trimmedPath.pts.data;
+        ptsCnt = trimmedPath.pts.count;
 
-        if (begin > end) {
-            doTrimStroke(cmds, cmdCnt, pts, ptsCnt, rshape->stroke->trim.simultaneous, begin, 1.0f);
-            doTrimStroke(cmds, cmdCnt, pts, ptsCnt, rshape->stroke->trim.simultaneous, 0.0f, end);
-        } else {
-            doTrimStroke(cmds, cmdCnt, pts, ptsCnt, rshape->stroke->trim.simultaneous, begin,  end);
-        }
-
-        return;
+        trimmedPath.cmds.data = nullptr;
+        trimmedPath.pts.data = nullptr;
+    } else {
+        cmds = rshape->path.cmds.data;
+        cmdCnt = rshape->path.cmds.count;
+        pts = rshape->path.pts.data;
+        ptsCnt = rshape->path.pts.count;
     }
 
     const float *dash_pattern = nullptr;
@@ -1568,6 +1568,9 @@ void Stroker::stroke(const RenderShape *rshape)
 
     if (dashCnt == 0) doStroke(cmds, cmdCnt, pts, ptsCnt);
     else doDashStroke(cmds, cmdCnt, pts, ptsCnt, dashCnt, dash_pattern);
+
+    free(trimmedCmds);
+    free(trimmedPts);
 }
 
 
@@ -1579,76 +1582,6 @@ RenderRegion Stroker::bounds() const
         static_cast<int32_t>(ceil(mRightBottom.x - floor(mLeftTop.x))),
         static_cast<int32_t>(ceil(mRightBottom.y - floor(mLeftTop.y))),
     };
-}
-
-void Stroker::doTrimStroke(const PathCommand* cmds, uint32_t cmdCnt, const Point* pts, uint32_t ptsCnt, bool simultaneous, float start, float end)
-{
-    if (simultaneous) {
-        auto startCmds = cmds;
-        auto currCmds = cmds;
-        int ptsNum = 0;
-        for (uint32_t i = 0; i < cmdCnt; i++) {
-            switch (*currCmds) {
-                case PathCommand::MoveTo: {
-                    if (currCmds != startCmds) {
-                        PathTrim trim{};
-                        if (trim.trim(startCmds, currCmds - startCmds, pts, ptsNum, start, end)) {
-                            const auto& sCmds = trim.cmds();
-                            const auto& sPts = trim.pts();
-                            doStroke(sCmds.data, sCmds.count, sPts.data, sPts.count);
-                        }
-                        startCmds = currCmds;
-                        pts += ptsNum;
-                        ptsNum = 0;
-                    }
-                    currCmds++;
-                    ptsNum++;
-                    break;
-                }
-                case PathCommand::LineTo:
-                    currCmds++;
-                    ptsNum++;
-                    break;
-                case PathCommand::CubicTo:
-                    currCmds++;
-                    ptsNum += 3;
-                    break;
-                case PathCommand::Close: {
-                    PathTrim trim{};
-                    currCmds++;
-                    if (trim.trim(startCmds, currCmds - startCmds, pts, ptsNum, start, end)) {
-                        const auto& sCmds = trim.cmds();
-                        const auto& sPts = trim.pts();
-                        doStroke(sCmds.data, sCmds.count, sPts.data, sPts.count);
-                    }
-                    startCmds = currCmds;
-                    pts += ptsNum;
-                    ptsNum = 0;
-                    break;
-                }
-            }
-        }
-
-        if (startCmds != currCmds && ptsNum > 0) {
-            PathTrim trim{};
-
-            if (trim.trim(startCmds, currCmds - startCmds, pts, ptsNum, start, end)) {
-                const auto& sCmds = trim.cmds();
-                const auto& sPts = trim.pts();
-                doStroke(sCmds.data, sCmds.count, sPts.data, sPts.count);
-            }
-            startCmds = currCmds;
-            pts += ptsNum;
-            ptsNum = 0;
-        }
-    } else {
-        PathTrim trim{};
-        if (trim.trim(cmds, cmdCnt, pts, ptsCnt, start, end)) {
-            const auto& sCmds = trim.cmds();
-            const auto& sPts = trim.pts();
-            doStroke(sCmds.data, sCmds.count, sPts.data, sPts.count);
-        }
-    }
 }
 
 
@@ -2209,222 +2142,6 @@ void DashStroke::cubicTo(const Point& cnt1, const Point& cnt2, const Point& end)
 }
 
 
-bool PathTrim::trim(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count, float start, float end)
-{
-    if (end - start < 0.0001f) return false;
-
-    auto len = pathLength(cmds, cmd_count, pts, pts_count);
-    if (len < 0.001f) return false;
-
-    auto startLength = len * start;
-    auto endLength = len * end;
-    if (startLength >= endLength) return false;
-
-    trimPath(cmds, cmd_count, pts, pts_count, startLength, endLength);
-
-    return true;
-}
-
-
-float PathTrim::pathLength(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count)
-{
-    auto len = 0.0f;
-    Point zero = {0.0f, 0.0f};
-    const Point* prev = nullptr;
-    const Point* begin = nullptr;
-
-    for (uint32_t i = 0; i < cmd_count; i++) {
-        switch (cmds[i]) {
-            case PathCommand::MoveTo: {
-                prev = pts;
-                begin = pts;
-                pts++;
-                break;
-            }
-            case PathCommand::LineTo: {
-                if (prev != nullptr) len += length(prev, pts);
-                if (begin == nullptr) begin = pts;
-                prev = pts;
-                pts++;
-                break;
-            }
-            case PathCommand::CubicTo: {
-                if (prev == nullptr || begin == nullptr) {
-                    prev = begin = &zero;
-                }
-                Bezier b{ *prev, pts[0], pts[1], pts[2]};
-                len += b.length();
-                prev = pts + 2;
-                pts += 3;
-                break;
-            }
-            case PathCommand::Close: {
-                if (prev != nullptr && begin != nullptr && prev != begin) {
-                    len += length(prev, begin);
-                }
-                prev = begin = nullptr;
-                break;
-            }
-        }
-    }
-    return len;
-}
-
-
-void PathTrim::trimPath(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count, float start, float end)
-{
-    auto pos = 0.0f;
-    Point zero = {0.0f, 0.0f};
-    Point prev = {};
-    Point begin = {};
-    auto closed = true;
-    auto pushedMoveTo = false;
-    auto hasLineTo = false;
-
-    auto handle_line_to = [&](const Point* p1, const Point* p2) {
-        auto currLen = length(p1, p2);
-        if (pos + currLen <= start) {
-            pos += currLen;
-            prev = *p2;
-            return;
-        }
-
-        if (pos >= end)  {
-            prev = *p2;
-            return;
-        }
-
-        Line line{*p1, *p2};
-
-        if (pos < start) {
-            Line left, right;
-            line.split(start - pos, left, right);
-
-            pos += left.length();
-            line = right;
-        }
-
-        if (pos + currLen > end) {
-            Line left, right;
-            line.split(end - pos, left, right);
-            pos += left.length();
-            line = left;
-        }
-
-        if (!pushedMoveTo) {
-            mCmds.push(PathCommand::MoveTo);
-            mPts.push(line.pt1);
-            pushedMoveTo = true;
-            begin = line.pt1;
-        }
-
-        pos += line.length();
-
-        mCmds.push(PathCommand::LineTo);
-        mPts.push(line.pt2);
-        prev = line.pt2;
-        hasLineTo = true;
-        closed = false;
-    };
-
-    for (uint32_t i = 0; i < cmd_count; i++) {
-        if (pos - end > 0.001f) return; // we are done
-
-        if (pos >= end) return;
-
-        switch (cmds[i]) {
-            case PathCommand::MoveTo: {
-                prev = *pts;
-                begin = *pts;
-                pts++;
-                closed = false;
-                break;
-            }
-            case PathCommand::LineTo: {
-                handle_line_to(&prev, pts);
-                hasLineTo = true;
-                pts++;
-                break;
-            }
-            case PathCommand::CubicTo: {
-                Bezier b{ prev, pts[0], pts[1], pts[2]};
-
-                auto currLen = b.length();
-                if (pos + currLen <= start) {
-                    pos += currLen;
-                    prev = pts[2];
-                    pts += 3;
-                    break;
-                }
-
-                if (pos < start) {
-                    Bezier left, right;
-                    b.split(start - pos, left, right);
-                    pos += left.length();
-                    b = right;
-                }
-
-                if (pos + currLen > end) {
-                    Bezier left, right;
-                    b.split(end - pos, left, right);
-                    pos += left.length();
-                    b = left;
-                }
-
-                if (!pushedMoveTo) {
-                    mCmds.push(PathCommand::MoveTo);
-                    mPts.push(b.start);
-                    pushedMoveTo = true;
-                }
-
-
-                pos += b.length();
-                mCmds.push(PathCommand::CubicTo);
-                mPts.push(b.ctrl1);
-                mPts.push(b.ctrl2);
-                mPts.push(b.end);
-                prev = b.end;
-                hasLineTo = true;
-                closed = false;
-                pts += 3;
-                break;
-            }
-            case PathCommand::Close: {
-                if (closed) break;
-                if (!hasLineTo) {
-                    closed = true;
-                    pushedMoveTo = false;
-                    prev = begin = zero;
-                    break;
-                }
-                if (prev == begin) {
-                    prev = begin = zero;
-                    closed = true;
-                    pushedMoveTo = false;
-                    break;
-                }
-                auto currLen = length(&prev, &begin);
-                if (currLen + pos < start) {
-                    pos += currLen;
-                    break;
-                }
-                if (pos + currLen  <= end) {
-                    mCmds.push(PathCommand::Close);
-                    pos += currLen;
-                    break;
-                }
-                // handle_line_to(&prev, &begin);
-                closed = true;
-                pushedMoveTo = false;
-                prev = begin = zero;
-                pos += currLen;
-                break;
-            }
-        }
-    }
-}
-
-
 BWTessellator::BWTessellator(Array<float>* points, Array<uint32_t>* indices): mResPoints(points), mResIndices(indices)
 {
 }
@@ -2502,10 +2219,10 @@ void BWTessellator::tessellate(const RenderShape *rshape, const Matrix& matrix)
 RenderRegion BWTessellator::bounds() const
 {
     return RenderRegion {
-        static_cast<int32_t>(floor(mLeftTop.x)),
-        static_cast<int32_t>(floor(mLeftTop.y)),
-        static_cast<int32_t>(ceil(mRightBottom.x - floor(mLeftTop.x))),
-        static_cast<int32_t>(ceil(mRightBottom.y - floor(mLeftTop.y))),
+        static_cast<int32_t>(floor(bbox.min.x)),
+        static_cast<int32_t>(floor(bbox.min.y)),
+        static_cast<int32_t>(ceil(bbox.max.x - floor(bbox.min.x))),
+        static_cast<int32_t>(ceil(bbox.max.y - floor(bbox.min.y))),
     };
 }
 
@@ -2515,13 +2232,10 @@ uint32_t BWTessellator::pushVertex(float x, float y)
     auto index = _pushVertex(mResPoints, x, y);
 
     if (index == 0) {
-        mRightBottom.x = mLeftTop.x = x;
-        mRightBottom.y = mLeftTop.y = y;
+        bbox.max = bbox.min = {x, y};
     } else {
-        mLeftTop.x = std::min(mLeftTop.x, x);
-        mLeftTop.y = std::min(mLeftTop.y, y);
-        mRightBottom.x = std::max(mRightBottom.x, x);
-        mRightBottom.y = std::max(mRightBottom.y , y);
+        bbox.min = {std::min(bbox.min.x, x), std::min(bbox.min.y, y)};
+        bbox.max = {std::max(bbox.max.x, x), std::max(bbox.max.y, y)};
     }
 
     return index;

@@ -37,36 +37,39 @@ struct LottieStroke
 {
     struct DashAttr
     {
-        //0: offset, 1: dash, 2: gap
-        LottieFloat value[3] = {0.0f, 0.0f, 0.0f};
+        LottieFloat offset = 0.0f;
+        LottieFloat* values = nullptr;
+        uint8_t size = 0;
+        uint8_t allocated = 0;
     };
 
     virtual ~LottieStroke()
     {
+        if (dashattr) delete[] dashattr->values;
         delete(dashattr);
     }
 
-    LottieFloat& dash(int no)
+
+    LottieFloat& dashValue()
     {
         if (!dashattr) dashattr = new DashAttr;
-        return dashattr->value[no];
+
+        if (dashattr->size + 1 > dashattr->allocated) {
+            dashattr->allocated = dashattr->size + 2;
+            auto newValues = new LottieFloat[dashattr->allocated];
+            for (uint8_t i = 0; i < dashattr->size; ++i) newValues[i] = LottieFloat(dashattr->values[i]);
+            delete[] dashattr->values;
+            dashattr->values = newValues;
+        }
+
+        return dashattr->values[dashattr->size++];
     }
 
-    float dashOffset(float frameNo, LottieExpressions* exps)
-    {
-        return dash(0)(frameNo, exps);
-    }
 
-    float dashGap(float frameNo, LottieExpressions* exps)
+    LottieFloat& dashOffset()
     {
-        return dash(2)(frameNo, exps);
-    }
-
-    float dashSize(float frameNo, LottieExpressions* exps)
-    {
-        auto d = dash(1)(frameNo, exps);
-        if (d == 0.0f) return 0.1f;
-        else return d;
+        if (!dashattr) dashattr = new DashAttr;
+        return dashattr->offset;
     }
 
     LottieFloat width = 0.0f;
@@ -261,8 +264,8 @@ struct LottieTextRange
     struct {
         LottieColor fillColor = RGB24{255, 255, 255};
         LottieColor strokeColor = RGB24{255, 255, 255};
-        LottiePosition position = Point{0, 0};
-        LottiePoint scale = Point{100, 100};
+        LottieVector position = Point{0, 0};
+        LottieScalar scale = Point{100, 100};
         LottieFloat letterSpacing = 0.0f;
         LottieFloat lineSpacing = 0.0f;
         LottieFloat strokeWidth = 0.0f;
@@ -300,14 +303,23 @@ struct LottieFont
         free(style);
         free(family);
         free(name);
+        free(data.b64src);
     }
+
+    struct {
+        char* b64src = nullptr;
+        uint32_t size = 0;
+    } data;
 
     Array<LottieGlyph*> chars;
     char* name = nullptr;
     char* family = nullptr;
     char* style = nullptr;
+    size_t dataSize = 0;
     float ascent = 0.0f;
     Origin origin = Embedded;
+
+    void prepare();
 };
 
 struct LottieMarker
@@ -328,7 +340,7 @@ struct LottieText : LottieObject, LottieRenderPooler<tvg::Shape>
     {
         enum Group : uint8_t { Chars = 1, Word = 2, Line = 3, All = 4 };
         Group grouping = Chars;
-        LottiePoint anchor{};
+        LottieScalar anchor{};
     } alignOption;
 
     LottieText()
@@ -382,7 +394,7 @@ struct LottieTrimpath : LottieObject
         return nullptr;
     }
 
-    void segment(float frameNo, float& start, float& end, LottieExpressions* exps);
+    void segment(float frameNo, float& start, float& end, Tween& tween, LottieExpressions* exps);
 
     LottieFloat start = 0.0f;
     LottieFloat end = 100.0f;
@@ -452,8 +464,8 @@ struct LottieRect : LottieShape
         return nullptr;
     }
 
-    LottiePosition position = Point{0.0f, 0.0f};
-    LottiePoint size = Point{0.0f, 0.0f};
+    LottieVector position = Point{0.0f, 0.0f};
+    LottieScalar size = Point{0.0f, 0.0f};
     LottieFloat radius = 0.0f;       //rounded corner radius
 };
 
@@ -476,7 +488,7 @@ struct LottiePolyStar : LottieShape
         return nullptr;
     }
 
-    LottiePosition position = Point{0.0f, 0.0f};
+    LottieVector position = Point{0.0f, 0.0f};
     LottieFloat innerRadius = 0.0f;
     LottieFloat outerRadius = 0.0f;
     LottieFloat innerRoundness = 0.0f;
@@ -498,8 +510,8 @@ struct LottieEllipse : LottieShape
         return nullptr;
     }
 
-    LottiePosition position = Point{0.0f, 0.0f};
-    LottiePoint size = Point{0.0f, 0.0f};
+    LottieVector position = Point{0.0f, 0.0f};
+    LottieScalar size = Point{0.0f, 0.0f};
 };
 
 
@@ -555,7 +567,7 @@ struct LottieTransform : LottieObject
         switch (prop->type) {
             case LottieProperty::Type::Position: {
                 if (byDefault) position.release();
-                position.copy(*static_cast<LottiePosition*>(prop), shallow);
+                position.copy(*static_cast<LottieVector*>(prop), shallow);
                 break;
             }
             case LottieProperty::Type::Float: {
@@ -565,7 +577,7 @@ struct LottieTransform : LottieObject
             }
             case LottieProperty::Type::Point: {
                 if (byDefault) scale.release();
-                scale.copy(*static_cast<LottiePoint*>(prop), shallow);
+                scale.copy(*static_cast<LottieScalar*>(prop), shallow);
                 break;
             }
             case LottieProperty::Type::Opacity: {
@@ -577,10 +589,10 @@ struct LottieTransform : LottieObject
         }
     }
 
-    LottiePosition position = Point{0.0f, 0.0f};
+    LottieVector position = Point{0.0f, 0.0f};
     LottieFloat rotation = 0.0f;           //z rotation
-    LottiePoint scale = Point{100.0f, 100.0f};
-    LottiePoint anchor = Point{0.0f, 0.0f};
+    LottieScalar scale = Point{100.0f, 100.0f};
+    LottieScalar anchor = Point{0.0f, 0.0f};
     LottieOpacity opacity = 255;
     LottieFloat skewAngle = 0.0f;
     LottieFloat skewAxis = 0.0f;
@@ -615,9 +627,8 @@ struct LottieSolidStroke : LottieSolid, LottieStroke
     {
         if (width.ix == ix) return &width;
         if (dashattr) {
-            if (dashattr->value[0].ix == ix) return &dashattr->value[0];
-            if (dashattr->value[1].ix == ix) return &dashattr->value[1];
-            if (dashattr->value[2].ix == ix) return &dashattr->value[2];
+            for (uint8_t i = 0; i < dashattr->size ; ++i)
+                if (dashattr->values[i].ix == ix) return &dashattr->values[i];
         }
         return LottieSolid::property(ix);
     }
@@ -690,10 +701,10 @@ struct LottieGradient : LottieObject
     }
 
     uint32_t populate(ColorStop& color, size_t count);
-    Fill* fill(float frameNo, LottieExpressions* exps);
+    Fill* fill(float frameNo, Tween& tween, LottieExpressions* exps);
 
-    LottiePoint start = Point{0.0f, 0.0f};
-    LottiePoint end = Point{0.0f, 0.0f};
+    LottieScalar start = Point{0.0f, 0.0f};
+    LottieScalar end = Point{0.0f, 0.0f};
     LottieFloat height = 0.0f;
     LottieFloat angle = 0.0f;
     LottieOpacity opacity = 255;
@@ -724,9 +735,8 @@ struct LottieGradientStroke : LottieGradient, LottieStroke
     {
         if (width.ix == ix) return &width;
         if (dashattr) {
-            if (dashattr->value[0].ix == ix) return &dashattr->value[0];
-            if (dashattr->value[1].ix == ix) return &dashattr->value[1];
-            if (dashattr->value[2].ix == ix) return &dashattr->value[2];
+            for (uint8_t i = 0; i < dashattr->size ; ++i)
+                if (dashattr->values[i].ix == ix) return &dashattr->values[i];
         }
         return LottieGradient::property(ix);
     }
@@ -773,10 +783,10 @@ struct LottieRepeater : LottieObject
     LottieFloat offset = 0.0f;
 
     //Transform
-    LottiePosition position = Point{0.0f, 0.0f};
+    LottieVector position = Point{0.0f, 0.0f};
     LottieFloat rotation = 0.0f;
-    LottiePoint scale = Point{100.0f, 100.0f};
-    LottiePoint anchor = Point{0.0f, 0.0f};
+    LottieScalar scale = Point{100.0f, 100.0f};
+    LottieScalar anchor = Point{0.0f, 0.0f};
     LottieOpacity startOpacity = 255;
     LottieOpacity endOpacity = 255;
     bool inorder = true;        //true: higher,  false: lower
@@ -960,6 +970,13 @@ struct LottieComposition
             if (layer->id == id) return layer;
         }
         return nullptr;
+    }
+
+    void clamp(float& frameNo)
+    {
+        frameNo += root->inFrame;
+        if (frameNo < root->inFrame) frameNo = root->inFrame;
+        if (frameNo >= root->outFrame) frameNo = root->outFrame - 1;
     }
 
     LottieLayer* root = nullptr;

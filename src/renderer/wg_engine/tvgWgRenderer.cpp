@@ -20,21 +20,23 @@
  * SOFTWARE.
  */
 
+#include <atomic>
 #include "tvgWgRenderer.h"
 
-WgRenderer::WgRenderer()
+
+/************************************************************************/
+/* Internal Class Implementation                                        */
+/************************************************************************/
+
+static atomic<int32_t> initEngineCnt{};
+static atomic<int32_t> rendererCnt{};
+
+
+static void _termEngine()
 {
-}
+    if (rendererCnt > 0) return;
 
-
-WgRenderer::~WgRenderer()
-{
-    release();
-}
-
-
-void WgRenderer::initialize()
-{
+    //TODO:
 }
 
 
@@ -49,6 +51,8 @@ void WgRenderer::release()
     // clear render data paint pools
     mRenderDataShapePool.release(mContext);
     mRenderDataPicturePool.release(mContext);
+    mRenderDataGaussianPool.release(mContext);
+    mRenderDataViewportPool.release(mContext);
     WgMeshDataPool::gMeshDataPool->release(mContext);
 
     // clear render storage pool
@@ -80,6 +84,58 @@ void WgRenderer::disposeObjects()
     }
     mDisposeRenderDatas.clear();
 }
+
+
+void WgRenderer::releaseSurfaceTexture()
+{
+    if (surfaceTexture.texture) {
+        wgpuTextureRelease(surfaceTexture.texture);
+        surfaceTexture.texture = nullptr;
+    }
+}
+
+
+void WgRenderer::clearTargets()
+{
+    releaseSurfaceTexture();
+    if (surface) wgpuSurfaceUnconfigure(surface);
+    targetTexture = nullptr;
+    surface = nullptr;
+    mTargetSurface.stride = 0;
+    mTargetSurface.w = 0;
+    mTargetSurface.h = 0;
+
+}
+
+
+bool WgRenderer::surfaceConfigure(WGPUSurface surface, WgContext& context, uint32_t width, uint32_t height)
+{
+    // store target surface properties
+    this->surface = surface;
+    if (width == 0 || height == 0 || !surface) return false;
+
+    // setup surface configuration
+    WGPUSurfaceConfiguration surfaceConfiguration {
+        .device = context.device,
+        .format = context.preferredFormat,
+        .usage = WGPUTextureUsage_RenderAttachment,
+    #ifdef __EMSCRIPTEN__
+        .alphaMode = WGPUCompositeAlphaMode_Premultiplied,
+    #endif
+        .width = width,
+        .height = height,
+    #ifndef __EMSCRIPTEN__
+        .presentMode = WGPUPresentMode_Fifo,
+    #endif
+    };
+    wgpuSurfaceConfigure(surface, &surfaceConfiguration);
+    return true;
+}
+
+
+/************************************************************************/
+/* External Class Implementation                                        */
+/************************************************************************/
 
 
 RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper)
@@ -182,6 +238,10 @@ bool WgRenderer::postRender()
     // pop root render storage to the render tree stack
     mRenderStorageStack.pop();
     assert(mRenderStorageStack.count == 0);
+    // clear viewport list and store allocated handles to pool
+    ARRAY_FOREACH(p, mRenderDataViewportList)
+        mRenderDataViewportPool.free(mContext, *p);
+    mRenderDataViewportList.clear();
     return true;
 }
 
@@ -197,7 +257,14 @@ RenderRegion WgRenderer::region(RenderData data)
 {
     auto renderData = (WgRenderDataPaint*)data;
     if (renderData->type() == Type::Shape) {
-        return renderData->aabb;
+        auto& v1 = renderData->aabb.min;
+        auto& v2 = renderData->aabb.max;
+        RenderRegion renderRegion;
+        renderRegion.x = static_cast<int32_t>(nearbyint(v1.x));
+        renderRegion.y = static_cast<int32_t>(nearbyint(v1.y));
+        renderRegion.w = static_cast<int32_t>(nearbyint(v2.x)) - renderRegion.x;
+        renderRegion.h = static_cast<int32_t>(nearbyint(v2.y)) - renderRegion.y;
+        return renderRegion;
     }
     return { 0, 0, (int32_t)mTargetSurface.w, (int32_t)mTargetSurface.h };
 }
@@ -238,15 +305,6 @@ bool WgRenderer::clear()
 {
     //TODO: clear the current target buffer only if clear() is called
     return true;
-}
-
-
-void WgRenderer::releaseSurfaceTexture()
-{
-    if (surfaceTexture.texture) {
-        wgpuTextureRelease(surfaceTexture.texture);
-        surfaceTexture.texture = nullptr;
-    }
 }
 
 
@@ -355,56 +413,41 @@ bool WgRenderer::target(WGPUDevice device, WGPUInstance instance, void* target, 
 }
 
 
-void WgRenderer::clearTargets()
+WgRenderer::WgRenderer()
 {
-    releaseSurfaceTexture();
-    if (surface) wgpuSurfaceUnconfigure(surface);
-    targetTexture = nullptr;
-    surface = nullptr;
-    mTargetSurface.stride = 0;
-    mTargetSurface.w = 0;
-    mTargetSurface.h = 0;
-
 }
 
 
-bool WgRenderer::surfaceConfigure(WGPUSurface surface, WgContext& context, uint32_t width, uint32_t height)
+WgRenderer::~WgRenderer()
 {
-    // store target surface properties
-    this->surface = surface;
-    if (width == 0 || height == 0 || !surface) return false;
+    release();
 
-    // setup surface configuration
-    WGPUSurfaceConfiguration surfaceConfiguration {
-        .device = context.device,
-        .format = context.preferredFormat,
-        .usage = WGPUTextureUsage_RenderAttachment,
-    #ifdef __EMSCRIPTEN__
-        .alphaMode = WGPUCompositeAlphaMode_Premultiplied,
-    #endif
-        .width = width,
-        .height = height,
-    #ifndef __EMSCRIPTEN__
-        .presentMode = WGPUPresentMode_Fifo,
-    #endif
-    };
-    wgpuSurfaceConfigure(surface, &surfaceConfiguration);
-    return true;
+    --rendererCnt;
+
+    if (rendererCnt == 0 && initEngineCnt == 0) _termEngine();
 }
 
 
 RenderCompositor* WgRenderer::target(const RenderRegion& region, TVG_UNUSED ColorSpace cs, TVG_UNUSED CompositionFlag flags)
 {
-    mCompositorStack.push(new WgCompose);
-    mCompositorStack.last()->aabb = region;
-    return mCompositorStack.last();
+    // create and setup compose data
+    WgCompose* compose = new WgCompose();
+    compose->aabb = region;
+    if (flags & PostProcessing) {
+        compose->aabb = region;
+        compose->rdViewport = mRenderDataViewportPool.allocate(mContext);
+        compose->rdViewport->update(mContext, region);
+        mRenderDataViewportList.push(compose->rdViewport);
+    }
+    mCompositorStack.push(compose);
+    return compose;
 }
 
 
 bool WgRenderer::beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity)
 {
     // save current composition settings
-    WgCompose* compose = (WgCompose *)cmp;
+    WgCompose* compose = (WgCompose*)cmp;
     compose->method = method;
     compose->opacity = opacity;
     compose->blend = mBlendMethod;
@@ -424,8 +467,8 @@ bool WgRenderer::beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_
 bool WgRenderer::endComposite(RenderCompositor* cmp)
 {
     // get current composition settings
-    WgCompose* comp = (WgCompose *)cmp;
-    // end current render pass
+    WgCompose* comp = (WgCompose*)cmp;
+    // we must to end current render pass to run blend/composition mechanics
     mCompositor.endRenderPass();
     // finish scene blending
     if (comp->method == MaskMethod::None) {
@@ -463,30 +506,67 @@ bool WgRenderer::endComposite(RenderCompositor* cmp)
 }
 
 
-void WgRenderer::prepare(TVG_UNUSED RenderEffect* effect, TVG_UNUSED const Matrix& transform)
+void WgRenderer::prepare(RenderEffect* effect, const Matrix& transform)
 {
-    //TODO: prepare the effect
+    // prepare gaussian blur data
+    if (effect->type == SceneEffect::GaussianBlur) {
+        auto gaussianBlur = (RenderEffectGaussianBlur*)effect;
+        auto renderDataGaussian = (WgRenderDataGaussian*)gaussianBlur->rd;
+        if (!renderDataGaussian) {
+            renderDataGaussian = mRenderDataGaussianPool.allocate(mContext);
+            gaussianBlur->rd = renderDataGaussian;
+        }
+        renderDataGaussian->update(mContext, gaussianBlur, transform);
+        effect->valid = true;
+    }
 }
 
 
-bool WgRenderer::region(TVG_UNUSED RenderEffect* effect)
+bool WgRenderer::region(RenderEffect* effect)
 {
-    //TODO: Return if the current post effect requires the region expansion
+    if (effect->type == SceneEffect::GaussianBlur) {
+        auto gaussian = (RenderEffectGaussianBlur*)effect;
+        auto renderDataGaussian = (WgRenderDataGaussian*)gaussian->rd;
+        if (gaussian->direction != 2) {
+            gaussian->extend.x = -renderDataGaussian->extend;
+            gaussian->extend.w = +renderDataGaussian->extend * 2;
+        }
+        if (gaussian->direction != 1) {
+            gaussian->extend.y = -renderDataGaussian->extend;
+            gaussian->extend.h = +renderDataGaussian->extend * 2;
+        }
+        return true;
+    }
     return false;
 }
 
 
-bool WgRenderer::render(TVG_UNUSED RenderCompositor* cmp, TVG_UNUSED const RenderEffect* effect, TVG_UNUSED bool direct)
+bool WgRenderer::render(RenderCompositor* cmp, const RenderEffect* effect, TVG_UNUSED bool direct)
 {
-    TVGLOG("WG_ENGINE", "SceneEffect(%d) is not supported", (int)effect->type);
+    // we must to end current render pass to resolve ms texture before effect
+    mCompositor.endRenderPass();
+
+    // handle gaussian blur
+    if (effect->type == SceneEffect::GaussianBlur) {
+        WgCompose* comp = (WgCompose*)cmp;
+        WgRenderStorage* dst = mRenderStorageStack.last();
+        RenderEffectGaussianBlur* gaussianBlur = (RenderEffectGaussianBlur*)effect;
+        mCompositor.gaussianBlur(mContext, dst, gaussianBlur, comp);
+        return true;
+    }
     return false;
 }
 
 
-void WgRenderer::dispose(TVG_UNUSED RenderEffect* effect)
+void WgRenderer::dispose(RenderEffect* effect)
 {
-    //TODO: dispose the effect
-}
+    // dispose gaussian blur data
+    if (effect->type == SceneEffect::GaussianBlur) {
+        auto gaussianBlur = (RenderEffectGaussianBlur*)effect;
+        mRenderDataGaussianPool.free(mContext, (WgRenderDataGaussian*)gaussianBlur->rd);
+        gaussianBlur->rd = nullptr;
+    }
+};
 
 
 bool WgRenderer::preUpdate()
@@ -501,19 +581,36 @@ bool WgRenderer::postUpdate()
 }
 
 
-WgRenderer* WgRenderer::gen()
+bool WgRenderer::init(TVG_UNUSED uint32_t threads)
 {
-    return new WgRenderer();
+    if ((initEngineCnt++) > 0) return true;
+
+    //TODO: global engine init
+
+    return true;
 }
 
 
-bool WgRenderer::init(TVG_UNUSED uint32_t threads)
+int32_t WgRenderer::init()
 {
-    return true;
+    return initEngineCnt;
 }
 
 
 bool WgRenderer::term()
 {
+    if ((--initEngineCnt) > 0) return true;
+
+    initEngineCnt = 0;
+
+    _termEngine();
+
     return true;
+}
+
+
+WgRenderer* WgRenderer::gen()
+{
+    ++rendererCnt;
+    return new WgRenderer();
 }
