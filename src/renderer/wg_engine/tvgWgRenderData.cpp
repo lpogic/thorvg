@@ -57,30 +57,21 @@ void WgMeshData::drawImage(WgContext& context, WGPURenderPassEncoder renderPassE
 
 void WgMeshData::update(WgContext& context, const WgVertexBuffer& vertexBuffer)
 {
-    assert(vertexBuffer.vcount > 2);
-    vertexCount = vertexBuffer.vcount;
-    indexCount = (vertexBuffer.vcount - 2) * 3;
-    // buffer position data create and write
-    context.allocateBufferVertex(bufferPosition, (float *)&vertexBuffer.vbuff, vertexCount * sizeof(float) * 2);
-    // buffer index data create and write
+    assert(vertexBuffer.count > 2);
+    vertexCount = vertexBuffer.count;
+    indexCount = (vertexBuffer.count - 2) * 3;
+    context.allocateBufferVertex(bufferPosition, (float*)vertexBuffer.data, vertexCount * sizeof(float) * 2);
     context.allocateBufferIndexFan(vertexCount);
 }
 
 
-void WgMeshData::update(WgContext& context, const WgVertexBufferInd& vertexBufferInd)
+void WgMeshData::update(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd)
 {
     assert(vertexBufferInd.vcount > 2);
     vertexCount = vertexBufferInd.vcount;
     indexCount = vertexBufferInd.icount;
-    // buffer position data create and write
-    if (vertexCount > 0)
-        context.allocateBufferVertex(bufferPosition, (float *)&vertexBufferInd.vbuff, vertexCount * sizeof(float) * 2);
-    // buffer tex coords data create and write
-    if (vertexCount > 0)
-        context.allocateBufferVertex(bufferTexCoord, (float *)&vertexBufferInd.tbuff, vertexCount * sizeof(float) * 2);
-    // buffer index data create and write
-    if (indexCount > 0)
-        context.allocateBufferIndex(bufferIndex, vertexBufferInd.ibuff, indexCount * sizeof(uint32_t));
+    if (vertexCount > 0) context.allocateBufferVertex(bufferPosition, (float*)vertexBufferInd.vbuff, vertexCount * sizeof(float) * 2);
+    if (indexCount > 0) context.allocateBufferIndex(bufferIndex, vertexBufferInd.ibuff, indexCount * sizeof(uint32_t));
 };
 
 
@@ -88,10 +79,7 @@ void WgMeshData::bbox(WgContext& context, const Point pmin, const Point pmax)
 {
     vertexCount = 4;
     indexCount = 6;
-    const float data[] = {
-        pmin.x, pmin.y, pmax.x, pmin.y,
-        pmax.x, pmax.y, pmin.x, pmax.y
-    };
+    const float data[] = {pmin.x, pmin.y, pmax.x, pmin.y, pmax.x, pmax.y, pmin.x, pmax.y};
     context.allocateBufferVertex(bufferPosition, data, sizeof(data));
     context.allocateBufferIndexFan(vertexCount);
 }
@@ -101,9 +89,9 @@ void WgMeshData::imageBox(WgContext& context, float w, float h)
 {
     vertexCount = 4;
     indexCount = 6;
-    const float vdata[] = { 0.0f, 0.0f,    w, 0.0f,   w,    h,  0.0f, h    };
-    const float tdata[] = { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f };
-    const uint32_t idata[] = { 0, 1, 2, 0, 2, 3 };
+    const float vdata[] = {0.0f, 0.0f, w, 0.0f, w, h, 0.0f, h};
+    const float tdata[] = {0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+    const uint32_t idata[] = {0, 1, 2, 0, 2, 3};
     context.allocateBufferVertex(bufferPosition, vdata, sizeof(vdata));
     context.allocateBufferVertex(bufferTexCoord, tdata, sizeof(tdata));
     context.allocateBufferIndex(bufferIndex, idata, sizeof(idata));
@@ -114,8 +102,8 @@ void WgMeshData::blitBox(WgContext& context)
 {
     vertexCount = 4;
     indexCount = 6;
-    const float vdata[] = { -1.0f, +1.0f, +1.0f, +1.0f, +1.0f, -1.0f, -1.0f, -1.0f };
-    const float tdata[] = { +0.0f, +0.0f, +1.0f, +0.0f, +1.0f, +1.0f, +0.0f, +1.0f };
+    const float vdata[] = {-1.0f, +1.0f, +1.0f, +1.0f, +1.0f, -1.0f, -1.0f, -1.0f};
+    const float tdata[] = {+0.0f, +0.0f, +1.0f, +0.0f, +1.0f, +1.0f, +0.0f, +1.0f};
     const uint32_t idata[] = { 0, 1, 2, 0, 2, 3 };
     context.allocateBufferVertex(bufferPosition, vdata, sizeof(vdata));
     context.allocateBufferVertex(bufferTexCoord, tdata, sizeof(tdata));
@@ -174,13 +162,13 @@ WgMeshDataPool* WgMeshDataPool::gMeshDataPool = &gMeshDataPoolInstance;
 
 void WgMeshDataGroup::append(WgContext& context, const WgVertexBuffer& vertexBuffer)
 {
-    assert(vertexBuffer.vcount >= 3);
+    assert(vertexBuffer.count >= 3);
     meshes.push(WgMeshDataPool::gMeshDataPool->allocate(context));
     meshes.last()->update(context, vertexBuffer);
 }
 
 
-void WgMeshDataGroup::append(WgContext& context, const WgVertexBufferInd& vertexBufferInd)
+void WgMeshDataGroup::append(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd)
 {
     assert(vertexBufferInd.vcount >= 3);
     meshes.push(WgMeshDataPool::gMeshDataPool->allocate(context));
@@ -235,53 +223,54 @@ void WgImageData::release(WgContext& context)
 // WgRenderSettings
 //***********************************************************************
 
-void WgRenderSettings::update(WgContext& context, const Fill* fill, const RenderColor& c, const RenderUpdateFlag flags)
+void WgRenderSettings::updateFill(WgContext& context, const Fill* fill)
 {
-    // setup fill properties
-    if ((flags & (RenderUpdateFlag::Gradient)) && fill) {
-        rasterType = WgRenderRasterType::Gradient;
-        // get gradient transfrom matrix
-        Matrix invFillTransform;
-        WgShaderTypeMat4x4f gradientTrans; // identity by default
-        if (inverse(&fill->transform(), &invFillTransform))
-            gradientTrans.update(invFillTransform);
-        // get gradient rasterisation settings
-        WgShaderTypeGradient gradient;
-        if (fill->type() == Type::LinearGradient) {
-            gradient.update((LinearGradient*)fill);
-            fillType = WgRenderSettingsType::Linear;
-        } else if (fill->type() == Type::RadialGradient) {
-            gradient.update((RadialGradient*)fill);
-            fillType = WgRenderSettingsType::Radial;
-        }
-        // update gpu assets
-        bool bufferGradientSettingsChanged = context.allocateBufferUniform(bufferGroupGradient, &gradient.settings, sizeof(gradient.settings));
-        bool bufferGradientTransformChanged = context.allocateBufferUniform(bufferGroupTransfromGrad, &gradientTrans.mat, sizeof(gradientTrans.mat));
-        bool textureGradientChanged = context.allocateTexture(texGradient, WG_TEXTURE_GRADIENT_SIZE, 1, WGPUTextureFormat_RGBA8Unorm, gradient.texData);
-        if (bufferGradientSettingsChanged || textureGradientChanged || bufferGradientTransformChanged) {
-            // update texture view
-            context.releaseTextureView(texViewGradient);
-            texViewGradient = context.createTextureView(texGradient);
-            // get sampler by spread type
-            WGPUSampler sampler = context.samplerLinearClamp;
-            if (fill->spread() == FillSpread::Reflect) sampler = context.samplerLinearMirror;
-            if (fill->spread() == FillSpread::Repeat) sampler = context.samplerLinearRepeat;
-            // update bind group
-            context.layouts.releaseBindGroup(bindGroupGradient);
-            bindGroupGradient = context.layouts.createBindGroupTexSampledBuff2Un(
-                sampler, texViewGradient, bufferGroupGradient, bufferGroupTransfromGrad);
-        }
-        skip = false;
-    } else if ((flags & RenderUpdateFlag::Color) && !fill) {
-        rasterType = WgRenderRasterType::Solid;
-        WgShaderTypeVec4f solidColor(c);
-        if (context.allocateBufferUniform(bufferGroupSolid, &solidColor, sizeof(solidColor))) {
-            context.layouts.releaseBindGroup(bindGroupSolid);
-            bindGroupSolid = context.layouts.createBindGroupBuffer1Un(bufferGroupSolid);
-        }
-        fillType = WgRenderSettingsType::Solid;
-        skip = (c.a == 0);
+    rasterType = WgRenderRasterType::Gradient;
+    // get gradient transfrom matrix
+    Matrix invFillTransform;
+    WgShaderTypeMat4x4f gradientTrans; // identity by default
+    if (inverse(&fill->transform(), &invFillTransform))
+        gradientTrans.update(invFillTransform);
+    // get gradient rasterisation settings
+    WgShaderTypeGradient gradient;
+    if (fill->type() == Type::LinearGradient) {
+        gradient.update((LinearGradient*)fill);
+        fillType = WgRenderSettingsType::Linear;
+    } else if (fill->type() == Type::RadialGradient) {
+        gradient.update((RadialGradient*)fill);
+        fillType = WgRenderSettingsType::Radial;
     }
+    // update gpu assets
+    bool bufferGradientSettingsChanged = context.allocateBufferUniform(bufferGroupGradient, &gradient.settings, sizeof(gradient.settings));
+    bool bufferGradientTransformChanged = context.allocateBufferUniform(bufferGroupTransfromGrad, &gradientTrans.mat, sizeof(gradientTrans.mat));
+    bool textureGradientChanged = context.allocateTexture(texGradient, WG_TEXTURE_GRADIENT_SIZE, 1, WGPUTextureFormat_RGBA8Unorm, gradient.texData);
+    if (bufferGradientSettingsChanged || textureGradientChanged || bufferGradientTransformChanged) {
+        // update texture view
+        context.releaseTextureView(texViewGradient);
+        texViewGradient = context.createTextureView(texGradient);
+        // get sampler by spread type
+        WGPUSampler sampler = context.samplerLinearClamp;
+        if (fill->spread() == FillSpread::Reflect) sampler = context.samplerLinearMirror;
+        if (fill->spread() == FillSpread::Repeat) sampler = context.samplerLinearRepeat;
+        // update bind group
+        context.layouts.releaseBindGroup(bindGroupGradient);
+        bindGroupGradient = context.layouts.createBindGroupTexSampledBuff2Un(
+            sampler, texViewGradient, bufferGroupGradient, bufferGroupTransfromGrad);
+    }
+    skip = false;
+};
+
+
+void WgRenderSettings::updateColor(WgContext& context, const RenderColor& c)
+{
+    rasterType = WgRenderRasterType::Solid;
+    WgShaderTypeVec4f solidColor(c);
+    if (context.allocateBufferUniform(bufferGroupSolid, &solidColor, sizeof(solidColor))) {
+        context.layouts.releaseBindGroup(bindGroupSolid);
+        bindGroupSolid = context.layouts.createBindGroupBuffer1Un(bufferGroupSolid);
+    }
+    fillType = WgRenderSettingsType::Solid;
+    skip = (c.a == 0);
 };
 
 
@@ -335,7 +324,7 @@ void WgRenderDataPaint::updateClips(tvg::Array<tvg::RenderData> &clips) {
 
 void WgRenderDataShape::appendShape(WgContext& context, const WgVertexBuffer& vertexBuffer)
 {
-    if (vertexBuffer.vcount < 3) return;
+    if (vertexBuffer.count < 3) return;
     Point pmin{}, pmax{};
     vertexBuffer.getMinMax(pmin, pmax);
     meshGroupShapes.append(context, vertexBuffer);
@@ -344,7 +333,7 @@ void WgRenderDataShape::appendShape(WgContext& context, const WgVertexBuffer& ve
 }
 
 
-void WgRenderDataShape::appendStroke(WgContext& context, const WgVertexBufferInd& vertexBufferInd)
+void WgRenderDataShape::appendStroke(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd)
 {
     if (vertexBufferInd.vcount < 3) return;
     Point pmin{}, pmax{};
@@ -374,7 +363,7 @@ void WgRenderDataShape::updateAABB(const Matrix& tr) {
 }
 
 
-void WgRenderDataShape::updateMeshes(WgContext& context, const RenderShape &rshape, const Matrix& tr)
+void WgRenderDataShape::updateMeshes(WgContext& context, const RenderShape &rshape, const Matrix& tr, WgGeometryBufferPool* pool)
 {
     releaseMeshes(context);
     strokeFirst = rshape.stroke ? rshape.stroke->strokeFirst : false;
@@ -383,45 +372,34 @@ void WgRenderDataShape::updateMeshes(WgContext& context, const RenderShape &rsha
     float scale = std::max(std::min(length(Point{tr.e11 + tr.e12,tr.e21 + tr.e22}), 8.0f), 1.0f);
 
     // path decoded vertex buffer
-    WgVertexBuffer pbuff;
-    pbuff.reset(scale);
+    auto pbuff = pool->reqVertexBuffer(scale);
 
-    if (rshape.strokeTrim()) {
-        WgVertexBuffer trimbuff;
-        trimbuff.reset(scale);
+    pbuff->decodePath(rshape, true, [&](const WgVertexBuffer& path_buff) {
+        appendShape(context, path_buff);
+        if ((rshape.stroke) && (rshape.stroke->width > 0)) proceedStrokes(context, rshape.stroke, path_buff, pool);
+    }, rshape.trimpath());
 
-        pbuff.decodePath(rshape, true, [&](const WgVertexBuffer& path_buff) {
-            appendShape(context, path_buff);
-        });
-        trimbuff.decodePath(rshape, true, [&](const WgVertexBuffer& path_buff) {
-            appendShape(context, path_buff);
-            proceedStrokes(context, rshape.stroke, path_buff);
-        }, true);
-    } else {
-        pbuff.decodePath(rshape, true, [&](const WgVertexBuffer& path_buff) {
-            appendShape(context, path_buff);
-            if (rshape.stroke) proceedStrokes(context, rshape.stroke, path_buff);
-        });
-    }
     // update shapes bbox (with empty path handling)
     if ((this->meshGroupShapesBBox.meshes.count > 0 ) ||
         (this->meshGroupStrokesBBox.meshes.count > 0)) {
         updateAABB(tr);
         meshDataBBox.bbox(context, pMin, pMax);
     } else aabb = {{0, 0}, {0, 0}};
+
+    pool->retVertexBuffer(pbuff);
 }
 
 
-void WgRenderDataShape::proceedStrokes(WgContext& context, const RenderStroke* rstroke, const WgVertexBuffer& buff)
+void WgRenderDataShape::proceedStrokes(WgContext& context, const RenderStroke* rstroke, const WgVertexBuffer& buff, WgGeometryBufferPool* pool)
 {
     assert(rstroke);
-    static WgVertexBufferInd strokesGenerator;
-    strokesGenerator.reset(buff.tscale);
+    auto strokesGenerator = pool->reqIndexedVertexBuffer(buff.scale);
+    if (rstroke->dashPattern) strokesGenerator->appendStrokesDashed(buff, rstroke);
+    else strokesGenerator->appendStrokes(buff, rstroke);
 
-    if (rstroke->dashPattern) strokesGenerator.appendStrokesDashed(buff, rstroke);
-    else strokesGenerator.appendStrokes(buff, rstroke);
+    appendStroke(context, *strokesGenerator);
 
-    appendStroke(context, strokesGenerator);
+    pool->retIndexedVertexBuffer(strokesGenerator);
 }
 
 
@@ -602,58 +580,99 @@ void WgRenderDataViewportPool::release(WgContext& context)
 }
 
 //***********************************************************************
-// WgRenderDataGaussian
+// WgRenderDataEffectParams
 //***********************************************************************
 
-void WgRenderDataGaussian::update(WgContext& context, RenderEffectGaussianBlur* gaussian, const Matrix& transform)
+void WgRenderDataEffectParams::update(WgContext& context, const WgShaderTypeEffectParams& effectParams)
+{
+    if (context.allocateBufferUniform(bufferParams, &effectParams.params, sizeof(effectParams.params))) {
+        context.layouts.releaseBindGroup(bindGroupParams);
+        bindGroupParams = context.layouts.createBindGroupBuffer1Un(bufferParams);
+    }
+}
+
+
+void WgRenderDataEffectParams::update(WgContext& context, const RenderEffectGaussianBlur* gaussian, const Matrix& transform)
 {
     assert(gaussian);
-    // compute gaussian blur data
-    WgShaderTypeGaussianBlur gaussianSettings;
-    gaussianSettings.update(gaussian, transform);
-    // update bind group and buffers
-    bool bufferSettingsChanged = context.allocateBufferUniform(bufferSettings, &gaussianSettings.settings, sizeof(gaussianSettings.settings));
-    if (bufferSettingsChanged) {
-        // update bind group
-        context.layouts.releaseBindGroup(bindGroupGaussian);
-        bindGroupGaussian = context.layouts.createBindGroupBuffer1Un(bufferSettings);
-    }
+    WgShaderTypeEffectParams effectParams;
+    effectParams.update(gaussian, transform);
+    update(context, effectParams);
     level = int(WG_GAUSSIAN_MAX_LEVEL * ((gaussian->quality - 1) * 0.01f)) + 1;
-    extend = gaussianSettings.extend;
+    extend = effectParams.extend;
 }
 
 
-void WgRenderDataGaussian::release(WgContext& context)
+void WgRenderDataEffectParams::update(WgContext& context, const RenderEffectDropShadow* dropShadow, const Matrix& transform)
 {
-    context.releaseBuffer(bufferSettings);
-    context.layouts.releaseBindGroup(bindGroupGaussian);
+    assert(dropShadow);
+    WgShaderTypeEffectParams effectParams;
+    effectParams.update(dropShadow, transform);
+    update(context, effectParams);
+    level = int(WG_GAUSSIAN_MAX_LEVEL * ((dropShadow->quality - 1) * 0.01f)) + 1;
+    extend = effectParams.extend;
+    offset = effectParams.offset;
+}
+
+
+void WgRenderDataEffectParams::update(WgContext& context, const RenderEffectFill* fill)
+{
+    assert(fill);
+    WgShaderTypeEffectParams effectParams;
+    effectParams.update(fill);
+    update(context, effectParams);
+}
+
+
+void WgRenderDataEffectParams::update(WgContext& context, const RenderEffectTint* tint)
+{
+    assert(tint);
+    WgShaderTypeEffectParams effectParams;
+    effectParams.update(tint);
+    update(context, effectParams);
+}
+
+
+void WgRenderDataEffectParams::update(WgContext& context, const RenderEffectTritone* tritone)
+{
+    assert(tritone);
+    WgShaderTypeEffectParams effectParams;
+    effectParams.update(tritone);
+    update(context, effectParams);
+}
+
+
+void WgRenderDataEffectParams::release(WgContext& context)
+{
+    context.releaseBuffer(bufferParams);
+    context.layouts.releaseBindGroup(bindGroupParams);
 }
 
 //***********************************************************************
-// WgRenderDataGaussianPool
+// WgRenderDataColorsPool
 //***********************************************************************
 
-WgRenderDataGaussian* WgRenderDataGaussianPool::allocate(WgContext& context)
+WgRenderDataEffectParams* WgRenderDataEffectParamsPool::allocate(WgContext& context)
 {
-    WgRenderDataGaussian* renderData{};
+    WgRenderDataEffectParams* renderData{};
     if (mPool.count > 0) {
         renderData = mPool.last();
         mPool.pop();
     } else {
-        renderData = new WgRenderDataGaussian();
+        renderData = new WgRenderDataEffectParams();
         mList.push(renderData);
     }
     return renderData;
 }
 
 
-void WgRenderDataGaussianPool::free(WgContext& context, WgRenderDataGaussian* renderData)
+void WgRenderDataEffectParamsPool::free(WgContext& context, WgRenderDataEffectParams* renderData)
 {
     if (renderData) mPool.push(renderData);
 }
 
 
-void WgRenderDataGaussianPool::release(WgContext& context)
+void WgRenderDataEffectParamsPool::release(WgContext& context)
 {
     ARRAY_FOREACH(p, mList) {
         (*p)->release(context);

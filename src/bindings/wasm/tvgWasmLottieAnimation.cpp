@@ -24,6 +24,7 @@
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include "tvgPicture.h"
+#include "tvgWasmDefaultFont.h"
 #ifdef THORVG_WG_RASTER_SUPPORT
     #include <emscripten/html5_webgpu.h>
 #endif
@@ -115,6 +116,10 @@ struct TvgEngineMethod
     {
         return val(typed_memory_view<uint8_t>(0, nullptr));
     }
+
+    void loadFont() {
+        Text::load("default", requestFont(), DEFAULT_FONT_SIZE, "ttf", false);
+    }
 };
 
 struct TvgSwEngine : TvgEngineMethod
@@ -123,20 +128,22 @@ struct TvgSwEngine : TvgEngineMethod
 
     ~TvgSwEngine()
     {
-        free(buffer);
+        std::free(buffer);
         Initializer::term(tvg::CanvasEngine::Sw);
+        retrieveFont();
     }
 
     Canvas* init(string&) override
     {
         Initializer::init(0, tvg::CanvasEngine::Sw);
+        loadFont();
         return SwCanvas::gen();
     }
 
     void resize(Canvas* canvas, int w, int h) override
     {
-        free(buffer);
-        buffer = (uint8_t*)malloc(w * h * sizeof(uint32_t));
+        std::free(buffer);
+        buffer = (uint8_t*)std::malloc(w * h * sizeof(uint32_t));
         static_cast<SwCanvas*>(canvas)->target((uint32_t *)buffer, w, w, h, ColorSpace::ABGR8888S);
     }
 
@@ -149,40 +156,42 @@ struct TvgSwEngine : TvgEngineMethod
 
 struct TvgWgEngine : TvgEngineMethod
 {
-    #ifdef THORVG_WG_RASTER_SUPPORT
-        WGPUSurface surface{};
-    #endif
+#ifdef THORVG_WG_RASTER_SUPPORT
+    WGPUSurface surface{};
+#endif
 
     ~TvgWgEngine()
     {
-        #ifdef THORVG_WG_RASTER_SUPPORT
-            wgpuSurfaceRelease(surface);
-        #endif
+    #ifdef THORVG_WG_RASTER_SUPPORT
+        wgpuSurfaceRelease(surface);
         Initializer::term(tvg::CanvasEngine::Wg);
+        retrieveFont();
+    #endif
     }
 
     Canvas* init(string& selector) override
     {
-        #ifdef THORVG_WG_RASTER_SUPPORT
-            WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
-            canvasDesc.chain.next = nullptr;
-            canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
-            canvasDesc.selector = selector.c_str();
+    #ifdef THORVG_WG_RASTER_SUPPORT
+        WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
+        canvasDesc.chain.next = nullptr;
+        canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+        canvasDesc.selector = selector.c_str();
 
-            WGPUSurfaceDescriptor surfaceDesc{};
-            surfaceDesc.nextInChain = &canvasDesc.chain;
-            surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
-        #endif
+        WGPUSurfaceDescriptor surfaceDesc{};
+        surfaceDesc.nextInChain = &canvasDesc.chain;
+        surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
 
         Initializer::init(0, tvg::CanvasEngine::Wg);
+        loadFont();
         return WgCanvas::gen();
+    #else
+        return nullptr;
+    #endif
     }
 
     void resize(Canvas* canvas, int w, int h) override
     {
-    #ifdef THORVG_WG_RASTER_SUPPORT
-        static_cast<WgCanvas*>(canvas)->target(device, instance, surface, w, h, ColorSpace::ABGR8888S);
-    #endif
+        if (canvas) static_cast<WgCanvas*>(canvas)->target(device, instance, surface, w, h, ColorSpace::ABGR8888S);
     }
 };
 
@@ -197,6 +206,7 @@ struct TvgGLEngine : TvgEngineMethod
             emscripten_webgl_destroy_context(context);
             context = 0;
         }
+        retrieveFont();
     #endif
     }
 
@@ -217,18 +227,19 @@ struct TvgGLEngine : TvgEngineMethod
         if (context == 0) return nullptr;
 
         emscripten_webgl_make_context_current(context);
-    #endif
 
         if (Initializer::init(0, tvg::CanvasEngine::Gl) != Result::Success) return nullptr;
+        loadFont();
 
         return GlCanvas::gen();
+    #else
+        return nullptr;
+    #endif
     }
 
     void resize(Canvas* canvas, int w, int h) override
     {
-    #ifdef THORVG_GL_RASTER_SUPPORT
-        static_cast<GlCanvas*>(canvas)->target((void*)context, 0, w, h, ColorSpace::ABGR8888S);
-    #endif
+        if (canvas) static_cast<GlCanvas*>(canvas)->target((void*)context, 0, w, h, ColorSpace::ABGR8888S);
     }
 };
 
@@ -315,7 +326,7 @@ public:
 
         string filetype = mimetype;
         if (filetype == "json") {
-            filetype = "lottie";
+            filetype = "lottie+json";
         }
 
         if (animation->picture()->load(data.c_str(), data.size(), filetype.c_str(), rpath.c_str(), false) != Result::Success) {
@@ -453,7 +464,7 @@ public:
             return false;
         }
 
-        if (animation->picture()->load(data.c_str(), data.size(), "lottie", nullptr, false) != Result::Success) {
+        if (animation->picture()->load(data.c_str(), data.size(), "lot", nullptr, false) != Result::Success) {
             errorMsg = "load() fail";
             return false;
         }

@@ -126,7 +126,12 @@ bool LottieParser::getValue(TextDocument& doc)
         if (KEY_AS("s")) doc.size = getFloat() * 0.01f;
         else if (KEY_AS("f")) doc.name = getStringCopy();
         else if (KEY_AS("t")) doc.text = getStringCopy();
-        else if (KEY_AS("j")) doc.justify = getInt();
+        else if (KEY_AS("j"))
+        {
+            auto val = getInt();
+            if (val == 1) doc.justify = -1.0f;        //right align
+            else if (val == 2) doc.justify = -0.5f;   //center align
+        }
         else if (KEY_AS("ca")) doc.caps = getInt();
         else if (KEY_AS("tr")) doc.tracking = getFloat() * 0.1f;
         else if (KEY_AS("lh")) doc.height = getFloat();
@@ -383,7 +388,7 @@ LottieInterpolator* LottieParser::getInterpolator(const char* key, Point& in, Po
 
     //new interpolator
     if (!interpolator) {
-        interpolator = static_cast<LottieInterpolator*>(malloc(sizeof(LottieInterpolator)));
+        interpolator = tvg::malloc<LottieInterpolator*>(sizeof(LottieInterpolator));
         interpolator->set(key, in, out);
         comp->interpolators.push(interpolator);
     }
@@ -466,7 +471,7 @@ void LottieParser::registerSlot(LottieObject* obj, const char* sid)
         (*p)->pairs.push({obj});
         return;
     }
-    comp->slots.push(new LottieSlot(strdup(sid), obj, type));
+    comp->slots.push(new LottieSlot(duplicate(sid), obj, type));
 }
 
 
@@ -893,7 +898,7 @@ void LottieParser::parseImage(LottieImage* image, const char* data, const char* 
         //figure out the mimetype
         auto mimeType = data + 11;
         auto needle = strstr(mimeType, ";");
-        image->data.mimeType = strDuplicate(mimeType, needle - mimeType);
+        image->data.mimeType = duplicate(mimeType, needle - mimeType);
         //b64 data
         auto b64Data = strstr(data, ",") + 1;
         size_t length = strlen(data) - (b64Data - data);
@@ -901,7 +906,7 @@ void LottieParser::parseImage(LottieImage* image, const char* data, const char* 
     //external image resource
     } else {
         auto len = strlen(dirName) + strlen(subPath) + strlen(data) + 2;
-        image->data.path = static_cast<char*>(malloc(len));
+        image->data.path = tvg::malloc<char*>(len);
         snprintf(image->data.path, len, "%s/%s%s", dirName, subPath, data);
     }
 
@@ -1135,7 +1140,7 @@ void LottieParser::parseTextRange(LottieText* text)
                     if (KEY_AS("t")) selector->expressible = (bool) getInt();
                     else if (KEY_AS("xe")) {
                         parseProperty<LottieProperty::Type::Float>(selector->maxEase);
-                        selector->interpolator = static_cast<LottieInterpolator*>(malloc(sizeof(LottieInterpolator)));
+                        selector->interpolator = tvg::malloc<LottieInterpolator*>(sizeof(LottieInterpolator));
                     }
                     else if (KEY_AS("ne")) parseProperty<LottieProperty::Type::Float>(selector->minEase);
                     else if (KEY_AS("a")) parseProperty<LottieProperty::Type::Float>(selector->maxAmount);
@@ -1467,8 +1472,8 @@ void LottieParser::postProcess(Array<LottieGlyph*>& glyphs)
             auto& font = comp->fonts[i];
             if (!strcmp(font->family, glyph->family) && !strcmp(font->style, glyph->style)) {
                 font->chars.push(glyph);
-                free(glyph->family);
-                free(glyph->style);
+                tvg::free(glyph->family);
+                tvg::free(glyph->style);
                 break;
             }
         }
@@ -1570,7 +1575,7 @@ bool LottieParser::apply(LottieSlot* slot, bool byDefault)
 
 void LottieParser::captureSlots(const char* key)
 {
-    free(slots);
+    tvg::free(slots);
 
     // TODO: Replace with immediate parsing, once the slot spec is confirmed by the LAC
 
@@ -1600,7 +1605,7 @@ void LottieParser::captureSlots(const char* key)
 
     //composite '{' + slots + '}'
     auto len = (end - begin + 2);
-    slots = (char*)malloc(sizeof(char) * len + 1);
+    slots = tvg::malloc<char*>(sizeof(char) * len + 1);
     slots[0] = '{';
     memcpy(slots + 1, begin, len);
     slots[len] = '\0';

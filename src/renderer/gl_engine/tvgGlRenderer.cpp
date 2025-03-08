@@ -146,7 +146,7 @@ void GlRenderer::initShaders()
 void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdateFlag flag, int32_t depth)
 {
     auto vp = currentPass()->getViewport();
-    auto bbox = sdata.geometry.getViewport();
+    auto bbox = sdata.geometry.viewport;
 
     bbox.intersect(vp);
 
@@ -186,7 +186,7 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdat
     auto a = MULTIPLY(c.a, sdata.opacity);
 
     if (flag & RenderUpdateFlag::Stroke) {
-        float strokeWidth = sdata.rshape->strokeWidth() * getScaleFactor(sdata.geometry.getTransformMatrix());
+        float strokeWidth = sdata.rshape->strokeWidth() * getScaleFactor(sdata.geometry.matrix);
         if (strokeWidth < MIN_GL_STROKE_WIDTH) {
             float alpha = strokeWidth / MIN_GL_STROKE_WIDTH;
             a = MULTIPLY(a, static_cast<uint8_t>(alpha * 255));
@@ -194,10 +194,8 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdat
     }
 
     // matrix buffer
-    const auto& matrix = sdata.geometry.getTransformMatrix();
-
     float matrix44[16];
-    currentPass()->getMatrix(matrix44, matrix);
+    currentPass()->getMatrix(matrix44, sdata.geometry.matrix);
     auto viewOffset = mGpuBuffer.push(matrix44, 16 * sizeof(float), true);
 
     task->addBindResource(GlBindingResource{
@@ -235,7 +233,7 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdat
     if (complexBlend) {
         auto task = new GlRenderTask(mPrograms[RT_Stencil]);
         sdata.geometry.draw(task, &mGpuBuffer, flag);
-        endBlendingCompose(task, sdata.geometry.getTransformMatrix());
+        endBlendingCompose(task, sdata.geometry.matrix);
     }
 }
 
@@ -243,7 +241,7 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdat
 void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFlag flag, int32_t depth)
 {
     auto vp = currentPass()->getViewport();
-    auto bbox = sdata.geometry.getViewport();
+    auto bbox = sdata.geometry.viewport;
 
     bbox.intersect(vp);
 
@@ -285,14 +283,13 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFla
     }
 
     // matrix buffer
-    const auto& matrix = sdata.geometry.getTransformMatrix();
     float invMat4[16];
     Matrix inv;
     inverse(&fill->transform(), &inv);
     GET_MATRIX44(inv, invMat4);
 
     float matrix44[16];
-    currentPass()->getMatrix(matrix44, matrix);
+    currentPass()->getMatrix(matrix44, sdata.geometry.matrix);
 
     auto viewOffset = mGpuBuffer.push(matrix44, 16 * sizeof(float), true);
 
@@ -423,7 +420,7 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFla
     if (complexBlend) {
         auto task = new GlRenderTask(mPrograms[RT_Stencil]);
         sdata.geometry.draw(task, &mGpuBuffer, flag);
-        endBlendingCompose(task, sdata.geometry.getTransformMatrix());
+        endBlendingCompose(task, sdata.geometry.matrix);
     }
 }
 
@@ -480,9 +477,10 @@ void GlRenderer::drawClip(Array<RenderData>& clips)
 
         clipTask->setDrawDepth(clipDepths[i]);
 
-        sdata->geometry.draw(clipTask, &mGpuBuffer, RenderUpdateFlag::Path);
+        auto flag = (sdata->geometry.stroke.vertex.count > 0) ? RenderUpdateFlag::Stroke : RenderUpdateFlag::Path;
+        sdata->geometry.draw(clipTask, &mGpuBuffer, flag);
 
-        auto bbox = sdata->geometry.getViewport();
+        auto bbox = sdata->geometry.viewport;
 
         bbox.intersect(vp);
 
@@ -491,11 +489,8 @@ void GlRenderer::drawClip(Array<RenderData>& clips)
 
         clipTask->setViewport({x, vp.h - y - bbox.h, bbox.w, bbox.h});
 
-        const auto& matrix = sdata->geometry.getTransformMatrix();
-
         float matrix44[16];
-
-        currentPass()->getMatrix(matrix44, matrix);
+        currentPass()->getMatrix(matrix44, sdata->geometry.matrix);
 
         auto loc = clipTask->getProgram()->getUniformBlockIndex("Matrix");
         auto viewOffset = mGpuBuffer.push(matrix44, 16 * sizeof(float), true);
@@ -1008,7 +1003,7 @@ bool GlRenderer::renderImage(void* data)
     if ((sdata->updateFlag & RenderUpdateFlag::Image) == 0) return true;
     auto vp = currentPass()->getViewport();
 
-    auto bbox = sdata->geometry.getViewport();
+    auto bbox = sdata->geometry.viewport;
 
     bbox.intersect(vp);
 
@@ -1035,9 +1030,8 @@ bool GlRenderer::renderImage(void* data)
     if (complexBlend) vp = currentPass()->getViewport();
 
     // matrix buffer
-    const auto& matrix = sdata->geometry.getTransformMatrix();
     float matrix44[16];
-    currentPass()->getMatrix(matrix44, matrix);
+    currentPass()->getMatrix(matrix44, sdata->geometry.matrix);
 
     task->addBindResource(GlBindingResource{
         0,
@@ -1068,7 +1062,7 @@ bool GlRenderer::renderImage(void* data)
     if (complexBlend) {
         auto task = new GlRenderTask(mPrograms[RT_Stencil]);
         sdata->geometry.draw(task, &mGpuBuffer, RenderUpdateFlag::Image);
-        endBlendingCompose(task, sdata->geometry.getTransformMatrix());
+        endBlendingCompose(task, sdata->geometry.matrix);
     }
 
     return true;
@@ -1085,7 +1079,7 @@ bool GlRenderer::renderShape(RenderData data)
 
     const auto& vp = currentPass()->getViewport();
 
-    auto bbox = sdata->geometry.getViewport();
+    auto bbox = sdata->geometry.viewport;
     bbox.intersect(vp);
 
     if (bbox.w <= 0 || bbox.h <= 0) return true;
@@ -1188,8 +1182,8 @@ RenderData GlRenderer::prepare(RenderSurface* image, RenderData data, const Matr
         sdata->geometry = GlGeometry();
     }
 
-    sdata->geometry.updateTransform(transform);
-    sdata->geometry.setViewport(mViewport);
+    sdata->geometry.matrix = transform;
+    sdata->geometry.viewport = mViewport;
 
     sdata->geometry.tesselate(image, flags);
 
@@ -1233,7 +1227,7 @@ RenderData GlRenderer::prepare(const RenderShape& rshape, RenderData data, const
     }
 
     if (clipper) {
-        sdata->updateFlag = RenderUpdateFlag::Path;
+        sdata->updateFlag = (rshape.stroke && (rshape.stroke->width > 0)) ? RenderUpdateFlag::Stroke : RenderUpdateFlag::Path;
     } else {
         if (alphaF) sdata->updateFlag = static_cast<RenderUpdateFlag>(RenderUpdateFlag::Color | sdata->updateFlag);
         if (rshape.fill) sdata->updateFlag = static_cast<RenderUpdateFlag>(RenderUpdateFlag::Gradient | sdata->updateFlag);
@@ -1243,8 +1237,8 @@ RenderData GlRenderer::prepare(const RenderShape& rshape, RenderData data, const
 
     if (sdata->updateFlag == RenderUpdateFlag::None) return sdata;
 
-    sdata->geometry.updateTransform(transform);
-    sdata->geometry.setViewport(mViewport);
+    sdata->geometry.matrix = transform;
+    sdata->geometry.viewport = mViewport;
 
     if (sdata->updateFlag & (RenderUpdateFlag::Color | RenderUpdateFlag::Stroke | RenderUpdateFlag::Gradient | RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform | RenderUpdateFlag::Path))
     {

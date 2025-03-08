@@ -21,6 +21,7 @@
  */
 
 #include <atomic>
+#include "tvgTaskScheduler.h"
 #include "tvgWgRenderer.h"
 
 
@@ -51,8 +52,8 @@ void WgRenderer::release()
     // clear render data paint pools
     mRenderDataShapePool.release(mContext);
     mRenderDataPicturePool.release(mContext);
-    mRenderDataGaussianPool.release(mContext);
     mRenderDataViewportPool.release(mContext);
+    mRenderDataEffectParamsPool.release(mContext);
     WgMeshDataPool::gMeshDataPool->release(mContext);
 
     // clear render storage pool
@@ -147,7 +148,7 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
 
     // update geometry
     if ((!data) || (flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Stroke))) {
-        renderDataShape->updateMeshes(mContext, rshape, transform);
+        renderDataShape->updateMeshes(mContext, rshape, transform, mBufferPool.pool);
     }
 
     // update paint settings
@@ -159,9 +160,12 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
     // setup fill settings
     renderDataShape->viewport = mViewport;
     renderDataShape->opacity = opacity;
-    renderDataShape->renderSettingsShape.update(mContext, rshape.fill, rshape.color, flags);
-    if (rshape.stroke)
-        renderDataShape->renderSettingsStroke.update(mContext, rshape.stroke->fill, rshape.stroke->color, flags);
+    if (flags & RenderUpdateFlag::Gradient && rshape.fill) renderDataShape->renderSettingsShape.updateFill(mContext, rshape.fill);
+    else if (flags & RenderUpdateFlag::Color) renderDataShape->renderSettingsShape.updateColor(mContext, rshape.color);
+    if (rshape.stroke) {
+        if (flags & RenderUpdateFlag::GradientStroke && rshape.stroke->fill) renderDataShape->renderSettingsStroke.updateFill(mContext, rshape.stroke->fill);
+        else if (flags & RenderUpdateFlag::Stroke) renderDataShape->renderSettingsStroke.updateColor(mContext, rshape.stroke->color);
+    }
 
     // store clips data
     renderDataShape->updateClips(clips);
@@ -415,12 +419,21 @@ bool WgRenderer::target(WGPUDevice device, WGPUInstance instance, void* target, 
 
 WgRenderer::WgRenderer()
 {
+    if (TaskScheduler::onthread()) {
+        TVGLOG("WG_RENDERER", "Running on a non-dominant thread!, Renderer(%p)", this);
+        mBufferPool.pool = new WgGeometryBufferPool;
+        mBufferPool.individual = true;
+    } else {
+        mBufferPool.pool = WgGeometryBufferPool::instance();
+    }
 }
 
 
 WgRenderer::~WgRenderer()
 {
     release();
+
+    if (mBufferPool.individual) delete(mBufferPool.pool);
 
     --rendererCnt;
 
@@ -510,13 +523,57 @@ void WgRenderer::prepare(RenderEffect* effect, const Matrix& transform)
 {
     // prepare gaussian blur data
     if (effect->type == SceneEffect::GaussianBlur) {
-        auto gaussianBlur = (RenderEffectGaussianBlur*)effect;
-        auto renderDataGaussian = (WgRenderDataGaussian*)gaussianBlur->rd;
-        if (!renderDataGaussian) {
-            renderDataGaussian = mRenderDataGaussianPool.allocate(mContext);
-            gaussianBlur->rd = renderDataGaussian;
+        auto renderEffect = (RenderEffectGaussianBlur*)effect;
+        auto renderData = (WgRenderDataEffectParams*)renderEffect->rd;
+        if (!renderData) {
+            renderData = mRenderDataEffectParamsPool.allocate(mContext);
+            renderEffect->rd = renderData;
         }
-        renderDataGaussian->update(mContext, gaussianBlur, transform);
+        renderData->update(mContext, renderEffect, transform);
+        effect->valid = true;
+    } else
+    // prepare drop shadow data
+    if (effect->type == SceneEffect::DropShadow) {
+        auto renderEffect = (RenderEffectDropShadow*)effect;
+        auto renderData = (WgRenderDataEffectParams*)renderEffect->rd;
+        if (!renderData) {
+            renderData = mRenderDataEffectParamsPool.allocate(mContext);
+            renderEffect->rd = renderData;
+        }
+        renderData->update(mContext, renderEffect, transform);
+        effect->valid = true;
+    } else
+    // prepare fill
+    if (effect->type == SceneEffect::Fill) {
+        auto renderEffect = (RenderEffectFill*)effect;
+        auto renderData = (WgRenderDataEffectParams*)renderEffect->rd;
+        if (!renderData) {
+            renderData = mRenderDataEffectParamsPool.allocate(mContext);
+            renderEffect->rd = renderData;
+        }
+        renderData->update(mContext, renderEffect);
+        effect->valid = true;
+    } else
+    // prepare tint
+    if (effect->type == SceneEffect::Tint) {
+        auto renderEffect = (RenderEffectTint*)effect;
+        auto renderData = (WgRenderDataEffectParams*)renderEffect->rd;
+        if (!renderData) {
+            renderData = mRenderDataEffectParamsPool.allocate(mContext);
+            renderEffect->rd = renderData;
+        }
+        renderData->update(mContext, renderEffect);
+        effect->valid = true;
+    } else
+    // prepare tritone
+    if (effect->type == SceneEffect::Tritone) {
+        auto renderEffect = (RenderEffectTritone*)effect;
+        auto renderData = (WgRenderDataEffectParams*)renderEffect->rd;
+        if (!renderData) {
+            renderData = mRenderDataEffectParamsPool.allocate(mContext);
+            renderEffect->rd = renderData;
+        }
+        renderData->update(mContext, renderEffect);
         effect->valid = true;
     }
 }
@@ -524,17 +581,28 @@ void WgRenderer::prepare(RenderEffect* effect, const Matrix& transform)
 
 bool WgRenderer::region(RenderEffect* effect)
 {
+    // update gaussian blur region
     if (effect->type == SceneEffect::GaussianBlur) {
         auto gaussian = (RenderEffectGaussianBlur*)effect;
-        auto renderDataGaussian = (WgRenderDataGaussian*)gaussian->rd;
+        auto renderData = (WgRenderDataEffectParams*)gaussian->rd;
         if (gaussian->direction != 2) {
-            gaussian->extend.x = -renderDataGaussian->extend;
-            gaussian->extend.w = +renderDataGaussian->extend * 2;
+            gaussian->extend.x = -renderData->extend;
+            gaussian->extend.w = +renderData->extend * 2;
         }
         if (gaussian->direction != 1) {
-            gaussian->extend.y = -renderDataGaussian->extend;
-            gaussian->extend.h = +renderDataGaussian->extend * 2;
+            gaussian->extend.y = -renderData->extend;
+            gaussian->extend.h = +renderData->extend * 2;
         }
+        return true;
+    } else
+    // update drop shadow region
+    if (effect->type == SceneEffect::DropShadow) {
+        auto dropShadow = (RenderEffectDropShadow*)effect;
+        auto renderData = (WgRenderDataEffectParams*)dropShadow->rd;
+        dropShadow->extend.x = -(renderData->extend + std::abs(renderData->offset.x));
+        dropShadow->extend.w = +(renderData->extend + std::abs(renderData->offset.x)) * 2;
+        dropShadow->extend.y = -(renderData->extend + std::abs(renderData->offset.y));
+        dropShadow->extend.h = +(renderData->extend + std::abs(renderData->offset.y)) * 2;
         return true;
     }
     return false;
@@ -545,14 +613,16 @@ bool WgRenderer::render(RenderCompositor* cmp, const RenderEffect* effect, TVG_U
 {
     // we must to end current render pass to resolve ms texture before effect
     mCompositor.endRenderPass();
+    WgCompose* comp = (WgCompose*)cmp;
+    WgRenderStorage* dst = mRenderStorageStack.last();
 
-    // handle gaussian blur
-    if (effect->type == SceneEffect::GaussianBlur) {
-        WgCompose* comp = (WgCompose*)cmp;
-        WgRenderStorage* dst = mRenderStorageStack.last();
-        RenderEffectGaussianBlur* gaussianBlur = (RenderEffectGaussianBlur*)effect;
-        mCompositor.gaussianBlur(mContext, dst, gaussianBlur, comp);
-        return true;
+    switch (effect->type) {
+        case SceneEffect::GaussianBlur: return mCompositor.gaussianBlur(mContext, dst, (RenderEffectGaussianBlur*)effect, comp);
+        case SceneEffect::DropShadow: return mCompositor.dropShadow(mContext, dst, (RenderEffectDropShadow*)effect, comp);
+        case SceneEffect::Fill: return mCompositor.fillEffect(mContext, dst, (RenderEffectFill*)effect, comp);
+        case SceneEffect::Tint: return mCompositor.tintEffect(mContext, dst, (RenderEffectTint*)effect, comp);
+        case SceneEffect::Tritone : return mCompositor.tritoneEffect(mContext, dst, (RenderEffectTritone*)effect, comp);
+        default: return false;
     }
     return false;
 }
@@ -560,12 +630,9 @@ bool WgRenderer::render(RenderCompositor* cmp, const RenderEffect* effect, TVG_U
 
 void WgRenderer::dispose(RenderEffect* effect)
 {
-    // dispose gaussian blur data
-    if (effect->type == SceneEffect::GaussianBlur) {
-        auto gaussianBlur = (RenderEffectGaussianBlur*)effect;
-        mRenderDataGaussianPool.free(mContext, (WgRenderDataGaussian*)gaussianBlur->rd);
-        gaussianBlur->rd = nullptr;
-    }
+    auto renderData = (WgRenderDataEffectParams*)effect->rd;
+    mRenderDataEffectParamsPool.free(mContext, renderData);
+    effect->rd = nullptr;
 };
 
 

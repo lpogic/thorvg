@@ -21,7 +21,6 @@
  */
 
 #include "tvgSwCommon.h"
-#include "tvgMath.h"
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
@@ -319,8 +318,8 @@ static SwOutline* _genDashOutline(const RenderShape* rshape, const Matrix& trans
         ++cmds;
     }
 
-    free(trimmedCmds);
-    free(trimmedPts);
+    tvg::free(trimmedCmds);
+    tvg::free(trimmedPts);
 
     _outlineEnd(*dash.outline);
 
@@ -375,7 +374,7 @@ static SwOutline* _genOutline(SwShape* shape, const RenderShape* rshape, const M
     //No actual shape data
     if (cmdCnt == 0 || ptsCnt == 0) return nullptr;
 
-    auto outline = trimmed ? mpoolReqDashOutline(mpool, tid) : mpoolReqOutline(mpool, tid);
+    auto outline = mpoolReqOutline(mpool, tid);
     auto closed = false;
 
     //Generate Outlines
@@ -410,10 +409,10 @@ static SwOutline* _genOutline(SwShape* shape, const RenderShape* rshape, const M
 
     outline->fillRule = rshape->rule;
 
-    free(trimmedCmds);
-    free(trimmedPts);
+    tvg::free(trimmedCmds);
+    tvg::free(trimmedPts);
 
-    if (!trimmed) shape->fastTrack = (!hasComposite && _axisAlignedRect(outline));
+    shape->fastTrack = (!hasComposite && _axisAlignedRect(outline));
     return outline;
 }
 
@@ -422,9 +421,9 @@ static SwOutline* _genOutline(SwShape* shape, const RenderShape* rshape, const M
 /* External Class Implementation                                        */
 /************************************************************************/
 
-bool shapePrepare(SwShape* shape, const RenderShape* rshape, const Matrix& transform,  const SwBBox& clipRegion, SwBBox& renderRegion, SwMpool* mpool, unsigned tid, bool hasComposite)
+bool shapePrepare(SwShape* shape, const RenderShape* rshape, const Matrix& transform, const SwBBox& clipRegion, SwBBox& renderRegion, SwMpool* mpool, unsigned tid, bool hasComposite)
 {
-    if (auto out = _genOutline(shape, rshape, transform, mpool, tid, hasComposite)) shape->outline = out;
+    if (auto out = _genOutline(shape, rshape, transform, mpool, tid, hasComposite, rshape->trimpath())) shape->outline = out;
     else return false;
     if (!mathUpdateOutlineBBox(shape->outline, clipRegion, renderRegion, shape->fastTrack)) return false;
 
@@ -461,7 +460,6 @@ void shapeDelOutline(SwShape* shape, SwMpool* mpool, uint32_t tid)
 void shapeReset(SwShape* shape)
 {
     rleReset(shape->rle);
-    rleReset(shape->strokeRle);
     shape->fastTrack = false;
     shape->bbox.reset();
 }
@@ -495,7 +493,7 @@ void shapeDelStroke(SwShape* shape)
 
 void shapeResetStroke(SwShape* shape, const RenderShape* rshape, const Matrix& transform)
 {
-    if (!shape->stroke) shape->stroke = static_cast<SwStroke*>(calloc(1, sizeof(SwStroke)));
+    if (!shape->stroke) shape->stroke = tvg::calloc<SwStroke*>(1, sizeof(SwStroke));
     auto stroke = shape->stroke;
     if (!stroke) return;
 
@@ -512,20 +510,14 @@ bool shapeGenStrokeRle(SwShape* shape, const RenderShape* rshape, const Matrix& 
     auto ret = true;
 
     //Dash style with/without trimming
-    auto trimmed = rshape->strokeTrim();
     if (rshape->stroke->dashCnt > 0) {
-        shapeOutline = _genDashOutline(rshape, transform, mpool, tid, trimmed);
+        shapeOutline = _genDashOutline(rshape, transform, mpool, tid, rshape->trimpath());
         if (!shapeOutline) return false;
         dashStroking = true;
-    //Trimming
-    } else if (trimmed) {
-        shapeOutline = _genOutline(shape, rshape, transform, mpool, tid, false, true);
-        if (!shapeOutline) return false;
-        dashStroking = true;
-    //Normal style
+    //Trimming & Normal style
     } else {
         if (!shape->outline) {
-            if (auto out = _genOutline(shape, rshape, transform, mpool, tid, false)) shape->outline = out;
+            if (auto out = _genOutline(shape, rshape, transform, mpool, tid, false, rshape->trimpath())) shape->outline = out;
             else return false;
         }
         shapeOutline = shape->outline;
@@ -568,7 +560,7 @@ bool shapeGenStrokeFillColors(SwShape* shape, const Fill* fill, const Matrix& tr
 void shapeResetFill(SwShape* shape)
 {
     if (!shape->fill) {
-        shape->fill = static_cast<SwFill*>(calloc(1, sizeof(SwFill)));
+        shape->fill = tvg::calloc<SwFill*>(1, sizeof(SwFill));
         if (!shape->fill) return;
     }
     fillReset(shape->fill);
@@ -578,7 +570,7 @@ void shapeResetFill(SwShape* shape)
 void shapeResetStrokeFill(SwShape* shape)
 {
     if (!shape->stroke->fill) {
-        shape->stroke->fill = static_cast<SwFill*>(calloc(1, sizeof(SwFill)));
+        shape->stroke->fill = tvg::calloc<SwFill*>(1, sizeof(SwFill));
         if (!shape->stroke->fill) return;
     }
     fillReset(shape->stroke->fill);

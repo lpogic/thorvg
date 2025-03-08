@@ -32,6 +32,9 @@ struct UserExample : tvgexam::Example
 
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
+        //The default font for fallback in case
+        tvg::Text::load(EXAMPLE_DIR"/font/Arial.ttf");
+
         //Animation Controller
         animation = unique_ptr<tvg::Animation>(tvg::Animation::gen());
         auto picture = animation->picture();
@@ -90,5 +93,5 @@ struct UserExample : tvgexam::Example
 
 int main(int argc, char **argv)
 {
-    return tvgexam::main(new UserExample, argc, argv, false, 1024, 1024);
+    return tvgexam::main(new UserExample, argc, argv, false, 1024, 1024, 4, true);
 }

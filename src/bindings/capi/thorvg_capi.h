@@ -912,25 +912,49 @@ TVG_API Tvg_Result tvg_paint_get_opacity(const Tvg_Paint* paint, uint8_t* opacit
 TVG_API Tvg_Paint* tvg_paint_duplicate(Tvg_Paint* paint);
 
 
-/*!
-* @brief Gets the axis-aligned bounding box of the Tvg_Paint object.
-*
-* @param[in] paint The Tvg_Paint object of which to get the bounds.
-* @param[out] x The x-coordinate of the upper-left corner of the object.
-* @param[out] y The y-coordinate of the upper-left corner of the object.
-* @param[out] w The width of the object.
-* @param[out] h The height of the object.
-* @param[in] transformed If @c true, the paint's transformations are taken into account in the scene it belongs to. Otherwise they aren't.
-*
-* @return Tvg_Result enumeration.
-* @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Paint pointer.
-*
-* @note This is useful when you need to figure out the bounding box of the paint in the canvas space.
-* @note The bounding box doesn't indicate the actual drawing region. It's the smallest rectangle that encloses the object.
-* @note If @p transformed is @c true, the paint needs to be pushed into a canvas and updated before this api is called.
-* @see tvg_canvas_update_paint()
-*/
-TVG_API Tvg_Result tvg_paint_get_bounds(const Tvg_Paint* paint, float* x, float* y, float* w, float* h, bool transformed);
+/**
+ * @brief Retrieves the axis-aligned bounding box (AABB) of the paint object in local space.
+ *
+ * This function returns the bounding box of the paint object relative to its local coordinate system, without applying any transformations.
+ *
+ * @param[in] paint The Tvg_Paint object of which to get the bounds.
+ * @param[out] x The x-coordinate of the upper-left corner of the bounding box.
+ * @param[out] y The y-coordinate of the upper-left corner of the bounding box.
+ * @param[out] w The width of the bounding box.
+ * @param[out] h The height of the bounding box.
+ *
+ * @return Tvg_Result enumeration.
+ * @retval TVG_RESULT_INVALID_ARGUMENT An invalid @p paint.
+ * @retval TVG_RESULT_INSUFFICIENT_CONDITION If it failed to compute the bounding box (mostly due to invalid path information).
+ *  
+ * @note The bounding box is calculated in the object's local space, meaning transformations such as scaling, rotation, or translation are not applied.
+ *
+ * @see tvg_paint_get_obb()
+ * @see tvg_canvas_update_paint()
+ */
+TVG_API Tvg_Result tvg_paint_get_aabb(const Tvg_Paint* paint, float* x, float* y, float* w, float* h);
+
+
+/**
+ * @brief Retrieves the object-oriented bounding box (OBB) of the paint object in canvas space.
+ * 
+ * This function returns the bounding box of the paint, as an oriented bounding box (OBB) after transformations are applied.
+ *
+ * @param[in] paint The Tvg_Paint object of which to get the bounds.
+ * @param[out] pt4 An array of four points representing the bounding box. The array size must be 4.
+ *
+ * @return Tvg_Result enumeration.
+ * @retval TVG_RESULT_INVALID_ARGUMENT @p paint or @p pt4 is invalid.
+ * @retval TVG_RESULT_INSUFFICIENT_CONDITION If it failed to compute the bounding box (mostly due to invalid path information).
+ * 
+ * @note The paint must be pushed into a canvas and updated before calling this function.
+ *
+ * @see tvg_paint_get_aabb()
+ * @see tvg_canvas_update_paint()
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Result tvg_paint_get_obb(const Tvg_Paint* paint, Tvg_Point* pt4);
 
 
 /*!
@@ -941,7 +965,7 @@ TVG_API Tvg_Result tvg_paint_get_bounds(const Tvg_Paint* paint, float* x, float*
 * @param[in] method The method used to mask the source object with the target.
 *
 * @return Tvg_Result enumeration.
-* @retval TVG_RESULT_INVALID_ARGUMENT An invalid @p paint or @p target object or the @p method equal to TVG_MASK_METHOD_NONE.
+
 */
 TVG_API Tvg_Result tvg_paint_set_mask_method(Tvg_Paint* paint, Tvg_Paint* target, Tvg_Mask_Method method);
 
@@ -1413,7 +1437,7 @@ TVG_API Tvg_Result tvg_shape_get_stroke_miterlimit(const Tvg_Paint* paint, float
 
 
 /*!
-* @brief Sets the trim of the stroke along the defined path segment, allowing control over which part of the stroke is visible.
+* @brief Sets the trim of the shape along the defined path segment, allowing control over which part of the shape is visible.
 *
 * If the values of the arguments @p begin and @p end exceed the 0-1 range, they are wrapped around in a manner similar to angle wrapping, effectively treating the range as circular.
 *
@@ -1428,7 +1452,7 @@ TVG_API Tvg_Result tvg_shape_get_stroke_miterlimit(const Tvg_Paint* paint, float
 *
 * @note Experimental API
 */
-TVG_API Tvg_Result tvg_shape_set_stroke_trim(Tvg_Paint* paint, float begin, float end, bool simultaneous);
+TVG_API Tvg_Result tvg_shape_set_trimpath(Tvg_Paint* paint, float begin, float end, bool simultaneous);
 
 
 /*!
@@ -1847,7 +1871,7 @@ TVG_API Tvg_Result tvg_picture_load_raw(Tvg_Paint* paint, uint32_t *data, uint32
 * @param[in] paint A Tvg_Paint pointer to the picture object.
 * @param[in] data A pointer to a memory location where the content of the picture file is stored. A null-terminated string is expected for non-binary data if @p copy is @c false
 * @param[in] size The size in bytes of the memory occupied by the @p data.
-* @param[in] mimetype Mimetype or extension of data such as "jpg", "jpeg", "svg", "svg+xml", "lottie", "png", etc. In case an empty string or an unknown type is provided, the loaders will be tried one by one.
+* @param[in] mimetype Mimetype or extension of data such as "jpg", "jpeg", "svg", "svg+xml", "lot", "lottie+json", "png", etc. In case an empty string or an unknown type is provided, the loaders will be tried one by one.
 * @param[in] rpath A resource directory path, if the @p data needs to access any external resources.
 * @param[in] copy If @c true the data are copied into the engine local buffer, otherwise they are not.
 *
@@ -2021,6 +2045,7 @@ TVG_API Tvg_Paint* tvg_text_new(void);
 * @retval TVG_RESULT_INVALID_ARGUMENT A @c nullptr passed as the @p paint argument.
 * @retval TVG_RESULT_INSUFFICIENT_CONDITION  The specified @p name cannot be found.
 *
+* @note If the @p name is not specified, ThorVG will select any available font candidate.
 * @note Experimental API
 */
 TVG_API Tvg_Result tvg_text_set_font(Tvg_Paint* paint, const char* name, float size, const char* style);
@@ -2272,7 +2297,7 @@ TVG_API Tvg_Result tvg_animation_set_frame(Tvg_Animation* animation, float no);
 /*!
 * @brief Retrieves a picture instance associated with this animation instance.
 *
-* This function provides access to the picture instance that can be used to load animation formats, such as Lottie(json).
+* This function provides access to the picture instance that can be used to load animation formats, such as lot.
 * After setting up the picture, it can be pushed to the designated canvas, enabling control over animation frames
 * with this Animation instance.
 *

@@ -184,7 +184,8 @@ void WgPipelines::initialize(WgContext& context)
     // bind group layouts blit
     const WGPUBindGroupLayout bindGroupLayoutsBlit[] { layouts.layoutTexSampled };
     // bind group layouts effects
-    const WGPUBindGroupLayout bindGroupLayoutsGaussian[] { layouts.layoutTexStrorage1RO, layouts.layoutTexStrorage1WO, layouts.layoutBuffer1Un, layouts.layoutBuffer1Un };
+    const WGPUBindGroupLayout bindGroupLayoutsGauss[] { layouts.layoutTexStrorage1RO, layouts.layoutTexStrorage1WO, layouts.layoutBuffer1Un, layouts.layoutBuffer1Un };
+    const WGPUBindGroupLayout bindGroupLayoutsEffects[] { layouts.layoutTexStrorage2RO, layouts.layoutTexStrorage1WO, layouts.layoutBuffer1Un, layouts.layoutBuffer1Un };
 
     // depth stencil state markup
     const WGPUDepthStencilState depthStencilStateNonZero = makeDepthStencilState(WGPUCompareFunction_Always, false, WGPUCompareFunction_Always, WGPUStencilOperation_IncrementWrap, WGPUCompareFunction_Always, WGPUStencilOperation_DecrementWrap);
@@ -221,7 +222,8 @@ void WgPipelines::initialize(WgContext& context)
     // shader blit
     shader_blit = createShaderModule(context.device, "The shader blit", cShaderSrc_Blit);
     // shader effects
-    shader_gaussian = createShaderModule(context.device, "The shader gaussian", cShaderSrc_GaussianBlur);
+    shader_gauss = createShaderModule(context.device, "The shader effects", cShaderSrc_GaussianBlur);
+    shader_effects = createShaderModule(context.device, "The shader effects", cShaderSrc_Effects);
 
     // layouts
     layout_stencil = createPipelineLayout(context.device, bindGroupLayoutsStencil, 2);
@@ -241,7 +243,8 @@ void WgPipelines::initialize(WgContext& context)
     // layout blit
     layout_blit = createPipelineLayout(context.device, bindGroupLayoutsBlit, 1);
     // layout effects
-    layout_gaussian = createPipelineLayout(context.device, bindGroupLayoutsGaussian, 4);
+    layout_gauss = createPipelineLayout(context.device, bindGroupLayoutsGauss, 4);
+    layout_effects = createPipelineLayout(context.device, bindGroupLayoutsEffects, 4);
 
     // render pipeline nonzero
     nonzero = createRenderPipeline(
@@ -447,17 +450,21 @@ void WgPipelines::initialize(WgContext& context)
         depthStencilStateScene, multisampleStateX1);
 
     // compute pipeline gaussian blur
-    gaussian_horz = createComputePipeline(
-        context.device, "The compute pipeline gaussian blur horizontal",
-        shader_gaussian, "cs_main_horz", layout_gaussian);
-    gaussian_vert = createComputePipeline(
-        context.device, "The compute pipeline gaussian blur vertical",
-        shader_gaussian, "cs_main_vert", layout_gaussian);
+    gaussian_horz = createComputePipeline(context.device, "The compute pipeline gaussian blur horizontal", shader_gauss, "cs_main_horz", layout_gauss);
+    gaussian_vert = createComputePipeline(context.device, "The compute pipeline gaussian blur vertical",   shader_gauss, "cs_main_vert", layout_gauss);
+    dropshadow    = createComputePipeline(context.device, "The compute pipeline drop shadow blend", shader_effects, "cs_main_drop_shadow", layout_effects);
+    fill_effect   = createComputePipeline(context.device, "The compute pipeline fill effect", shader_effects, "cs_main_fill", layout_effects);
+    tint_effect   = createComputePipeline(context.device, "The compute pipeline tint effect", shader_effects, "cs_main_tint", layout_effects);
+    tritone_effect= createComputePipeline(context.device, "The compute pipeline tritone effect", shader_effects, "cs_main_tritone", layout_effects);
 }
 
 void WgPipelines::releaseGraphicHandles(WgContext& context)
 {
     // pipeline effects
+    releaseComputePipeline(tritone_effect);
+    releaseComputePipeline(tint_effect);
+    releaseComputePipeline(fill_effect);
+    releaseComputePipeline(dropshadow);
     releaseComputePipeline(gaussian_vert);
     releaseComputePipeline(gaussian_horz);
     // pipeline blit
@@ -490,7 +497,8 @@ void WgPipelines::releaseGraphicHandles(WgContext& context)
     releaseRenderPipeline(evenodd);
     releaseRenderPipeline(nonzero);
     // layouts
-    releasePipelineLayout(layout_gaussian);
+    releasePipelineLayout(layout_effects);
+    releasePipelineLayout(layout_gauss);
     releasePipelineLayout(layout_blit);
     releasePipelineLayout(layout_scene_compose);
     releasePipelineLayout(layout_scene_blend);
@@ -504,7 +512,8 @@ void WgPipelines::releaseGraphicHandles(WgContext& context)
     releasePipelineLayout(layout_depth);
     releasePipelineLayout(layout_stencil);
     // shaders
-    releaseShaderModule(shader_gaussian);
+    releaseShaderModule(shader_effects);
+    releaseShaderModule(shader_gauss);
     releaseShaderModule(shader_blit);
     releaseShaderModule(shader_scene_compose);
     releaseShaderModule(shader_scene_blend);

@@ -25,6 +25,7 @@
 
 #include "tvgWgPipelines.h"
 #include "tvgWgGeometry.h"
+#include "tvgWgShaderTypes.h"
 
 struct WgMeshData {
     WGPUBuffer bufferPosition{};
@@ -38,7 +39,7 @@ struct WgMeshData {
     void drawImage(WgContext& context, WGPURenderPassEncoder renderPassEncoder);
 
     void update(WgContext& context, const WgVertexBuffer& vertexBuffer);
-    void update(WgContext& context, const WgVertexBufferInd& vertexBufferInd);
+    void update(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd);
     void bbox(WgContext& context, const Point pmin, const Point pmax);
     void imageBox(WgContext& context, float w, float h);
     void blitBox(WgContext& context);
@@ -60,7 +61,7 @@ struct WgMeshDataGroup {
     Array<WgMeshData*> meshes{};
     
     void append(WgContext& context, const WgVertexBuffer& vertexBuffer);
-    void append(WgContext& context, const WgVertexBufferInd& vertexBufferInd);
+    void append(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd);
     void append(WgContext& context, const Point pmin, const Point pmax);
     void release(WgContext& context);
 };
@@ -89,7 +90,8 @@ struct WgRenderSettings
     WgRenderRasterType rasterType{};
     bool skip{};
 
-    void update(WgContext& context, const Fill* fill, const RenderColor& c, const RenderUpdateFlag flags);
+    void updateFill(WgContext& context, const Fill* fill);
+    void updateColor(WgContext& context, const RenderColor& c);
     void release(WgContext& context);
 };
 
@@ -126,11 +128,11 @@ struct WgRenderDataShape: public WgRenderDataPaint
     FillRule fillRule{};
 
     void appendShape(WgContext& context, const WgVertexBuffer& vertexBuffer);
-    void appendStroke(WgContext& context, const WgVertexBufferInd& vertexBufferInd);
+    void appendStroke(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd);
     void updateBBox(Point pmin, Point pmax);
     void updateAABB(const Matrix& tr);
-    void updateMeshes(WgContext& context, const RenderShape& rshape, const Matrix& tr);
-    void proceedStrokes(WgContext& context, const RenderStroke* rstroke, const WgVertexBuffer& buff);
+    void updateMeshes(WgContext& context, const RenderShape& rshape, const Matrix& tr, WgGeometryBufferPool* pool);
+    void proceedStrokes(WgContext& context, const RenderStroke* rstroke, const WgVertexBuffer& buff, WgGeometryBufferPool* pool);
     void releaseMeshes(WgContext& context);
     void release(WgContext& context) override;
     Type type() override { return Type::Shape; };
@@ -189,28 +191,36 @@ public:
     void release(WgContext& context);
 };
 
+// gaussian blur, drop shadow, fill, tint, tritone
 #define WG_GAUSSIAN_MAX_LEVEL 3
-struct WgRenderDataGaussian
+struct WgRenderDataEffectParams
 {
-    WGPUBindGroup bindGroupGaussian{};
-    WGPUBuffer bufferSettings{};
+    WGPUBindGroup bindGroupParams{};
+    WGPUBuffer bufferParams{};
     uint32_t extend{};
     uint32_t level{};
+    Point offset{};
 
-    void update(WgContext& context, RenderEffectGaussianBlur* gaussian, const Matrix& transform);
+    void update(WgContext& context, const WgShaderTypeEffectParams& effectParams);
+    void update(WgContext& context, const RenderEffectGaussianBlur* gaussian, const Matrix& transform);
+    void update(WgContext& context, const RenderEffectDropShadow* dropShadow, const Matrix& transform);
+    void update(WgContext& context, const RenderEffectFill* fill);
+    void update(WgContext& context, const RenderEffectTint* tint);
+    void update(WgContext& context, const RenderEffectTritone* tritone);
     void release(WgContext& context);
 };
 
-class WgRenderDataGaussianPool {
+// effect params pool
+class WgRenderDataEffectParamsPool {
 private:
-    // pool contains all created but unused render data for gaussian filter
-    Array<WgRenderDataGaussian*> mPool;
-    // list contains all created render data for gaussian filter
+    // pool contains all created but unused render data for params
+    Array<WgRenderDataEffectParams*> mPool;
+    // list contains all created render data for params
     // to ensure that all created instances will be released
-    Array<WgRenderDataGaussian*> mList;
+    Array<WgRenderDataEffectParams*> mList;
 public:
-    WgRenderDataGaussian* allocate(WgContext& context);
-    void free(WgContext& context, WgRenderDataGaussian* renderData);
+    WgRenderDataEffectParams* allocate(WgContext& context);
+    void free(WgContext& context, WgRenderDataEffectParams* renderData);
     void release(WgContext& context);
 };
 

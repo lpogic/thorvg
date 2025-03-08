@@ -21,9 +21,9 @@ endif
 
 source_file = [
     'Accessor.cpp',
-    'AnimateMasking.cpp',
     'Animation.cpp',
     'Blending.cpp',
+    'BoundingBox.cpp',
     'Clipping.cpp',
     'CustomTransform.cpp',
     'DataLoad.cpp',
@@ -33,25 +33,19 @@ source_file = [
     'SceneEffects.cpp',
     'FillRule.cpp',
     'FillSpread.cpp',
-    'GifSaver.cpp',
     'GradientMasking.cpp',
     'GradientStroke.cpp',
     'GradientTransform.cpp',
     'ImageRotation.cpp',
-    'ImageScaleDown.cpp',
-    'ImageScaleUp.cpp',
-    'InvLumaMasking.cpp',
-    'InvMasking.cpp',
+    'ImageScaling.cpp',
     'LinearGradient.cpp',
     'Lottie.cpp',
-    'LottieTweening.cpp',
     'LumaMasking.cpp',
     'Masking.cpp',
     'MaskingMethods.cpp',
     'MultiCanvas.cpp',
     'Opacity.cpp',
     'Path.cpp',
-    'Performance.cpp',
     'PictureJpg.cpp',
     'PicturePng.cpp',
     'PictureRaw.cpp',
@@ -66,21 +60,24 @@ source_file = [
     'Stroke.cpp',
     'StrokeLine.cpp',
     'StrokeMiterlimit.cpp',
-    'StrokeTrim.cpp',
     'Svg.cpp',
     'Text.cpp',
     'Transform.cpp',
+    'TrimPath.cpp',
     'Update.cpp',
     'Viewport.cpp'
 ]
 
+if gif_saver
+    source_file += 'GifSaver.cpp'
+endif
 
 if lottie_loader
-  source_file += 'LottieExtension.cpp'
+    source_file += ['LottieExtension.cpp', 'LottieTweening.cpp']
 endif
 
 if lottie_expressions
-  source_file += 'LottieExpressions.cpp'
+    source_file += 'LottieExpressions.cpp'
 endif
 
 foreach current_file : source_file

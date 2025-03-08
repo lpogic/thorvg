@@ -41,9 +41,9 @@ struct RenderShape;
 class Tessellator final
 {
 public:
-    Tessellator(Array<float>* points, Array<uint32_t>* indices);
+    Tessellator(GlGeometryBuffer* buffer);
     ~Tessellator();
-    bool tessellate(const RenderShape *rshape, bool antialias = false);
+    bool tessellate(const RenderShape *rshape, const RenderPath& path, bool antialias = false);
     void tessellate(const Array<const RenderShape*> &shapes);
 
 private:
@@ -66,11 +66,10 @@ private:
     Array<VertexList*> outlines;
     VertexList* pMesh;
     Polygon* pPolygon;
-    Array<float>* resGlPoints;
-    Array<uint32_t>* resIndices;
+    GlGeometryBuffer* buffer;
 };
 
-class Stroker final
+class Stroker
 {
     struct State
     {
@@ -80,14 +79,14 @@ class Stroker final
         Point prevPtDir;
     };
 public:
-    Stroker(Array<float>* points, Array<uint32_t>* indices, const Matrix& matrix);
+    Stroker(GlGeometryBuffer* buffer, const Matrix& matrix);
     ~Stroker() = default;
-    void stroke(const RenderShape *rshape);
+    void stroke(const RenderShape *rshape, const RenderPath& path);
     RenderRegion bounds() const;
 
 private:
     void doStroke(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count);
-    void doDashStroke(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count, uint32_t dash_count, const float* dash_pattern);
+    void doDashStroke(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count, uint32_t dash_count, const float* dash_pattern, float dash_offset);
 
     float strokeRadius() const
     {
@@ -107,8 +106,7 @@ private:
     void strokeRound(const Point& p, const Point& outDir);
     void strokeRoundPoint(const Point& p);
 
-    Array<float>* mResGlPoints;
-    Array<uint32_t>* mResIndices;
+    GlGeometryBuffer* mBuffer;
     Matrix mMatrix;
     float mStrokeWidth = MIN_GL_STROKE_WIDTH;
     float mMiterLimit = 4.f;
@@ -122,7 +120,7 @@ private:
 class DashStroke
 {
 public:
-    DashStroke(Array<PathCommand>* cmds, Array<Point>* pts, uint32_t dash_count, const float* dash_pattern);
+    DashStroke(Array<PathCommand>* cmds, Array<Point>* pts, uint32_t dash_count, const float* dash_pattern, float dash_offset);
     ~DashStroke() = default;
     void doStroke(const PathCommand* cmds, uint32_t cmd_count, const Point* pts, uint32_t pts_count);
 
@@ -137,9 +135,11 @@ private:
     Array<Point>* mPts;
     uint32_t mDashCount;
     const float* mDashPattern;
+    float mDashOffset;
     float mCurrLen;
     int32_t mCurrIdx;
     bool mCurOpGap;
+    bool mMove;
     Point mPtStart;
     Point mPtCur;
 };
@@ -147,17 +147,16 @@ private:
 class BWTessellator
 {
 public:
-    BWTessellator(Array<float>* points, Array<uint32_t>* indices);
+    BWTessellator(GlGeometryBuffer* buffer);
     ~BWTessellator() = default;
-    void tessellate(const RenderShape *rshape, const Matrix& matrix);
+    void tessellate(const RenderPath& path, const Matrix& matrix);
     RenderRegion bounds() const;
 
 private:
     uint32_t pushVertex(float x, float y);
     void pushTriangle(uint32_t a, uint32_t b, uint32_t c);
 
-    Array<float>* mResPoints;
-    Array<uint32_t>* mResIndices;
+    GlGeometryBuffer* mBuffer;
     BBox bbox = {{}, {}};
 };
 

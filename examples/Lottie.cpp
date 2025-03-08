@@ -43,7 +43,7 @@ struct UserExample : tvgexam::Example
 
         //ignore if not lottie.
         const char *ext = path + strlen(path) - 4;
-        if (strcmp(ext, "json")) return;
+        if (strcmp(ext, "json") && strcmp(ext, "lot")) return;
 
         //Animation Controller
         auto animation = tvg::Animation::gen();
@@ -92,6 +92,9 @@ struct UserExample : tvgexam::Example
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
         if (!canvas) return false;
+
+        //The default font for fallback in case
+        tvg::Text::load(EXAMPLE_DIR"/font/Arial.ttf");
 
         //Background
         auto shape = tvg::Shape::gen();

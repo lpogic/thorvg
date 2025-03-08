@@ -20,20 +20,10 @@
  * SOFTWARE.
  */
 
-#include <cstring>
 #include <ctype.h>
-#include <string>
-
-#ifdef _WIN32
-    #include <malloc.h>
-#elif defined(__linux__) || defined(__ZEPHYR__)
-    #include <alloca.h>
-#else
-    #include <stdlib.h>
-#endif
-
-#include "tvgXmlParser.h"
 #include "tvgStr.h"
+#include "tvgXmlParser.h"
+
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
@@ -298,7 +288,7 @@ bool isIgnoreUnsupportedLogElements(TVG_UNUSED const char* tagName)
 bool simpleXmlParseAttributes(const char* buf, unsigned bufLength, simpleXMLAttributeCb func, const void* data)
 {
     const char *itr = buf, *itrEnd = buf + bufLength;
-    char* tmpBuf = (char*)malloc(bufLength + 1);
+    char* tmpBuf = tvg::malloc<char*>(bufLength + 1);
 
     if (!buf || !func || !tmpBuf) goto error;
 
@@ -363,11 +353,11 @@ bool simpleXmlParseAttributes(const char* buf, unsigned bufLength, simpleXMLAttr
     }
 
 success:
-    free(tmpBuf);
+    tvg::free(tmpBuf);
     return true;
 
 error:
-    free(tmpBuf);
+    tvg::free(tmpBuf);
     return false;
 }
 
@@ -561,11 +551,11 @@ const char* simpleXmlParseCSSAttribute(const char* buf, unsigned bufLength, char
         if (*p == '.') break;
     }
 
-    if (p == itr) *tag = strdup("all");
-    else *tag = strDuplicate(itr, p - itr);
+    if (p == itr) *tag = duplicate("all");
+    else *tag = duplicate(itr, p - itr);
 
     if (p == itrEnd) *name = nullptr;
-    else *name = strDuplicate(p + 1, itrEnd - p - 1);
+    else *name = duplicate(p + 1, itrEnd - p - 1);
 
     return (nextElement ? nextElement + 1 : nullptr);
 }

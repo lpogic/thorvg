@@ -798,11 +798,11 @@ static float _downScaleFloat(float v)
 }
 
 
-static uint32_t _pushVertex(Array<float> *array, float x, float y)
+static uint32_t _pushVertex(Array<float>& array, float x, float y)
 {
-    array->push(x);
-    array->push(y);
-    return (array->count - 2) / 2;
+    array.push(x);
+    array.push(y);
+    return (array.count - 2) / 2;
 }
 
 
@@ -830,13 +830,12 @@ static Orientation _calcOrientation(const Point& dir1, const Point& dir2)
 }
 
 
-Tessellator::Tessellator(Array<float> *points, Array<uint32_t> *indices)
+Tessellator::Tessellator(GlGeometryBuffer* buffer)
     : pHeap(new ObjectHeap),
       outlines(),
       pMesh(new VertexList),
       pPolygon(),
-      resGlPoints(points),
-      resIndices(indices)
+      buffer(buffer)
 {
 }
 
@@ -851,16 +850,11 @@ Tessellator::~Tessellator()
 }
 
 
-bool Tessellator::tessellate(const RenderShape *rshape, bool antialias)
+bool Tessellator::tessellate(const RenderShape *rshape, const RenderPath& path, bool antialias)
 {
-    auto cmds = rshape->path.cmds.data;
-    auto cmdCnt = rshape->path.cmds.count;
-    auto pts = rshape->path.pts.data;
-    auto ptsCnt = rshape->path.pts.count;
-
     this->fillRule = rshape->rule;
 
-    this->visitShape(cmds, cmdCnt, pts, ptsCnt);
+    this->visitShape(path.cmds.data, path.cmds.count, path.pts.data, path.pts.count);
     this->buildMesh();
     this->mergeVertices();
 
@@ -889,12 +883,14 @@ void Tessellator::tessellate(const Array<const RenderShape *> &shapes)
     this->fillRule = FillRule::NonZero;
 
     for (uint32_t i = 0; i < shapes.count; i++) {
-        auto cmds = shapes[i]->path.cmds.data;
-        auto cmdCnt = shapes[i]->path.cmds.count;
-        auto pts = shapes[i]->path.pts.data;
-        auto ptsCnt = shapes[i]->path.pts.count;
+        const RenderPath* path = nullptr;
+        RenderPath trimmedPath;
+        if (shapes[i]->trimpath()) {
+            if (!shapes[i]->stroke->trim.trim(shapes[i]->path, trimmedPath)) continue;
+            path = &trimmedPath;
+        } else path = &shapes[i]->path;
 
-        this->visitShape(cmds, cmdCnt, pts, ptsCnt);
+        this->visitShape(path->cmds.data, path->cmds.count, path->pts.data, path->pts.count);
     }
 
     this->buildMesh();
@@ -917,9 +913,9 @@ void Tessellator::visitShape(const PathCommand *cmds, uint32_t cmd_count, const 
 {
     // all points at least need to be visit once
     // so the points count is at least the same as the count in shape
-    resGlPoints->reserve(pts_count * 2);
+    buffer->vertex.reserve(pts_count * 2);
     // triangle fans, the indices count is at least triangles number * 3
-    resIndices->reserve((pts_count - 2) * 3);
+    buffer->index.reserve((pts_count - 2) * 3);
 
     const Point *firstPt = nullptr;
 
@@ -1513,22 +1509,22 @@ void Tessellator::emitPoly(MonotonePolygon *poly)
 void Tessellator::emitTriangle(Vertex *p1, Vertex *p2, Vertex *p3)
 {
     // check if index is generated
-    if (p1->index == 0xFFFFFFFF) p1->index = _pushVertex(resGlPoints, _downScaleFloat(p1->point.x), _downScaleFloat(p1->point.y));
-    if (p2->index == 0xFFFFFFFF) p2->index = _pushVertex(resGlPoints, _downScaleFloat(p2->point.x), _downScaleFloat(p2->point.y));
-    if (p3->index == 0xFFFFFFFF) p3->index = _pushVertex(resGlPoints, _downScaleFloat(p3->point.x), _downScaleFloat(p3->point.y));
+    if (p1->index == 0xFFFFFFFF) p1->index = _pushVertex(buffer->vertex, _downScaleFloat(p1->point.x), _downScaleFloat(p1->point.y));
+    if (p2->index == 0xFFFFFFFF) p2->index = _pushVertex(buffer->vertex, _downScaleFloat(p2->point.x), _downScaleFloat(p2->point.y));
+    if (p3->index == 0xFFFFFFFF) p3->index = _pushVertex(buffer->vertex, _downScaleFloat(p3->point.x), _downScaleFloat(p3->point.y));
 
-    resIndices->push(p1->index);
-    resIndices->push(p2->index);
-    resIndices->push(p3->index);
+    buffer->index.push(p1->index);
+    buffer->index.push(p2->index);
+    buffer->index.push(p3->index);
 }
 
 
-Stroker::Stroker(Array<float> *points, Array<uint32_t> *indices, const Matrix& matrix) : mResGlPoints(points), mResIndices(indices), mMatrix(matrix)
+Stroker::Stroker(GlGeometryBuffer* buffer, const Matrix& matrix) : mBuffer(buffer), mMatrix(matrix)
 {
 }
 
 
-void Stroker::stroke(const RenderShape *rshape)
+void Stroker::stroke(const RenderShape *rshape, const RenderPath& path)
 {
     mMiterLimit = rshape->strokeMiterlimit();
     mStrokeCap = rshape->strokeCap();
@@ -1541,36 +1537,17 @@ void Stroker::stroke(const RenderShape *rshape)
         mStrokeWidth = strokeWidth / mMatrix.e11;
     }
 
-    PathCommand *cmds, *trimmedCmds = nullptr;
-    Point *pts, *trimmedPts = nullptr;
-    uint32_t cmdCnt = 0, ptsCnt = 0;
-
-    if (rshape->strokeTrim()) {
-        RenderPath trimmedPath;
-        if (!rshape->stroke->trim.trim(rshape->path, trimmedPath)) return;
-
-        cmds = trimmedCmds = trimmedPath.cmds.data;
-        cmdCnt = trimmedPath.cmds.count;
-        pts = trimmedPts = trimmedPath.pts.data;
-        ptsCnt = trimmedPath.pts.count;
-
-        trimmedPath.cmds.data = nullptr;
-        trimmedPath.pts.data = nullptr;
-    } else {
-        cmds = rshape->path.cmds.data;
-        cmdCnt = rshape->path.cmds.count;
-        pts = rshape->path.pts.data;
-        ptsCnt = rshape->path.pts.count;
-    }
+    auto cmds = path.cmds.data;
+    auto pts = path.pts.data;
+    auto cmdCnt = path.cmds.count;
+    auto ptsCnt = path.pts.count;
 
     const float *dash_pattern = nullptr;
-    auto dashCnt = rshape->strokeDash(&dash_pattern, nullptr);
+    auto dash_offset = 0.0f;
+    auto dashCnt = rshape->strokeDash(&dash_pattern, &dash_offset);
 
     if (dashCnt == 0) doStroke(cmds, cmdCnt, pts, ptsCnt);
-    else doDashStroke(cmds, cmdCnt, pts, ptsCnt, dashCnt, dash_pattern);
-
-    free(trimmedCmds);
-    free(trimmedPts);
+    else doDashStroke(cmds, cmdCnt, pts, ptsCnt, dashCnt, dash_pattern, dash_offset);
 }
 
 
@@ -1587,8 +1564,8 @@ RenderRegion Stroker::bounds() const
 
 void Stroker::doStroke(const PathCommand *cmds, uint32_t cmd_count, const Point *pts, uint32_t pts_count)
 {
-    mResGlPoints->reserve(pts_count * 4 + 16);
-    mResIndices->reserve(pts_count * 3);
+    mBuffer->vertex.reserve(pts_count * 4 + 16);
+    mBuffer->index.reserve(pts_count * 3);
 
     auto validStrokeCap = false;
 
@@ -1629,7 +1606,7 @@ void Stroker::doStroke(const PathCommand *cmds, uint32_t cmd_count, const Point 
 }
 
 
-void Stroker::doDashStroke(const PathCommand *cmds, uint32_t cmd_count, const Point *pts, uint32_t pts_count, uint32_t dash_count, const float *dash_pattern)
+void Stroker::doDashStroke(const PathCommand *cmds, uint32_t cmd_count, const Point *pts, uint32_t pts_count, uint32_t dash_count, const float *dash_pattern, float dash_offset)
 {
     Array<PathCommand> dash_cmds{};
     Array<Point> dash_pts{};
@@ -1637,7 +1614,7 @@ void Stroker::doDashStroke(const PathCommand *cmds, uint32_t cmd_count, const Po
     dash_cmds.reserve(20 * cmd_count);
     dash_pts.reserve(20 * pts_count);
 
-    DashStroke dash(&dash_cmds, &dash_pts, dash_count, dash_pattern);
+    DashStroke dash(&dash_cmds, &dash_pts, dash_count, dash_pattern, dash_offset);
     dash.doStroke(cmds, cmd_count, pts, pts_count);
 
     this->doStroke(dash_cmds.data, dash_cmds.count, dash_pts.data, dash_pts.count);
@@ -1677,10 +1654,10 @@ void Stroker::strokeLineTo(const Point& curr)
     auto c = curr + normal * strokeRadius();
     auto d = curr - normal * strokeRadius();
 
-    auto ia = _pushVertex(mResGlPoints, a.x, a.y);
-    auto ib = _pushVertex(mResGlPoints, b.x, b.y);
-    auto ic = _pushVertex(mResGlPoints, c.x, c.y);
-    auto id = _pushVertex(mResGlPoints, d.x, d.y);
+    auto ia = _pushVertex(mBuffer->vertex, a.x, a.y);
+    auto ib = _pushVertex(mBuffer->vertex, b.x, b.y);
+    auto ic = _pushVertex(mBuffer->vertex, c.x, c.y);
+    auto id = _pushVertex(mBuffer->vertex, d.x, d.y);
 
     /**
      *   a --------- c
@@ -1689,13 +1666,13 @@ void Stroker::strokeLineTo(const Point& curr)
      *   b-----------d
      */
 
-    this->mResIndices->push(ia);
-    this->mResIndices->push(ib);
-    this->mResIndices->push(ic);
+    this->mBuffer->index.push(ia);
+    this->mBuffer->index.push(ib);
+    this->mBuffer->index.push(ic);
 
-    this->mResIndices->push(ib);
-    this->mResIndices->push(id);
-    this->mResIndices->push(ic);
+    this->mBuffer->index.push(ib);
+    this->mBuffer->index.push(id);
+    this->mBuffer->index.push(ic);
 
     if (mStrokeState.prevPt == mStrokeState.firstPt) {
         // first point after moveTo
@@ -1745,7 +1722,7 @@ void Stroker::strokeCubicTo(const Point& cnt1, const Point& cnt2, const Point& e
 
 void Stroker::strokeClose()
 {
-    if (mStrokeState.prevPt != mStrokeState.firstPt) {
+    if (length(mStrokeState.prevPt - mStrokeState.firstPt) > 0.015625f) {
         this->strokeLineTo(mStrokeState.firstPt);
     }
 
@@ -1801,8 +1778,8 @@ void Stroker::strokeRound(const Point &prev, const Point& curr, const Point& cen
 
     // Fixme: just use bezier curve to calculate step count
     auto count = _bezierCurveCount(_bezFromArc(prev, curr, strokeRadius()));
-    auto c = _pushVertex(mResGlPoints, center.x, center.y);
-    auto pi = _pushVertex(mResGlPoints, prev.x, prev.y);
+    auto c = _pushVertex(mBuffer->vertex, center.x, center.y);
+    auto pi = _pushVertex(mBuffer->vertex, prev.x, prev.y);
     auto step = 1.f / (count - 1);
     auto dir = curr - prev;
 
@@ -1813,11 +1790,11 @@ void Stroker::strokeRound(const Point &prev, const Point& curr, const Point& cen
         normalize(o_dir);
 
         auto out = center + o_dir * strokeRadius();
-        auto oi = _pushVertex(mResGlPoints, out.x, out.y);
+        auto oi = _pushVertex(mBuffer->vertex, out.x, out.y);
 
-        mResIndices->push(c);
-        mResIndices->push(pi);
-        mResIndices->push(oi);
+        mBuffer->index.push(c);
+        mBuffer->index.push(pi);
+        mBuffer->index.push(oi);
 
         pi = oi;
 
@@ -1833,19 +1810,19 @@ void Stroker::strokeRoundPoint(const Point &p)
 {
     // Fixme: just use bezier curve to calculate step count
     auto count = _bezierCurveCount(_bezFromArc(p, p, strokeRadius())) * 2;
-    auto c = _pushVertex(mResGlPoints, p.x, p.y);
+    auto c = _pushVertex(mBuffer->vertex, p.x, p.y);
     auto step = 2 * M_PI / (count - 1);
 
     for (uint32_t i = 1; i <= static_cast<uint32_t>(count); i++) {
         float angle = i * step;
         Point dir = {cos(angle), sin(angle)};
         Point out = p + dir * strokeRadius();
-        auto oi = _pushVertex(mResGlPoints, out.x, out.y);
+        auto oi = _pushVertex(mBuffer->vertex, out.x, out.y);
 
         if (oi > 1) {
-            mResIndices->push(c);
-            mResIndices->push(oi);
-            mResIndices->push(oi - 1);
+            mBuffer->index.push(c);
+            mBuffer->index.push(oi);
+            mBuffer->index.push(oi - 1);
         }
     }
 
@@ -1870,18 +1847,18 @@ void Stroker::strokeMiter(const Point& prev, const Point& curr, const Point& cen
     }
 
     auto join = center + pe;
-    auto c = _pushVertex(mResGlPoints, center.x, center.y);
-    auto cp1 = _pushVertex(mResGlPoints, prev.x, prev.y);
-    auto cp2 = _pushVertex(mResGlPoints, curr.x, curr.y);
-    auto e = _pushVertex(mResGlPoints, join.x, join.y);
+    auto c = _pushVertex(mBuffer->vertex, center.x, center.y);
+    auto cp1 = _pushVertex(mBuffer->vertex, prev.x, prev.y);
+    auto cp2 = _pushVertex(mBuffer->vertex, curr.x, curr.y);
+    auto e = _pushVertex(mBuffer->vertex, join.x, join.y);
 
-    mResIndices->push(c);
-    mResIndices->push(cp1);
-    mResIndices->push(e);
+    mBuffer->index.push(c);
+    mBuffer->index.push(cp1);
+    mBuffer->index.push(e);
 
-    mResIndices->push(e);
-    mResIndices->push(cp2);
-    mResIndices->push(c);
+    mBuffer->index.push(e);
+    mBuffer->index.push(cp2);
+    mBuffer->index.push(c);
 
     mLeftTop.x = std::min(mLeftTop.x, join.x);
     mLeftTop.y = std::min(mLeftTop.y, join.y);
@@ -1893,13 +1870,13 @@ void Stroker::strokeMiter(const Point& prev, const Point& curr, const Point& cen
 
 void Stroker::strokeBevel(const Point& prev, const Point& curr, const Point& center)
 {
-    auto a = _pushVertex(mResGlPoints, prev.x, prev.y);
-    auto b = _pushVertex(mResGlPoints, curr.x, curr.y);
-    auto c = _pushVertex(mResGlPoints, center.x, center.y);
+    auto a = _pushVertex(mBuffer->vertex, prev.x, prev.y);
+    auto b = _pushVertex(mBuffer->vertex, curr.x, curr.y);
+    auto c = _pushVertex(mBuffer->vertex, center.x, center.y);
 
-    mResIndices->push(a);
-    mResIndices->push(b);
-    mResIndices->push(c);
+    mBuffer->index.push(a);
+    mBuffer->index.push(b);
+    mBuffer->index.push(c);
 }
 
 
@@ -1912,18 +1889,18 @@ void Stroker::strokeSquare(const Point& p, const Point& outDir)
     auto c = a + outDir * strokeRadius();
     auto d = b + outDir * strokeRadius();
 
-    auto ai = _pushVertex(mResGlPoints, a.x, a.y);
-    auto bi = _pushVertex(mResGlPoints, b.x, b.y);
-    auto ci = _pushVertex(mResGlPoints, c.x, c.y);
-    auto di = _pushVertex(mResGlPoints, d.x, d.y);
+    auto ai = _pushVertex(mBuffer->vertex, a.x, a.y);
+    auto bi = _pushVertex(mBuffer->vertex, b.x, b.y);
+    auto ci = _pushVertex(mBuffer->vertex, c.x, c.y);
+    auto di = _pushVertex(mBuffer->vertex, d.x, d.y);
 
-    mResIndices->push(ai);
-    mResIndices->push(bi);
-    mResIndices->push(ci);
+    mBuffer->index.push(ai);
+    mBuffer->index.push(bi);
+    mBuffer->index.push(ci);
 
-    mResIndices->push(ci);
-    mResIndices->push(bi);
-    mResIndices->push(di);
+    mBuffer->index.push(ci);
+    mBuffer->index.push(bi);
+    mBuffer->index.push(di);
 
     mLeftTop.x = std::min(mLeftTop.x, std::min(std::min(a.x, b.x), std::min(c.x, d.x)));
     mLeftTop.y = std::min(mLeftTop.y, std::min(std::min(a.y, b.y), std::min(c.y, d.y)));
@@ -1942,18 +1919,18 @@ void Stroker::strokeSquarePoint(const Point& p)
     auto c = p - offsetX - offsetY;
     auto d = p + offsetX - offsetY;
 
-    auto ai = _pushVertex(mResGlPoints, a.x, a.y);
-    auto bi = _pushVertex(mResGlPoints, b.x, b.y);
-    auto ci = _pushVertex(mResGlPoints, c.x, c.y);
-    auto di = _pushVertex(mResGlPoints, d.x, d.y);
+    auto ai = _pushVertex(mBuffer->vertex, a.x, a.y);
+    auto bi = _pushVertex(mBuffer->vertex, b.x, b.y);
+    auto ci = _pushVertex(mBuffer->vertex, c.x, c.y);
+    auto di = _pushVertex(mBuffer->vertex, d.x, d.y);
 
-    mResIndices->push(ai);
-    mResIndices->push(bi);
-    mResIndices->push(ci);
+    mBuffer->index.push(ai);
+    mBuffer->index.push(bi);
+    mBuffer->index.push(ci);
 
-    mResIndices->push(ci);
-    mResIndices->push(di);
-    mResIndices->push(ai);
+    mBuffer->index.push(ci);
+    mBuffer->index.push(di);
+    mBuffer->index.push(ai);
 
     mLeftTop.x = std::min(mLeftTop.x, std::min(std::min(a.x, b.x), std::min(c.x, d.x)));
     mLeftTop.y = std::min(mLeftTop.y, std::min(std::min(a.y, b.y), std::min(c.y, d.y)));
@@ -1974,14 +1951,16 @@ void Stroker::strokeRound(const Point& p, const Point& outDir)
 }
 
 
-DashStroke::DashStroke(Array<PathCommand> *cmds, Array<Point> *pts, uint32_t dash_count, const float *dash_pattern)
+DashStroke::DashStroke(Array<PathCommand> *cmds, Array<Point> *pts, uint32_t dash_count, const float *dash_pattern, float dash_offset)
     : mCmds(cmds),
       mPts(pts),
       mDashCount(dash_count),
       mDashPattern(dash_pattern),
+      mDashOffset(dash_offset),
       mCurrLen(),
       mCurrIdx(),
       mCurOpGap(false),
+      mMove(true),
       mPtStart(),
       mPtCur()
 {
@@ -1990,6 +1969,26 @@ DashStroke::DashStroke(Array<PathCommand> *cmds, Array<Point> *pts, uint32_t das
 
 void DashStroke::doStroke(const PathCommand *cmds, uint32_t cmd_count, const Point *pts, uint32_t pts_count)
 {
+    int32_t idx = 0;
+    auto offset = mDashOffset;
+    bool gap = false;
+    if (!tvg::zero(mDashOffset)) {
+        auto len = 0.0f;
+        for (uint32_t i = 0; i < mDashCount; ++i) len += mDashPattern[i];
+        if (mDashCount % 2) len *= 2;
+
+        offset = fmodf(offset, len);
+        if (offset < 0) offset += len;
+
+        for (uint32_t i = 0; i < mDashCount * (mDashCount % 2 + 1); ++i, ++idx) {
+            auto curPattern = mDashPattern[i % mDashCount];
+            if (offset < curPattern) break;
+            offset -= curPattern;
+            gap = !gap;
+        }
+        idx = idx % mDashCount;
+    }
+
     for (uint32_t i = 0; i < cmd_count; i++) {
         switch (*cmds) {
             case PathCommand::Close: {
@@ -1998,9 +1997,10 @@ void DashStroke::doStroke(const PathCommand *cmds, uint32_t cmd_count, const Poi
             }
             case PathCommand::MoveTo: {
                 // reset the dash state
-                mCurrIdx = 0;
-                mCurrLen = 0.f;
-                mCurOpGap = false;
+                mCurrIdx = idx;
+                mCurrLen = mDashPattern[idx] - offset;
+                mCurOpGap = gap;
+                mMove = true;
                 mPtStart = mPtCur = *pts;
                 pts++;
                 break;
@@ -2026,38 +2026,51 @@ void DashStroke::dashLineTo(const Point& to)
 {
     auto len = length(mPtCur - to);
 
-    if (len < mCurrLen) {
+    if (tvg::zero(len)) {
+        this->moveTo(mPtCur);
+    } else if (len <= mCurrLen) {
         mCurrLen -= len;
         if (!mCurOpGap) {
-            this->moveTo(mPtCur);
+            if (mMove) {
+                this->moveTo(mPtCur);
+                mMove = false;
+            }
             this->lineTo(to);
         }
     } else {
         Line curr = {mPtCur, to};
 
-        while (len > mCurrLen) {
-            len -= mCurrLen;
-
-            Line left, right;
-            curr.split(mCurrLen, left, right);
-
+        while (len - mCurrLen > 0.0001f) {
+            Line right;
+            if (mCurrLen > 0.0f) {
+                Line left;
+                curr.split(mCurrLen, left, right);
+                len -= mCurrLen;
+                if (!mCurOpGap) {
+                    if (mMove || mDashPattern[mCurrIdx] - mCurrLen < FLOAT_EPSILON) {
+                        this->moveTo(left.pt1);
+                        mMove = false;
+                    }
+                    this->lineTo(left.pt2);
+                }
+            } else right = curr;
             mCurrIdx = (mCurrIdx + 1) % mDashCount;
-            if (!mCurOpGap) {
-                this->moveTo(left.pt1);
-                this->lineTo(left.pt2);
-            }
             mCurrLen = mDashPattern[mCurrIdx];
             mCurOpGap = !mCurOpGap;
             curr = right;
             mPtCur = curr.pt1;
+            mMove = true;
         }
         mCurrLen -= len;
         if (!mCurOpGap) {
-            this->moveTo(curr.pt1);
+            if (mMove) {
+                this->moveTo(curr.pt1);
+                mMove = false;
+            }
             this->lineTo(curr.pt2);
         }
 
-        if (mCurrLen < 1) {
+        if (mCurrLen < 0.1f) {
             mCurrIdx = (mCurrIdx + 1) % mDashCount;
             mCurrLen = mDashPattern[mCurrIdx];
             mCurOpGap = !mCurOpGap;
@@ -2078,38 +2091,50 @@ void DashStroke::dashCubicTo(const Point& cnt1, const Point& cnt2, const Point& 
 
     auto len = cur.length();
 
-    if (len < mCurrLen) {
+    if (tvg::zero(len)) {
+        this->moveTo(mPtCur);
+    } else if (len <= mCurrLen) {
         mCurrLen -= len;
         if (!mCurOpGap) {
-            this->moveTo(mPtCur);
+            if (mMove) {
+                this->moveTo(mPtCur);
+                mMove = false;
+            }
             this->cubicTo(cnt1, cnt2, end);
         }
     } else {
-        while (len > mCurrLen) {
-            len -= mCurrLen;
-
-            Bezier left, right;
-            cur.split(mCurrLen, left, right);
-
-            if (mCurrIdx == 0) {
-                this->moveTo(left.start);
-                this->cubicTo(left.ctrl1, left.ctrl2, left.end);
-            }
-
+        while (len - mCurrLen > 0.0001f) {
+            Bezier right;
+            if (mCurrLen > 0.0f) {
+                Bezier left;
+                cur.split(mCurrLen, left, right);
+                len -= mCurrLen;
+                if (!mCurOpGap) {
+                    if (mMove || mDashPattern[mCurrIdx] - mCurrLen < FLOAT_EPSILON) {
+                        this->moveTo(left.start);
+                        mMove = false;
+                    }
+                    this->cubicTo(left.ctrl1, left.ctrl2, left.end);
+                }
+            } else right = cur;
             mCurrIdx = (mCurrIdx + 1) % mDashCount;
             mCurrLen = mDashPattern[mCurrIdx];
             mCurOpGap = !mCurOpGap;
             cur = right;
             mPtCur = cur.start;
+            mMove = true;
         }
 
         mCurrLen -= len;
         if (!mCurOpGap) {
-            this->moveTo(cur.start);
+            if (mMove) {
+                this->moveTo(cur.start);
+                mMove = false;
+            }
             this->cubicTo(cur.ctrl1, cur.ctrl2, cur.end);
         }
 
-        if (mCurrLen < 1) {
+        if (mCurrLen < 0.1f) {
             mCurrIdx = (mCurrIdx + 1) % mDashCount;
             mCurrLen = mDashPattern[mCurrIdx];
             mCurOpGap = !mCurOpGap;
@@ -2142,25 +2167,25 @@ void DashStroke::cubicTo(const Point& cnt1, const Point& cnt2, const Point& end)
 }
 
 
-BWTessellator::BWTessellator(Array<float>* points, Array<uint32_t>* indices): mResPoints(points), mResIndices(indices)
+BWTessellator::BWTessellator(GlGeometryBuffer* buffer): mBuffer(buffer)
 {
 }
 
 
-void BWTessellator::tessellate(const RenderShape *rshape, const Matrix& matrix)
+void BWTessellator::tessellate(const RenderPath& path, const Matrix& matrix)
 {
-    auto cmds = rshape->path.cmds.data;
-    auto cmdCnt = rshape->path.cmds.count;
-    auto pts = rshape->path.pts.data;
-    auto ptsCnt = rshape->path.pts.count;
+    auto cmds = path.cmds.data;
+    auto cmdCnt = path.cmds.count;
+    auto pts = path.pts.data;
+    auto ptsCnt = path.pts.count;
 
     if (ptsCnt <= 2) return;
 
     uint32_t firstIndex = 0;
     uint32_t prevIndex = 0;
 
-    mResPoints->reserve(ptsCnt * 2);
-    mResIndices->reserve((ptsCnt - 2) * 3);
+    mBuffer->vertex.reserve(ptsCnt * 2);
+    mBuffer->index.reserve((ptsCnt - 2) * 3);
 
     for (uint32_t i = 0; i < cmdCnt; i++) {
         switch(cmds[i]) {
@@ -2229,7 +2254,7 @@ RenderRegion BWTessellator::bounds() const
 
 uint32_t BWTessellator::pushVertex(float x, float y)
 {
-    auto index = _pushVertex(mResPoints, x, y);
+    auto index = _pushVertex(mBuffer->vertex, x, y);
 
     if (index == 0) {
         bbox.max = bbox.min = {x, y};
@@ -2244,9 +2269,9 @@ uint32_t BWTessellator::pushVertex(float x, float y)
 
 void BWTessellator::pushTriangle(uint32_t a, uint32_t b, uint32_t c)
 {
-    mResIndices->push(a);
-    mResIndices->push(b);
-    mResIndices->push(c);
+    mBuffer->index.push(a);
+    mBuffer->index.push(b);
+    mBuffer->index.push(c);
 }
 
 }  // namespace tvg

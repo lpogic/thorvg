@@ -20,11 +20,11 @@
  * SOFTWARE.
  */
 
-#include "tvgLottieLoader.h"
+#include "tvgStr.h"
+ #include "tvgLottieLoader.h"
 #include "tvgLottieModel.h"
 #include "tvgLottieParser.h"
 #include "tvgLottieBuilder.h"
-#include "tvgStr.h"
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
@@ -58,7 +58,7 @@ void LottieLoader::run(unsigned tid)
 void LottieLoader::release()
 {
     if (copy) {
-        free((char*)content);
+        tvg::free((char*)content);
         content = nullptr;
     }
 }
@@ -68,7 +68,7 @@ void LottieLoader::release()
 /* External Class Implementation                                        */
 /************************************************************************/
 
-LottieLoader::LottieLoader() : FrameModule(FileType::Lottie), builder(new LottieBuilder)
+LottieLoader::LottieLoader() : FrameModule(FileType::Lot), builder(new LottieBuilder)
 {
 
 }
@@ -84,7 +84,7 @@ LottieLoader::~LottieLoader()
     delete(comp);
     delete(builder);
 
-    free(dirName);
+    tvg::free(dirName);
 }
 
 
@@ -138,7 +138,7 @@ bool LottieLoader::header()
             p += 5;
             auto e = strstr(p, ",");
             if (!e) e = strstr(p, "}");
-            frameRate = strToFloat(p, nullptr);
+            frameRate = toFloat(p, nullptr);
             p = e;
             continue;
         }
@@ -148,7 +148,7 @@ bool LottieLoader::header()
             p += 5;
             auto e = strstr(p, ",");
             if (!e) e = strstr(p, "}");
-            startFrame = strToFloat(p, nullptr);
+            startFrame = toFloat(p, nullptr);
             p = e;
             continue;
         }
@@ -158,7 +158,7 @@ bool LottieLoader::header()
             p += 5;
             auto e = strstr(p, ",");
             if (!e) e = strstr(p, "}");
-            endFrame = strToFloat(p, nullptr);
+            endFrame = toFloat(p, nullptr);
             p = e;
             continue;
         }
@@ -168,7 +168,7 @@ bool LottieLoader::header()
             p += 4;
             auto e = strstr(p, ",");
             if (!e) e = strstr(p, "}");
-            w = strToFloat(p, nullptr);
+            w = toFloat(p, nullptr);
             p = e;
             continue;
         }
@@ -177,7 +177,7 @@ bool LottieLoader::header()
             p += 4;
             auto e = strstr(p, ",");
             if (!e) e = strstr(p, "}");
-            h = strToFloat(p, nullptr);
+            h = toFloat(p, nullptr);
             p = e;
             continue;
         }
@@ -200,7 +200,7 @@ bool LottieLoader::header()
 bool LottieLoader::open(const char* data, uint32_t size, const char* rpath, bool copy)
 {
     if (copy) {
-        content = (char*)malloc(size + 1);
+        content = tvg::malloc<char*>(size + 1);
         if (!content) return false;
         memcpy((char*)content, data, size);
         const_cast<char*>(content)[size] = '\0';
@@ -209,8 +209,8 @@ bool LottieLoader::open(const char* data, uint32_t size, const char* rpath, bool
     this->size = size;
     this->copy = copy;
 
-    if (!rpath) this->dirName = strdup(".");
-    else this->dirName = strdup(rpath);
+    if (!rpath) this->dirName = duplicate(".");
+    else this->dirName = duplicate(rpath);
 
     return header();
 }
@@ -230,14 +230,14 @@ bool LottieLoader::open(const char* path)
         return false;
     }
 
-    auto content = (char*)(malloc(sizeof(char) * size + 1));
+    auto content = tvg::malloc<char*>(sizeof(char) * size + 1);
     fseek(f, 0, SEEK_SET);
     size = fread(content, sizeof(char), size, f);
     content[size] = '\0';
 
     fclose(f);
 
-    this->dirName = strDirname(path);
+    this->dirName = tvg::dirname(path);
     this->content = content;
     this->copy = true;
 
@@ -295,7 +295,7 @@ bool LottieLoader::override(const char* slots, bool byDefault)
     //override slots
     if (slots) {
         //Copy the input data because the JSON parser will encode the data immediately.
-        auto temp = byDefault ? slots : strdup(slots);
+        auto temp = byDefault ? slots : duplicate(slots);
 
         //parsing slot json
         LottieParser parser(temp, dirName, builder->expressions());
@@ -313,7 +313,7 @@ bool LottieLoader::override(const char* slots, bool byDefault)
             if (!applied) parser.skip();
             ++idx;
         }
-        free((char*)temp);
+        tvg::free((char*)temp);
         rebuild = succeed;
         overridden |= succeed;
         return rebuild;

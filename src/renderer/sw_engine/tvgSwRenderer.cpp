@@ -25,7 +25,6 @@
 #endif
 #include <algorithm>
 #include <atomic>
-#include "tvgMath.h"
 #include "tvgSwCommon.h"
 #include "tvgTaskScheduler.h"
 #include "tvgSwRenderer.h"
@@ -86,7 +85,7 @@ struct SwShapeTask : SwTask
        Additionally, the stroke style should not be dashed. */
     bool antialiasing(float strokeWidth)
     {
-        return strokeWidth < 2.0f || rshape->stroke->dashCnt > 0 || rshape->stroke->strokeFirst || rshape->strokeTrim() || rshape->stroke->color.a < 255;
+        return strokeWidth < 2.0f || rshape->stroke->dashCnt > 0 || rshape->stroke->strokeFirst || rshape->trimpath() || rshape->stroke->color.a < 255;
     }
 
     float validStrokeWidth(bool clipper)
@@ -123,8 +122,7 @@ struct SwShapeTask : SwTask
         auto visibleFill = false;
 
         //This checks also for the case, if the invisible shape turned to visible by alpha.
-        auto prepareShape = false;
-        if (!shapePrepared(&shape) && (flags & RenderUpdateFlag::Color)) prepareShape = true;
+        auto prepareShape = !shapePrepared(&shape) && flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient);
 
         //Shape
         if (flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Transform) || prepareShape) {
@@ -185,6 +183,7 @@ struct SwShapeTask : SwTask
     err:
         bbox.reset();
         shapeReset(&shape);
+        rleReset(shape.strokeRle);
         shapeDelOutline(&shape, mpool, tid);
     }
 
@@ -325,8 +324,6 @@ bool SwRenderer::sync()
     }
     tasks.clear();
 
-    if (!sharedMpool) mpoolClear(mpool);
-
     return true;
 }
 
@@ -386,7 +383,7 @@ void SwRenderer::clearCompositors()
 {
     //Free Composite Caches
     ARRAY_FOREACH(p, compositors) {
-        free((*p)->compositor->image.data);
+        tvg::free((*p)->compositor->image.data);
         delete((*p)->compositor);
         delete(*p);
     }
@@ -557,7 +554,7 @@ SwSurface* SwRenderer::request(int channelSize, bool square)
         //Inherits attributes from main surface
         cmp = new SwSurface(surface);
         cmp->compositor = new SwCompositor;
-        cmp->compositor->image.data = (pixel_t*)malloc(channelSize * w * h);
+        cmp->compositor->image.data = tvg::malloc<pixel_t*>(channelSize * w * h);
         cmp->w = cmp->compositor->image.w = w;
         cmp->h = cmp->compositor->image.h = h;
         cmp->stride = cmp->compositor->image.stride = w;
@@ -702,7 +699,7 @@ bool SwRenderer::render(RenderCompositor* cmp, const RenderEffect* effect, bool 
 
 void SwRenderer::dispose(RenderEffect* effect) 
 {
-    free(effect->rd);
+    tvg::free(effect->rd);
     effect->rd = nullptr;
 }
 
@@ -796,6 +793,7 @@ SwRenderer::SwRenderer()
     if (TaskScheduler::onthread()) {
         TVGLOG("SW_RENDERER", "Running on a non-dominant thread!, Renderer(%p)", this);
         mpool = mpoolInit(threadsCnt);
+        sharedMpool = false;
     } else {
         mpool = globalMpool;
         sharedMpool = true;

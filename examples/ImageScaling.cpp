@@ -20,7 +20,6 @@
  * SOFTWARE.
  */
 
-
 #include "Example.h"
 
 /************************************************************************/
@@ -38,7 +37,9 @@ struct UserExample : tvgexam::Example
         //Original
         picture = tvg::Picture::gen();
 
-        if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/image/scaleup.jpg"))) return false;
+        if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/image/scale.jpg"))) return false;
+
+        picture->scale(1.5f);
 
         canvas->push(picture);
 
@@ -49,9 +50,9 @@ struct UserExample : tvgexam::Example
     {
         if (!canvas) return false;
 
-        auto progress = tvgexam::progress(elapsed, 7.0f, true);  //play time 7 sec.
+        auto progress = tvgexam::progress(elapsed, 3.0f, true);  //play time 3 secs.
 
-        picture->scale(progress * 4.0f);
+        picture->scale((1.0f - progress) * 1.5f);
 
         canvas->update(picture);
 
@@ -66,5 +67,5 @@ struct UserExample : tvgexam::Example
 
 int main(int argc, char **argv)
 {
-    return tvgexam::main(new UserExample, argc, argv, true);
+    return tvgexam::main(new UserExample, argc, argv, true, 1024, 1024);
 }

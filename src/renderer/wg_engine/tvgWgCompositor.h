@@ -54,7 +54,9 @@ private:
     WGPUCommandEncoder commandEncoder{};
     WgRenderStorage* currentTarget{};
     // intermediate render storages
-    WgRenderStorage storageDstCopy;
+    WgRenderStorage storageTemp0;
+    WgRenderStorage storageTemp1;
+    WGPUBindGroup bindGroupStorageTemp{};
     // composition and blend geometries
     WgMeshData meshData;
     // render target dimensions
@@ -63,6 +65,8 @@ private:
     
     // viewport utilities
     RenderRegion shrinkRenderRegion(RenderRegion& rect);
+    void copyTexture(const WgRenderStorage* dst, const WgRenderStorage* src);
+    void copyTexture(const WgRenderStorage* dst, const WgRenderStorage* src, const RenderRegion& region);
 
     // shapes
     void drawShape(WgContext& context, WgRenderDataShape* renderData);
@@ -83,6 +87,8 @@ private:
     void drawScene(WgContext& context, WgRenderStorage* scene, WgCompose* compose);
     void blendScene(WgContext& context, WgRenderStorage* src, WgCompose* compose);
 
+    // the renderer prioritizes clipping with the stroke over the shape's fill
+    void markupClipPath(WgContext& context, WgRenderDataShape* renderData);
     void renderClipPath(WgContext& context, WgRenderDataPaint* paint);
     void clearClipPath(WgContext& context, WgRenderDataPaint* paint);
 
@@ -107,7 +113,11 @@ public:
     void blit(WgContext& context, WGPUCommandEncoder encoder, WgRenderStorage* src, WGPUTextureView dstView);
 
     // effects
-    void gaussianBlur(WgContext& context, WgRenderStorage* dst, const RenderEffectGaussianBlur* params, const WgCompose* compose);
+    bool gaussianBlur(WgContext& context, WgRenderStorage* dst, const RenderEffectGaussianBlur* params, const WgCompose* compose);
+    bool dropShadow(WgContext& context, WgRenderStorage* dst, const RenderEffectDropShadow* params, const WgCompose* compose);
+    bool fillEffect(WgContext& context, WgRenderStorage* dst, const RenderEffectFill* params, const WgCompose* compose);
+    bool tintEffect(WgContext& context, WgRenderStorage* dst, const RenderEffectTint* params, const WgCompose* compose);
+    bool tritoneEffect(WgContext& context, WgRenderStorage* dst, const RenderEffectTritone* params, const WgCompose* compose);
 };
 
 #endif // _TVG_WG_COMPOSITOR_H_

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2024 - 2025 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,62 +28,34 @@
 
 struct UserExample : tvgexam::Example
 {
-    tvg::Shape* maskShape = nullptr;
-    tvg::Shape* mask = nullptr;
-
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
         if (!canvas) return false;
 
-        // background
-        auto bg = tvg::Shape::gen();
-        bg->appendRect(0, 0, w, h);
-        bg->fill(255, 255, 255);
-        canvas->push(bg);
+        //Shape 1
+        auto shape1 = tvg::Shape::gen();
+        shape1->appendCircle(245, 125, 50, 120);
+        shape1->appendCircle(245, 365, 50, 120);
+        shape1->appendCircle(125, 245, 120, 50);
+        shape1->appendCircle(365, 245, 120, 50);
+        shape1->fill(0, 50, 155, 100);
+        shape1->strokeFill(0, 0, 255);
+        shape1->strokeJoin(tvg::StrokeJoin::Round);
+        shape1->strokeCap(tvg::StrokeCap::Round);
+        shape1->strokeWidth(12);
+        shape1->trimpath(0.25f, 0.75f, false);
 
-        //image
-        auto picture1 = tvg::Picture::gen();
-        if (!tvgexam::verify(picture1->load(EXAMPLE_DIR"/svg/cartman.svg"))) return false;
-        picture1->size(400, 400);
-        canvas->push(picture1);
+        auto shape2 = static_cast<tvg::Shape*>(shape1->duplicate());
+        shape2->translate(300, 300);
+        shape2->fill(0, 155, 50, 100);
+        shape2->strokeFill(0, 255, 0);
 
-        auto picture2 = tvg::Picture::gen();
-        picture2->load(EXAMPLE_DIR"/svg/logo.svg");
-        picture2->size(400, 400);
+        float dashPatterns[] = {10, 20};
+        shape2->strokeDash(dashPatterns, 2, 10);
+        shape2->trimpath(0.25f, 0.75f, true);
 
-        //mask
-        maskShape = tvg::Shape::gen();
-        maskShape->appendCircle(180, 180, 75, 75);
-        maskShape->fill(125, 125, 125);
-        maskShape->strokeFill(25, 25, 25);
-        maskShape->strokeJoin(tvg::StrokeJoin::Round);
-        maskShape->strokeWidth(10);
-        canvas->push(maskShape);
-
-        mask = tvg::Shape::gen();
-        mask->appendCircle(180, 180, 75, 75);
-        mask->fill(255, 255, 255);         //AlphaMask RGB channels are unused.
-
-        picture2->mask(mask, tvg::MaskMethod::Alpha);
-        canvas->push(picture2);
-
-        return true;
-    }
-
-    bool update(tvg::Canvas* canvas, uint32_t elapsed) override
-    {
-        if (!canvas) return false;
-
-        /* Update shape directly.
-           You can update only necessary properties of this shape,
-           while retaining other properties. */
-        auto progress = tvgexam::progress(elapsed, 3.0f, true);  //play time 3 sec.
-
-        // Translate mask object with its stroke & update
-        maskShape->translate(0 , progress * 300 - 100);
-        mask->translate(0 , progress * 300 - 100);
-
-        canvas->update();
+        canvas->push(shape1);
+        canvas->push(shape2);
 
         return true;
     }
