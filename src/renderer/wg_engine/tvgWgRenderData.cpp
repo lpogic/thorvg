@@ -383,8 +383,8 @@ void WgRenderDataShape::updateMeshes(WgContext& context, const RenderShape &rsha
     if ((this->meshGroupShapesBBox.meshes.count > 0 ) ||
         (this->meshGroupStrokesBBox.meshes.count > 0)) {
         updateAABB(tr);
-        meshDataBBox.bbox(context, pMin, pMax);
     } else aabb = {{0, 0}, {0, 0}};
+    meshDataBBox.bbox(context, pMin, pMax);
 
     pool->retVertexBuffer(pbuff);
 }
@@ -394,8 +394,8 @@ void WgRenderDataShape::proceedStrokes(WgContext& context, const RenderStroke* r
 {
     assert(rstroke);
     auto strokesGenerator = pool->reqIndexedVertexBuffer(buff.scale);
-    if (rstroke->dashPattern) strokesGenerator->appendStrokesDashed(buff, rstroke);
-    else strokesGenerator->appendStrokes(buff, rstroke);
+    if (rstroke->dash.count == 0) strokesGenerator->appendStrokes(buff, rstroke);
+    else strokesGenerator->appendStrokesDashed(buff, rstroke);
 
     appendStroke(context, *strokesGenerator);
 

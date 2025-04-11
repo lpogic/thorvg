@@ -44,12 +44,13 @@ struct TtfLoader : public FontLoader
     ~TtfLoader();
 
     using FontLoader::open;
+    using FontLoader::read;
+
     bool open(const char* path) override;
     bool open(const char *data, uint32_t size, const char* rpath, bool copy) override;
-    bool transform(Paint* paint) override;
-    bool request(Shape* shape, const char* text, float fontSize, bool italic = false) override;
-    bool read() override;
-    bool metrics(int roundMethod, float widthLimit, int indexLimit, float* width, int* index) override;
+    float transform(Paint* paint, FontMetrics& metrices, float fontSize, bool italic) override;
+    bool read(Shape* shape, const char* text, FontMetrics& out) override;
+    bool TtfLoader::metrics(const char* text, float fontSize,  int roundMethod, float widthLimit, int indexLimit, float* width, int* index) override;
     void clear();
 };
 

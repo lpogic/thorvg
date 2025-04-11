@@ -169,6 +169,12 @@ TVG_API Tvg_Result tvg_canvas_set_viewport(Tvg_Canvas* canvas, int32_t x, int32_
 /* Paint API                                                            */
 /************************************************************************/
 
+TVG_API const Tvg_Paint* tvg_paint_get_parent(const Tvg_Paint* paint)
+{
+    return (const Tvg_Paint*) reinterpret_cast<const Paint*>(paint)->parent();
+}
+
+
 TVG_API Tvg_Result tvg_paint_del(Tvg_Paint* paint)
 {
     if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
@@ -298,7 +304,7 @@ TVG_API Tvg_Result tvg_paint_get_type(const Tvg_Paint* paint, Tvg_Type* type)
 }
 
 
-TVG_API Tvg_Result tvg_paint_set_clip(Tvg_Paint* paint, Tvg_Paint* clipper)
+TVG_API Tvg_Result tvg_paint_clip(Tvg_Paint* paint, Tvg_Paint* clipper)
 {
    if (!paint) return TVG_RESULT_INVALID_ARGUMENT;
    return (Tvg_Result) reinterpret_cast<Paint*>(paint)->clip((Paint*)(clipper));
@@ -897,6 +903,28 @@ TVG_API Tvg_Result tvg_animation_del(Tvg_Animation* animation)
 /* Accessor API                                                         */
 /************************************************************************/
 
+TVG_API Tvg_Accessor* tvg_accessor_new()
+{
+    return (Tvg_Accessor*) Accessor::gen();
+}
+
+
+TVG_API Tvg_Result tvg_accessor_del(Tvg_Accessor* accessor)
+{
+    if (!accessor) return TVG_RESULT_INVALID_ARGUMENT;
+    delete(reinterpret_cast<Accessor*>(accessor));
+    return TVG_RESULT_SUCCESS;
+}
+
+
+TVG_API Tvg_Result tvg_accessor_set(Tvg_Accessor* accessor, Tvg_Paint* paint, bool (*func)(Tvg_Paint* paint, void* data), void* data)
+{
+    if (!accessor) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<Accessor*>(accessor)->set(static_cast<Picture*>(reinterpret_cast<Paint*>(paint)),
+        [func](const Paint* paint, void* data) { return func((Tvg_Paint*) paint, data); }, data);
+}
+
+
 TVG_API uint32_t tvg_accessor_generate_id(const char* name)
 {
     return Accessor::id(name);
@@ -964,6 +992,16 @@ TVG_API Tvg_Result tvg_lottie_animation_tween(Tvg_Animation* animation, float fr
 #ifdef THORVG_LOTTIE_LOADER_SUPPORT
     if (!animation) return TVG_RESULT_INVALID_ARGUMENT;
     return (Tvg_Result) reinterpret_cast<LottieAnimation*>(animation)->tween(from, to, progress);
+#endif
+    return TVG_RESULT_NOT_SUPPORTED;
+}
+
+
+TVG_API Tvg_Result tvg_lottie_animation_assign(Tvg_Animation* animation, const char* layer, uint32_t ix, const char* var, float val)
+{
+#ifdef THORVG_LOTTIE_LOADER_SUPPORT
+    if (!animation) return TVG_RESULT_INVALID_ARGUMENT;
+    return (Tvg_Result) reinterpret_cast<LottieAnimation*>(animation)->assign(layer, ix, var, val);
 #endif
     return TVG_RESULT_NOT_SUPPORTED;
 }

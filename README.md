@@ -13,7 +13,9 @@
 <br>
 [![Latest](https://img.shields.io/github/v/release/thorvg/thorvg)](https://github.com/thorvg/thorvg/releases/latest)
 [![vcpkg](https://img.shields.io/vcpkg/v/thorvg)](https://vcpkg.link/ports/thorvg)
+[![ArchLinux](https://img.shields.io/aur/version/thorvg?color=orange)](https://aur.archlinux.org/packages/thorvg)
 [![Conan](https://img.shields.io/conan/v/thorvg)](https://conan.io/center/recipes/thorvg)
+[![Fedora](https://img.shields.io/fedora/v/thorvg?color=orange)](https://src.fedoraproject.org/rpms/thorvg)
 [![MSYS2](https://img.shields.io/badge/msys2-Latest-orange)](https://packages.msys2.org/packages/mingw-w64-x86_64-thorvg?repo=mingw64)
 [![npm](https://img.shields.io/npm/v/@thorvg/lottie-player)](https://www.npmjs.com/package/@thorvg/lottie-player)
 [![pub](https://img.shields.io/pub/v/thorvg.svg)](https://pub.dev/packages/thorvg)
@@ -41,19 +43,11 @@ The following list shows primitives that are supported by ThorVG: <br />
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_primitives.png">
 </p>
 ​ThorVG is designed for a wide range of programs, offering adaptability for integration and use in various applications and systems. It achieves this through a single binary with selectively buildable, modular components in a building block style. This ensures both optimal size and easy maintenance. <br />
-<br />
+<br/>
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_structure.png">
 </p>
-If your program includes the main renderer, you can seamlessly utilize ThorVG APIs by transitioning drawing contexts between the main renderer and ThorVG. Throughout these API calls, ThorVG effectively serializes drawing commands among volatile paint nodes. Subsequently, it undertakes synchronous or asynchronous rendering via its backend raster engines. Currently, ThorVG provides its own implementation of multiple raster engines, allowing you to choose the one that best suits your app and system preferences.<br/>
-<br/>
-
-- CPU/SIMD (Software)
-- OpenGL/ES
-- WebGL
-- WebGPU
-<br />
-ThorVG is adept at handling vector images, including formats like SVG, and it remains adaptable for accommodating additional popular formats as needed. In the rendering process, the library may generate intermediate frame buffers for scene compositing, though only when essential. The accompanying diagram provides a concise overview of how to effectively incorporate ThorVG within your system.<br />
+If your program includes the main renderer, you can seamlessly utilize ThorVG APIs by transitioning drawing contexts between the main renderer and ThorVG. Throughout these API calls, ThorVG effectively serializes drawing commands among volatile paint nodes. Subsequently, it undertakes synchronous or asynchronous rendering via its backend raster engines. Additionally, ThorVG is adept at handling vector images, including formats like SVG, and it remains adaptable for accommodating additional popular formats as needed. In the rendering process, the library may generate intermediate frame buffers for scene compositing, though only when essential. The accompanying diagram provides a concise overview of how to effectively incorporate ThorVG within your system.<br />
 <br />
 <p align="center">
   <img width="900" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_flow.png">
@@ -64,6 +58,19 @@ The task scheduler has been meticulously crafted to conceal complexity, streamli
 <br />
 <p align="center">
   <img width="900" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_thread.png">
+</p>
+Today, ThorVG provides its own implementation of multiple raster engines, allowing you to choose the one that best suits your app and system preferences.<br/>
+<br/>
+
+- CPU/SIMD (Software)
+- OpenGL/ES
+- WebGL
+- WebGPU
+<br/>
+ThorVG is ahead of the curve, particularly in the web ecosystem. WebGPU introduces next-generation APIs similar to Vulkan, leveraging compute shaders and providing low-overhead, modern GPU access for more aggressive optimization strategies and broader applications. Building on this, ThorVG fully supports vector rendering features within its specification on top of WebGPU. Additionally, by abstracting underlying hardware graphics accelerations such as Metal, Vulkan, and DirectX, ThorVG ensures seamless adoption across various systems, regardless of the installed hardware accelerations.<br/>
+<br/>
+<p align="center">
+  <img width="700" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_webgpu.png">
 </p>
 ThorVG is actively under development, continuously expanding its support for essential platforms as needed. The major platforms currently supported include: <br />
 <br />
@@ -87,9 +94,12 @@ ThorVG is actively under development, continuously expanding its support for ess
     - [dotLottie](#dotlottie)
     - [Flux Audio](#flux-audio)
     - [Godot](#godot)
+    - [Lottie Creator](#lottie-creator)
+    - [LVGL](#lvgl)
     - [Tizen](#tizen)
-  - [Examples](#examples)
-  - [Documentation](#documentation)
+  - [References](#references)
+  - [APIs](#apis)
+  - [Examples](#examples)    
   - [Tools](#tools)
     - [ThorVG Viewer](#thorvg-viewer)
     - [Lottie to GIF](#lottie-to-gif)
@@ -378,6 +388,14 @@ ThorVG has been integrated into the [Godot](https://www.godotengine.org) project
   <img width="798" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_godot.png">
 </p>
 
+### Lottie Creator
+
+[Lottie Creator](https://creator.lottiefiles.com/) is designed to create ultra-lightweight, highly customizable and interactive animations for web, apps and social. Supercharged with AI-based Motion Copilot. ThorVG is powering the Canvas engine behind Lottie Creator — enabling fast and scalable vector graphics rendering across platforms.
+
+<p align="center">
+  <img width="800" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_creator.png">
+</p>
+
 ### LVGL
 [LVGL](https://lvgl.io/) is an open-source graphics library specifically designed for embedded systems with limited resources. It is lightweight and highly customizable, providing support for graphical user interfaces (GUIs) on microcontrollers, IoT devices, and other embedded platforms. ThorVG serves as the vector drawing primitives library in the LVGL framework.
 
@@ -391,6 +409,19 @@ ThorVG has been integrated into the [Tizen](https://www.tizen.org) platform as t
 <p align="center">
   <img width="798" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_tizen.png">
 </p>
+
+[Back to contents](#contents)
+<br />
+<br />
+## References
+- [Universal Motion Graphics across All Platforms: Unleashing Creativity with ThorVG](https://youtu.be/qhHMycRPQ9M?si=RXAag3Fxm8R7W_I0)
+- [Canva Enhances iOS Lottie Rendering: 80% Faster and 70% More Efficient with ThorVG](https://lottiefiles.com/blog/working-with-lottie-animations/canva-enhances-ios-rendering-faster-and-efficient-with-thorvg)
+
+[Back to contents](#contents)
+<br />
+<br />
+## APIs
+The ThorVG API documentation can be accessed at [thorvg.org/apis](https://www.thorvg.org/apis), and is also available in the [C++ API](https://github.com/thorvg/thorvg/blob/main/inc/thorvg.h), [C API](https://github.com/thorvg/thorvg/blob/main/src/bindings/capi/thorvg_capi.h) within this repository.
 
 [Back to contents](#contents)
 <br />
@@ -411,13 +442,6 @@ Alternatively, you can read the official guidance [here](https://wiki.libsdl.org
 [Back to contents](#contents)
 <br />
 <br />
-
-## Documentation
-The ThorVG API documentation can be accessed at [thorvg.org/apis](https://www.thorvg.org/apis), and is also available in the [C++ API](https://github.com/thorvg/thorvg/blob/main/inc/thorvg.h), [C API](https://github.com/thorvg/thorvg/blob/main/src/bindings/capi/thorvg_capi.h) within this repository.
-
-[Back to contents](#contents)
-<br />
-<br />
 ## Tools
 ### ThorVG Viewer
 ThorVG provides the resource verification tool for the ThorVG Engine. [ThorVG viewer](https://thorvg.github.io/thorvg.viewer/) does immediate rendering via web browser running on the ThorVG web-assembly binary, allowing real-time editing of the vector elements on it. It doesn't upload your resources to any external server while allowing to export to supported formats such as GIF, so the designer resource copyright is protected.</br>
@@ -428,22 +452,22 @@ ThorVG provides the resource verification tool for the ThorVG Engine. [ThorVG vi
 </p>
 
 ### Lottie to GIF
-ThorVG provides an executable `lottie2gif` converter that generates a GIF file from a Lottie file.
+ThorVG provides an executable `tvg-lottie2gif` converter that generates a GIF file from a Lottie file.
 
-To use the `lottie2gif`, you must turn on this feature in the build option:
+To use the `tvg-lottie2gif`, you must turn on this feature in the build option:
 ```
 meson setup builddir -Dtools=lottie2gif -Dsavers=gif
 ```
-To use the 'lottie2gif' converter, you need to provide the 'Lottie files' parameter. This parameter can be a file name with the '.json' extension or a directory name. It also accepts multiple files or directories separated by spaces. If a directory is specified, the converter will search for files with the '.json' extension within that directory and all its subdirectories.<br />
+To use the 'tvg-lottie2gif' converter, you need to provide the 'Lottie files' parameter. This parameter can be a file name with the '.json' extension or a directory name. It also accepts multiple files or directories separated by spaces. If a directory is specified, the converter will search for files with the '.json' extension within that directory and all its subdirectories.<br />
 <br />
 Optionally, you can specify the image resolution in the 'WxH' format, with two numbers separated by an 'x' sign, following the '-r' flag.<br />
 <br />
 Both flags, if provided, are applied to all of the `.json` files.
 
-The usage examples of the `lottie2gif`:
+The usage examples of the `tvg-lottie2gif`:
 ```
 Usage:
-    lottie2gif [Lottie file] or [Lottie folder] [-r resolution] [-f fps] [-b background color]
+    tvg-lottie2gif [Lottie file] or [Lottie folder] [-r resolution] [-f fps] [-b background color]
 
 Flags:
     -r set the output image resolution.
@@ -451,22 +475,22 @@ Flags:
     -b specifies the base background color (RGB in hex). If not specified, the background color will follow the original content.
 
 Examples:
-    $ lottie2gif input.json
-    $ lottie2gif input.json -f 30
-    $ lottie2gif input.json -r 600x600 -f 30
-    $ lottie2gif lottiefolder
-    $ lottie2gif lottiefolder -r 600x600
-    $ lottie2gif lottiefolder -r 600x600 -f 30 -b fa7410
+    $ tvg-lottie2gif input.json
+    $ tvg-lottie2gif input.json -f 30
+    $ tvg-lottie2gif input.json -r 600x600 -f 30
+    $ tvg-lottie2gif lottiefolder
+    $ tvg-lottie2gif lottiefolder -r 600x600
+    $ tvg-lottie2gif lottiefolder -r 600x600 -f 30 -b fa7410
 ```
 
 ### SVG to PNG
-ThorVG provides an executable `svg2png` converter that generates a PNG file from an SVG file.
+ThorVG provides an executable `tvg-svg2png` converter that generates a PNG file from an SVG file.
 
-To use the `svg2png`, you must turn on this feature in the build option:
+To use the `tvg-svg2png`, you must turn on this feature in the build option:
 ```
 meson setup builddir -Dtools=svg2png
 ```
-To use the 'svg2png' converter, you need to provide the 'SVG files' parameter. This parameter can be a file name with the '.svg' extension or a directory name. It also accepts multiple files or directories separated by spaces. If a directory is specified, the converter will search for files with the '.svg' extension within that directory and all its subdirectories.<br />
+To use the 'tvg-svg2png' converter, you need to provide the 'SVG files' parameter. This parameter can be a file name with the '.svg' extension or a directory name. It also accepts multiple files or directories separated by spaces. If a directory is specified, the converter will search for files with the '.svg' extension within that directory and all its subdirectories.<br />
 <br />
 Optionally, you can specify the image resolution in the 'WxH' format, with two numbers separated by an 'x' sign, following the '-r' flag.<br />
 <br />
@@ -474,21 +498,21 @@ The background color can be set with the `-b` flag. The `bgColor` parameter shou
 <br />
 Both flags, if provided, are applied to all of the `.svg` files.
 
-The usage examples of the `svg2png`:
+The usage examples of the `tvg-svg2png`:
 ```
 Usage:
-    svg2png [SVG files] [-r resolution] [-b bgColor]
+    tvg-svg2png [SVG files] [-r resolution] [-b bgColor]
 
 Flags:
     -r set the output image resolution.
     -b set the output image background color.
 
 Examples:
-    $ svg2png input.svg
-    $ svg2png input.svg -r 200x200
-    $ svg2png input.svg -r 200x200 -b ff00ff
-    $ svg2png input1.svg input2.svg -r 200x200 -b ff00ff
-    $ svg2png . -r 200x200
+    $ tvg-svg2png input.svg
+    $ tvg-svg2png input.svg -r 200x200
+    $ tvg-svg2png input.svg -r 200x200 -b ff00ff
+    $ tvg-svg2png input1.svg input2.svg -r 200x200 -b ff00ff
+    $ tvg-svg2png . -r 200x200
 ```
 
 [Back to contents](#contents)

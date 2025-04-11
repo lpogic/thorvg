@@ -319,9 +319,7 @@ bool LottieLoader::override(const char* slots, bool byDefault)
         return rebuild;
     //reset slots
     } else if (overridden) {
-        ARRAY_FOREACH(p, comp->slots) {
-            (*p)->reset();
-        }
+        ARRAY_FOREACH(p, comp->slots) (*p)->reset();
         overridden = false;
         rebuild = true;
     }
@@ -455,6 +453,15 @@ bool LottieLoader::tween(float from, float to, float progress)
     builder->onTween(shorten(to), progress);
 
     TaskScheduler::request(this);
+
+    return true;
+}
+
+
+bool LottieLoader::assign(const char* layer, uint32_t ix, const char* var, float val)
+{
+    if (!ready() || !comp->expressions) return false;
+    comp->root->assign(layer, ix, var, val);
 
     return true;
 }

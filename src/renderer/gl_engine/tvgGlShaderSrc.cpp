@@ -436,7 +436,7 @@ const char* MASK_LUMA_FRAG_SHADER = TVG_COMPOSE_SHADER(
             maskColor = vec4(maskColor.rgb / maskColor.a, maskColor.a);                                             \n
         }                                                                                                           \n
                                                                                                                     \n
-        FragColor = srcColor * (0.299 * maskColor.r + 0.587 * maskColor.g + 0.114 * maskColor.b) * maskColor.a;     \n
+        FragColor = srcColor * dot(maskColor.rgb, vec3(0.2125, 0.7154, 0.0721)) * maskColor.a;                      \n
     }                                                                                                               \n
 );
 
@@ -450,7 +450,7 @@ const char* MASK_INV_LUMA_FRAG_SHADER = TVG_COMPOSE_SHADER(
     {                                                                                   \n
         vec4 srcColor = texture(uSrcTexture, vUV);                                      \n
         vec4 maskColor = texture(uMaskTexture, vUV);                                    \n
-        float luma = (0.299 * maskColor.r + 0.587 * maskColor.g + 0.114 * maskColor.b); \n
+        float luma = dot(maskColor.rgb, vec3(0.2125, 0.7154, 0.0721));                  \n
         FragColor = srcColor * (1.0 - luma);                                            \n
     }                                                                                   \n
 );
@@ -736,4 +736,150 @@ const char* EXCLUSION_BLEND_FRAG = COMPLEX_BLEND_HEADER R"(
 
         FragColor = dstColor + srcColor - (2.0 * dstColor * srcColor);
     }
+)";
+
+const char* EFFECT_VERTEX = R"(
+layout(location = 0) in vec2 aLocation;
+out vec2 vUV;
+
+void main()
+{
+    vUV = aLocation * 0.5 + 0.5;
+    gl_Position = vec4(aLocation, 0.0, 1.0);
+}
+)";
+
+const char* GAUSSIAN_VERTICAL = R"(
+uniform sampler2D uSrcTexture;
+layout(std140) uniform Gaussian {
+    int level;
+    float sigma;
+    float scale;
+    float extend;
+} uGaussian;
+
+in vec2 vUV;
+out vec4 FragColor;
+
+float gaussian(float x, float sigma) {
+    float exponent = -x * x / (2.0 * sigma * sigma);
+    return exp(exponent) / (sqrt(2.0 * 3.141592) * sigma);
+}
+
+void main()
+{
+    vec2 texelSize = 1.0 / vec2(textureSize(uSrcTexture, 0));
+    vec4 colorSum = vec4(0.0);
+    float sigma = uGaussian.sigma * uGaussian.scale;
+    float weightSum = 0.0;
+    int radius = int(uGaussian.extend);
+    
+    for (int y = -radius; y <= radius; ++y) {
+        float weight = gaussian(float(y), sigma);
+        vec2 offset = vec2(0.0, float(y) * texelSize.y);
+        colorSum += texture(uSrcTexture, vUV + offset) * weight;
+        weightSum += weight;
+    }
+    
+    FragColor = colorSum / weightSum;
+} 
+)";
+
+const char* GAUSSIAN_HORIZONTAL = R"(
+uniform sampler2D uSrcTexture;
+layout(std140) uniform Gaussian {
+    int level;
+    float sigma;
+    float scale;
+    float extend;
+} uGaussian;
+
+in vec2 vUV;
+out vec4 FragColor;
+
+float gaussian(float x, float sigma) {
+    float exponent = -x * x / (2.0 * sigma * sigma);
+    return exp(exponent) / (sqrt(2.0 * 3.141592) * sigma);
+}
+
+void main()
+{
+    vec2 texelSize = 1.0 / vec2(textureSize(uSrcTexture, 0));
+    vec4 colorSum = vec4(0.0);
+    float sigma = uGaussian.sigma * uGaussian.scale;
+    float weightSum = 0.0;
+    int radius = int(uGaussian.extend);
+    
+    for (int y = -radius; y <= radius; ++y) {
+        float weight = gaussian(float(y), sigma);
+        vec2 offset = vec2(float(y) * texelSize.x, 0.0);
+        colorSum += texture(uSrcTexture, vUV + offset) * weight;
+        weightSum += weight;
+    }
+    
+    FragColor = colorSum / weightSum;
+} 
+)";
+
+const char* EFFECT_FILL = R"(
+uniform sampler2D uSrcTexture;
+layout(std140) uniform Params {
+    vec4 params[3];
+} uParams;
+
+in vec2 vUV;
+out vec4 FragColor;
+
+void main()
+{
+    vec4 orig = texture(uSrcTexture, vUV);
+    vec4 fill = uParams.params[0];
+    FragColor = fill * orig.a * fill.a;
+} 
+)";
+
+const char* EFFECT_TINT = R"(
+uniform sampler2D uSrcTexture;
+layout(std140) uniform Params {
+    vec4 params[3];
+} uParams;
+
+in vec2 vUV;
+out vec4 FragColor;
+
+void main()
+{
+    vec4 orig = texture(uSrcTexture, vUV);
+    float luma = dot(orig.rgb, vec3(0.2125, 0.7154, 0.0721));
+    vec4 black = uParams.params[0];
+    vec4 white = uParams.params[1];
+    float intens = uParams.params[2].r;
+    FragColor = mix(orig, mix(white, black, luma), intens) * orig.a;
+} 
+)";
+
+const char* EFFECT_TRITONE = R"(
+uniform sampler2D uSrcTexture;
+layout(std140) uniform Params {
+    vec4 params[3];
+} uParams;
+
+in vec2 vUV;
+out vec4 FragColor;
+
+void main()
+{
+    vec4 orig = texture(uSrcTexture, vUV);
+    float luma = dot(orig.rgb, vec3(0.2125, 0.7154, 0.0721));
+    vec4 shadow = uParams.params[0];
+    vec4 midtone = uParams.params[1];
+    vec4 highlight = uParams.params[2];
+
+    FragColor = vec4(
+        luma >= 0.5f ? mix(midtone.r, highlight.r, (luma - 0.5f)*2.0f) : mix(shadow.r, midtone.r, luma * 2.0f),
+        luma >= 0.5f ? mix(midtone.g, highlight.g, (luma - 0.5f)*2.0f) : mix(shadow.g, midtone.g, luma * 2.0f),
+        luma >= 0.5f ? mix(midtone.b, highlight.b, (luma - 0.5f)*2.0f) : mix(shadow.b, midtone.b, luma * 2.0f),
+        luma >= 0.5f ? mix(midtone.a, highlight.a, (luma - 0.5f)*2.0f) : mix(shadow.a, midtone.a, luma * 2.0f)
+    ) * orig.a;
+} 
 )";

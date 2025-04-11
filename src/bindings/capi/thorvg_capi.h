@@ -101,6 +101,11 @@ typedef struct _Tvg_Saver Tvg_Saver;
 */
 typedef struct _Tvg_Animation Tvg_Animation;
 
+/**
+* @brief A structure representing an object that enables iterating through a scene's descendents.
+*/
+typedef struct _Tvg_Accessor Tvg_Accessor;
+
 
 /**
 * @brief Enumeration specifying the engine type used for the graphics backend. For multiple backends bitwise operation is allowed.
@@ -211,7 +216,7 @@ typedef enum {
  * @see tvg_paint_get_type()
  * @see tvg_gradient_get_type()
  *
- * @note Experimental API
+ * @since 1.0
  */
 typedef enum {
     TVG_TYPE_UNDEF = 0,        ///< Undefined type.
@@ -245,9 +250,9 @@ enum {
  * @brief Enumeration determining the ending type of a stroke in the open sub-paths.
  */
 typedef enum {
-    TVG_STROKE_CAP_SQUARE = 0, ///< The stroke is extended in both endpoints of a sub-path by a rectangle, with the width equal to the stroke width and the length equal to the half of the stroke width. For zero length sub-paths the square is rendered with the size of the stroke width.
-    TVG_STROKE_CAP_BUTT,       ///< The stroke ends exactly at each of the two endpoints of a sub-path. For zero length sub-paths no stroke is rendered.
-    TVG_STROKE_CAP_ROUND       ///< The stroke is extended in both endpoints of a sub-path by a half circle, with a radius equal to the half of a stroke width. For zero length sub-paths a full circle is rendered.
+    TVG_STROKE_CAP_BUTT = 0, ///< The stroke ends exactly at each of the two endpoints of a sub-path. For zero length sub-paths no stroke is rendered.
+    TVG_STROKE_CAP_ROUND,    ///< The stroke is extended in both endpoints of a sub-path by a half circle, with a radius equal to the half of a stroke width. For zero length sub-paths a full circle is rendered.
+    TVG_STROKE_CAP_SQUARE    ///< The stroke is extended in both endpoints of a sub-path by a rectangle, with the width equal to the stroke width and the length equal to the half of the stroke width. For zero length sub-paths the square is rendered with the size of the stroke width.
 } Tvg_Stroke_Cap;
 
 
@@ -255,9 +260,9 @@ typedef enum {
  * @brief Enumeration specifying how to fill the area outside the gradient bounds.
  */
 typedef enum {
-    TVG_STROKE_JOIN_BEVEL = 0, ///< The outer corner of the joined path segments is bevelled at the join point. The triangular region of the corner is enclosed by a straight line between the outer corners of each stroke.
-    TVG_STROKE_JOIN_MITER,     ///< The outer corner of the joined path segments is spiked. The spike is created by extension beyond the join point of the outer edges of the stroke until they intersect. In case the extension goes beyond the limit, the join style is converted to the Bevel style.
-    TVG_STROKE_JOIN_ROUND      ///< The outer corner of the joined path segments is rounded. The circular region is centered at the join point.
+    TVG_STROKE_JOIN_MITER = 0, ///< The outer corner of the joined path segments is spiked. The spike is created by extension beyond the join point of the outer edges of the stroke until they intersect. In case the extension goes beyond the limit, the join style is converted to the Bevel style.
+    TVG_STROKE_JOIN_ROUND,     ///< The outer corner of the joined path segments is rounded. The circular region is centered at the join point.
+    TVG_STROKE_JOIN_BEVEL      ///< The outer corner of the joined path segments is bevelled at the join point. The triangular region of the corner is enclosed by a straight line between the outer corners of each stroke.
 } Tvg_Stroke_Join;
 
 
@@ -666,7 +671,7 @@ TVG_API Tvg_Result tvg_canvas_update_paint(Tvg_Canvas* canvas, Tvg_Paint* paint)
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Canvas pointer.
 *
-* @note Clearing the buffer is unnecessary if the canvas will be fully covered 
+* @note Clearing the buffer is unnecessary if the canvas will be fully covered
 *       with opaque content, which can improve performance.
 * @note Drawing may be asynchronous if the thread count is greater than zero.
 *       To ensure drawing is complete, call tvg_canvas_sync() afterwards.
@@ -714,7 +719,6 @@ TVG_API Tvg_Result tvg_canvas_sync(Tvg_Canvas* canvas);
 TVG_API Tvg_Result tvg_canvas_set_viewport(Tvg_Canvas* canvas, int32_t x, int32_t y, int32_t w, int32_t h);
 
 /** \} */   // end defgroup ThorVGCapi_Canvas
-
 
 /**
 * @defgroup ThorVGCapi_Paint Paint
@@ -913,9 +917,9 @@ TVG_API Tvg_Paint* tvg_paint_duplicate(Tvg_Paint* paint);
 
 
 /**
- * @brief Retrieves the axis-aligned bounding box (AABB) of the paint object in local space.
+ * @brief Retrieves the axis-aligned bounding box (AABB) of the paint object in canvas space.
  *
- * This function returns the bounding box of the paint object relative to its local coordinate system, without applying any transformations.
+ * This function returns the bounding box of the paint, as an axis-aligned bounding box (AABB) after transformations are applied.
  *
  * @param[in] paint The Tvg_Paint object of which to get the bounds.
  * @param[out] x The x-coordinate of the upper-left corner of the bounding box.
@@ -926,8 +930,6 @@ TVG_API Tvg_Paint* tvg_paint_duplicate(Tvg_Paint* paint);
  * @return Tvg_Result enumeration.
  * @retval TVG_RESULT_INVALID_ARGUMENT An invalid @p paint.
  * @retval TVG_RESULT_INSUFFICIENT_CONDITION If it failed to compute the bounding box (mostly due to invalid path information).
- *  
- * @note The bounding box is calculated in the object's local space, meaning transformations such as scaling, rotation, or translation are not applied.
  *
  * @see tvg_paint_get_obb()
  * @see tvg_canvas_update_paint()
@@ -937,7 +939,7 @@ TVG_API Tvg_Result tvg_paint_get_aabb(const Tvg_Paint* paint, float* x, float* y
 
 /**
  * @brief Retrieves the object-oriented bounding box (OBB) of the paint object in canvas space.
- * 
+ *
  * This function returns the bounding box of the paint, as an oriented bounding box (OBB) after transformations are applied.
  *
  * @param[in] paint The Tvg_Paint object of which to get the bounds.
@@ -946,8 +948,6 @@ TVG_API Tvg_Result tvg_paint_get_aabb(const Tvg_Paint* paint, float* x, float* y
  * @return Tvg_Result enumeration.
  * @retval TVG_RESULT_INVALID_ARGUMENT @p paint or @p pt4 is invalid.
  * @retval TVG_RESULT_INSUFFICIENT_CONDITION If it failed to compute the bounding box (mostly due to invalid path information).
- * 
- * @note The paint must be pushed into a canvas and updated before calling this function.
  *
  * @see tvg_paint_get_aabb()
  * @see tvg_canvas_update_paint()
@@ -963,6 +963,8 @@ TVG_API Tvg_Result tvg_paint_get_obb(const Tvg_Paint* paint, Tvg_Point* pt4);
 * @param[in] paint The source object of the masking.
 * @param[in] target The target object of the masking.
 * @param[in] method The method used to mask the source object with the target.
+*
+* @retval TVG_RESULT_INSUFFICIENT_CONDITION if the target has already belonged to another paint.
 *
 * @return Tvg_Result enumeration.
 
@@ -993,11 +995,30 @@ TVG_API Tvg_Result tvg_paint_get_mask_method(const Tvg_Paint* paint, const Tvg_P
 *
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT In case a @c nullptr is passed as the argument.
+* @retval TVG_RESULT_INSUFFICIENT_CONDITION if the target has already belonged to another paint.
 * @retval TVG_RESULT_NOT_SUPPORTED If the @p clipper type is not Shape.
 *
-* @note Experimental API
+* @since 1.0
 */
-TVG_API Tvg_Result tvg_paint_set_clip(Tvg_Paint* paint, Tvg_Paint* clipper);
+TVG_API Tvg_Result tvg_paint_clip(Tvg_Paint* paint, Tvg_Paint* clipper);
+
+
+/**
+ * @brief Retrieves the parent paint object.
+ *
+ * This function returns a pointer to the parent object if the current paint
+ * belongs to one. Otherwise, it returns @c nullptr.
+ *
+ * @param[in] paint The Tvg_Paint object of which to get the scene.
+ *
+ * @return A pointer to the parent object if available, otherwise @c nullptr.
+ *
+ * @see tvg_scene_push()
+ * @see tvg_canvas_push()
+ *
+ * @since 1.0
+*/
+TVG_API const Tvg_Paint* tvg_paint_get_parent(const Tvg_Paint* paint);
 
 
 /**
@@ -1009,7 +1030,7 @@ TVG_API Tvg_Result tvg_paint_set_clip(Tvg_Paint* paint, Tvg_Paint* clipper);
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT In case a @c nullptr is passed as the argument.
 *
-* @note Experimental API
+* @since 1.0
 */
 TVG_API Tvg_Result tvg_paint_get_type(const Tvg_Paint* paint, Tvg_Type* type);
 
@@ -1450,7 +1471,7 @@ TVG_API Tvg_Result tvg_shape_get_stroke_miterlimit(const Tvg_Paint* paint, float
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Paint pointer.
 *
-* @note Experimental API
+* @since 1.0
 */
 TVG_API Tvg_Result tvg_shape_set_trimpath(Tvg_Paint* paint, float begin, float end, bool simultaneous);
 
@@ -1771,7 +1792,7 @@ TVG_API Tvg_Result tvg_gradient_get_transform(const Tvg_Gradient* grad, Tvg_Matr
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT In case a @c nullptr is passed as the argument.
 *
-* @note Experimental API
+* @since 1.0
 */
 TVG_API Tvg_Result tvg_gradient_get_type(const Tvg_Gradient* grad, Tvg_Type* type);
 
@@ -1924,7 +1945,7 @@ TVG_API Tvg_Result tvg_picture_get_size(const Tvg_Paint* paint, float* w, float*
 * @return A pointer to the paint object that matches the given identifier, or @c nullptr if no matching paint object is found.
 *
 * @see tvg_accessor_generate_id()
-* @note experimental API
+* @note Experimental API
 */
 TVG_API const Tvg_Paint* tvg_picture_get_paint(Tvg_Paint* paint, uint32_t id);
 
@@ -2046,7 +2067,7 @@ TVG_API Tvg_Paint* tvg_text_new(void);
 * @retval TVG_RESULT_INSUFFICIENT_CONDITION  The specified @p name cannot be found.
 *
 * @note If the @p name is not specified, ThorVG will select any available font candidate.
-* @note Experimental API
+* @since 1.0
 */
 TVG_API Tvg_Result tvg_text_set_font(Tvg_Paint* paint, const char* name, float size, const char* style);
 
@@ -2063,7 +2084,7 @@ TVG_API Tvg_Result tvg_text_set_font(Tvg_Paint* paint, const char* name, float s
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT A @c nullptr passed as the @p paint argument.
 *
-* @note Experimental API
+* @since 1.0
 */
 TVG_API Tvg_Result tvg_text_set_text(Tvg_Paint* paint, const char* text);
 
@@ -2432,6 +2453,48 @@ TVG_API Tvg_Result tvg_animation_del(Tvg_Animation* animation);
 /************************************************************************/
 /* Accessor API                                                         */
 /************************************************************************/
+/*!
+* @brief Creates a new accessor object.
+*
+* @return A new accessor object.
+*
+* @note Experimental API
+*/
+TVG_API Tvg_Accessor* tvg_accessor_new();
+
+
+/*!
+* @brief Deletes the given accessor object.
+*
+* @param[in] accessor The accessor object to be deleted.
+*
+* @return Tvg_Result enumeration.
+* @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Accessor pointer.
+*
+* @note Experimental API
+*/
+TVG_API Tvg_Result tvg_accessor_del(Tvg_Accessor* accessor);
+
+
+/*!
+* @brief Sets the paint of the accessor then iterates through its descendents.
+*
+* Iterates through all descendents of the scene passed through the paint argument
+* while calling func on each and passing the data pointer to this function. When
+* func returns false iteration stops and the function returns.
+*
+* @param[in] accessor A Tvg_Accessor pointer to the accessor object.
+* @param[in] paint A Tvg_Paint pointer to the scene object.
+* @param[in] func A function pointer to the function that will be execute for each child.
+* @param[in] data A void pointer to data that will be passed to the func.
+*
+* @return Tvg_Result enumeration.
+* @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Accessor, Tvg_Paint, or function pointer.
+*
+* @note Experimental API
+*/
+TVG_API Tvg_Result tvg_accessor_set(Tvg_Accessor* accessor, Tvg_Paint* paint, bool (*func)(Tvg_Paint* paint, void* data), void* data);
+
 
 /*!
 * @brief Generate a unique ID (hash key) from a given name.
@@ -2548,10 +2611,28 @@ TVG_API Tvg_Result tvg_lottie_animation_get_marker(Tvg_Animation* animation, uin
  * @return Tvg_Result enumeration.
  * @retval TVG_RESULT_INSUFFICIENT_CONDITION In case the animation is not loaded.
  *
- * @note Experimental API
+ * @since 1.0
  */
 TVG_API Tvg_Result tvg_lottie_animation_tween(Tvg_Animation* animation, float from, float to, float progress);
 
+
+/*!
+* \brief Updates the value of an expression variable for a specific layer.
+*
+* \param[in] animation The Tvg_Animation pointer to the Lottie animation object.
+* \param[in] layer The name of the layer containing the variable to be updated.
+* \param[in] ix The property index of the variable within the layer.
+* \param[in] var The name of the variable to be updated.
+* \param[in] val The new value to assign to the variable.
+*
+* \return Tvg_Result enumeration.
+* \retval TVG_RESULT_INSUFFICIENT_CONDITION If the animation is not loaded.
+* \retval TVG_RESULT_INVALID_ARGUMENT When the given parameter is invalid.
+* \retval TVG_RESULT_NOT_SUPPORTED When neither the layer nor the property is found in the current animation.
+*
+* \note Experimental API
+*/
+TVG_API Tvg_Result tvg_lottie_animation_assign(Tvg_Animation* animation, const char* layer, uint32_t ix, const char* var, float val);
 
 /** \} */   // end addtogroup ThorVGCapi_LottieAnimation
 

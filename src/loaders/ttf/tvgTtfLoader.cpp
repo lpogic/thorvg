@@ -220,16 +220,16 @@ void TtfLoader::clear()
 /* External Class Implementation                                        */
 /************************************************************************/
 
-
-bool TtfLoader::transform(Paint* paint)
+float TtfLoader::transform(Paint* paint, FontMetrics& metrics, float fontSize, bool italic)
 {
-    if (!paint) return false;
     auto shift = 0.0f;
+    auto dpi = 96.0f / 72.0f;   //dpi base?
+    auto scale = fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
     if (italic) shift = -scale * 0.18f;  //experimental decision.
-    Matrix m = {scale, shift, -(shift * reader.metrics.minw), 0, scale, 0, 0, 0, 1};
+    Matrix m = {scale, shift, -(shift * metrics.minw), 0, scale, 0, 0, 0, 1};
     paint->transform(m);
 
-    return true;
+    return scale;
 }
 
 
@@ -274,27 +274,15 @@ bool TtfLoader::open(const char* data, uint32_t size, TVG_UNUSED const char* rpa
     return reader.header();
 }
 
-
-bool TtfLoader::request(Shape* shape, const char* text, float fontSize, bool italic)
-{
-    this->shape = shape;
-    this->text = text;
-    this->italic = italic;
-
-    scale = fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
-    return true;
-}
-
-
-bool TtfLoader::read()
+bool TtfLoader::read(Shape* shape, const char* text, FontMetrics& out)
 {
     if (!text) return false;
 
     shape->reset();
-    shape->fill(FillRule::EvenOdd);
 
     auto n = strlen(text);
     auto code = _codepoints(text, n);
+    if (!code) return false;
 
     //TODO: optimize with the texture-atlas?
     TtfGlyphMetrics gmetrics;
@@ -313,7 +301,7 @@ bool TtfLoader::read()
             lglyph = rglyph;
             //store the first glyph with outline min size for italic transform.
             if (loadMinw && gmetrics.outline) {
-                reader.metrics.minw = gmetrics.minw;
+                out.minw = gmetrics.minw;
                 loadMinw = false;
             }
         }
@@ -325,8 +313,7 @@ bool TtfLoader::read()
     return true;
 }
 
-
-bool TtfLoader::metrics(int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
+bool TtfLoader::metrics(const char* text, float fontSize,  int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
 {
     if (!text) {
         if(width) *width = 0.0f;
@@ -336,6 +323,7 @@ bool TtfLoader::metrics(int roundMethod, float widthLimit, int indexLimit, float
 
     auto n = strlen(text);
     auto code = _codepoints(text, n);
+    auto scale = fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
 
     widthLimit = widthLimit / scale;
     if (indexLimit >= n) indexLimit = -1;
