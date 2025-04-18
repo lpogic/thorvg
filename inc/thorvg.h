@@ -1716,7 +1716,7 @@ public:
 class TVG_API SwCanvas final : public Canvas
 {
 public:
-    ~SwCanvas();
+    ~SwCanvas() override;
 
     /**
      * @brief Sets the drawing target for the rasterization.
@@ -1760,7 +1760,7 @@ public:
 class TVG_API GlCanvas final : public Canvas
 {
 public:
-    ~GlCanvas();
+    ~GlCanvas() override;
 
     /**
      * @brief Sets the drawing target for rasterization.
@@ -1809,7 +1809,7 @@ public:
 class TVG_API WgCanvas final : public Canvas
 {
 public:
-    ~WgCanvas();
+    ~WgCanvas() override;
 
     /**
      * @brief Sets the drawing target for the rasterization.

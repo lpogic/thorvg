@@ -77,8 +77,8 @@ namespace tvg
                 tvg::rotate(&m, degree);
             }
         } tr;
+        RenderUpdateFlag renderFlag = RenderUpdateFlag::None;
         BlendMethod blendMethod;
-        uint8_t renderFlag;
         uint8_t ctxFlag;
         uint8_t opacity;
         uint8_t refCnt = 0;       //reference count
@@ -163,7 +163,7 @@ namespace tvg
 
         Result clip(Paint* clp)
         {
-            if (PAINT(clp)->parent) return Result::InsufficientCondition;
+            if (clp && PAINT(clp)->parent) return Result::InsufficientCondition;
             if (clipper) PAINT(clipper)->unref(clipper != clp);
             clipper = clp;
             if (clp) {
