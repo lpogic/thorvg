@@ -85,7 +85,6 @@ bool WgContext::allocateTexture(WGPUTexture& texture, uint32_t width, uint32_t h
         const WGPUTextureDataLayout textureDataLayout{ .bytesPerRow = 4 * width, .rowsPerImage = height };
         const WGPUExtent3D writeSize{ .width = width, .height = height, .depthOrArrayLayers = 1 };
         wgpuQueueWriteTexture(queue, &imageCopyTexture, data, 4 * width * height, &textureDataLayout, &writeSize);
-        wgpuQueueSubmit(queue, 0, nullptr);
     } else {
         releaseTexture(texture);
         texture = createTexture(width, height, format);
@@ -94,7 +93,6 @@ bool WgContext::allocateTexture(WGPUTexture& texture, uint32_t width, uint32_t h
         const WGPUTextureDataLayout textureDataLayout{ .bytesPerRow = 4 * width, .rowsPerImage = height };
         const WGPUExtent3D writeSize{ .width = width, .height = height, .depthOrArrayLayers = 1 };
         wgpuQueueWriteTexture(queue, &imageCopyTexture, data, 4 * width * height, &textureDataLayout, &writeSize);
-        wgpuQueueSubmit(queue, 0, nullptr);
         return true;
     }
     return false;
@@ -200,10 +198,7 @@ bool WgContext::allocateBufferVertex(WGPUBuffer& buffer, const float* data, uint
         wgpuQueueWriteBuffer(queue, buffer, 0, data, size);
     else {
         releaseBuffer(buffer);
-        const WGPUBufferDescriptor bufferDesc {
-            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-            .size = size > WG_VERTEX_BUFFER_MIN_SIZE ? size : WG_VERTEX_BUFFER_MIN_SIZE
-        };
+        const WGPUBufferDescriptor bufferDesc { .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex, .size = size };
         buffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
         wgpuQueueWriteBuffer(queue, buffer, 0, data, size);
         return true;
@@ -218,10 +213,7 @@ bool WgContext::allocateBufferIndex(WGPUBuffer& buffer, const uint32_t* data, ui
         wgpuQueueWriteBuffer(queue, buffer, 0, data, size);
     else {
         releaseBuffer(buffer);
-        const WGPUBufferDescriptor bufferDesc {
-            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-            .size = size > WG_INDEX_BUFFER_MIN_SIZE ? size : WG_INDEX_BUFFER_MIN_SIZE
-        };
+        const WGPUBufferDescriptor bufferDesc { .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index, .size = size };
         buffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
         wgpuQueueWriteBuffer(queue, buffer, 0, data, size);
         return true;
@@ -241,10 +233,7 @@ bool WgContext::allocateBufferIndexFan(uint64_t vertexCount)
             indexes.push(i + 2);
         }
         releaseBuffer(bufferIndexFan);
-        WGPUBufferDescriptor bufferDesc{
-            .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-            .size = indexCount * sizeof(uint32_t)
-        };
+        WGPUBufferDescriptor bufferDesc{ .usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index, .size = indexCount * sizeof(uint32_t) };
         bufferIndexFan = wgpuDeviceCreateBuffer(device, &bufferDesc);
         wgpuQueueWriteBuffer(queue, bufferIndexFan, 0, &indexes[0], indexCount * sizeof(uint32_t));
         return true;
@@ -268,4 +257,41 @@ void WgContext::releaseQueue(WGPUQueue& queue)
         wgpuQueueRelease(queue);
         queue = nullptr;
     }
+}
+
+
+WGPUCommandEncoder WgContext::createCommandEncoder()
+{
+    WGPUCommandEncoderDescriptor commandEncoderDesc{};
+    return wgpuDeviceCreateCommandEncoder(device, &commandEncoderDesc);
+}
+
+
+void WgContext::submitCommandEncoder(WGPUCommandEncoder commandEncoder)
+{
+    const WGPUCommandBufferDescriptor commandBufferDesc{};
+    WGPUCommandBuffer commandsBuffer = wgpuCommandEncoderFinish(commandEncoder, &commandBufferDesc);
+    wgpuQueueSubmit(queue, 1, &commandsBuffer);
+    wgpuCommandBufferRelease(commandsBuffer);
+}
+
+
+void WgContext::releaseCommandEncoder(WGPUCommandEncoder& commandEncoder)
+{
+    if (commandEncoder) {
+        wgpuCommandEncoderRelease(commandEncoder);
+        commandEncoder = nullptr;
+    }
+}
+
+
+void WgContext::submit()
+{
+    wgpuQueueSubmit(queue, 0, nullptr);
+}
+
+
+bool WgContext::invalid()
+{
+    return !instance || !device;
 }

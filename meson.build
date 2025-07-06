@@ -39,6 +39,11 @@ if all_engines or get_option('engines').contains('wg')
     config_h.set10('THORVG_WG_RASTER_SUPPORT', true)
 endif
 
+#Partial Rendering
+if get_option('partial')
+  config_h.set10('THORVG_PARTIAL_RENDER_SUPPORT', true)
+endif
+
 #Tools
 all_tools = get_option('tools').contains('all')
 lottie2gif = all_tools or get_option('tools').contains('lottie2gif')
@@ -132,6 +137,18 @@ if lottie_expressions
     config_h.set10('THORVG_LOTTIE_EXPRESSIONS_SUPPORT', true)
 endif
 
+gl_variant = ''
+
+if gl_engine
+    if get_option('extra').contains('opengl_es')
+        gl_variant = 'OpenGL ES'
+    else
+        gl_variant = 'OpenGL'
+    endif
+else
+    gl_variant = 'None'
+endif
+
 #Miscellaneous
 config_h.set10('WIN32_LEAN_AND_MEAN', true)
 
@@ -141,9 +158,6 @@ configure_file(
 )
 
 headers = [include_directories('inc'), include_directories('.')]
-
-#OpenGL profile: OpenGLES(true) or OpenGL(false), confirmed by gl_engine
-target_opengles = false
 
 subdir('inc')
 subdir('src')
@@ -157,57 +171,75 @@ if get_option('tests')
    subdir('test')
 endif
 
-summary = '''
+summary(
+  {
+    'Build Type': get_option('buildtype'),
+    'Prefix': get_option('prefix'),
+    'File I/O': get_option('file'),
+    'Multi-Tasking': get_option('threads'),
+    'Partial Rendering': get_option('partial'),
+    'SIMD Instruction': simd_type,
+    'Log Message': get_option('log'),
+    'Tests': get_option('tests'),
+    'Examples': get_option('examples'),
+  },
+  bool_yn: true,
+)
 
-Summary:
-    ThorVG version:             @0@
-    Build Type:                 @1@
-    Prefix:                     @2@
-    Multi-Tasking:              @3@
-    SIMD Instruction:           @4@
-    Raster Engine (SW):         @5@
-    Raster Engine (GL):         @6@
-    Raster Engine (WG):         @7@
-    Loader (SVG):               @8@
-    Loader (TTF):               @9@
-    Loader (LOTTIE):            @10@
-    Loader (PNG):               @11@
-    Loader (JPG):               @12@
-    Loader (WEBP):              @13@
-    Saver (GIF):                @14@
-    Binding (CAPI):             @15@
-    Binding (WASM_BETA):        @16@
-    Log Message:                @17@
-    Tests:                      @18@
-    Examples:                   @19@
-    Tool (Svg2Png):             @20@
-    Tool (Lottie2Gif):          @21@
-    Extra (Lottie Expressions): @22@
+summary(
+  {
+    'SW': sw_engine,
+    'GL': gl_engine,
+    'WG': wg_engine,
+  },
+  section: 'Raster Engine',
+  bool_yn: true,
+)
 
-'''.format(
-        meson.project_version(),
-        get_option('buildtype'),
-        get_option('prefix'),
-        get_option('threads'),
-        simd_type,
-        sw_engine,
-        gl_engine,
-        wg_engine,
-        svg_loader,
-        ttf_loader,
-        lottie_loader,
-        png_loader,
-        jpg_loader,
-        webp_loader,
-        gif_saver,
-        get_option('bindings').contains('capi'),
-        get_option('bindings').contains('wasm_beta'),
-        get_option('log'),
-        get_option('tests'),
-        get_option('examples'),
-        svg2png,
-        lottie2gif,
-        lottie_expressions
-    )
+summary(
+  {
+    'SVG': svg_loader,
+    'TTF': ttf_loader,
+    'LOTTIE': lottie_loader,
+    'PNG': png_loader,
+    'JPG': jpg_loader,
+    'WEBP': webp_loader,
+  },
+  section: 'Loader',
+  bool_yn: true,
+)
 
-message(summary)
+summary(
+  {
+    'GIF': gif_saver,
+  },
+  section: 'Saver',
+  bool_yn: true,
+)
+
+summary(
+  {
+    'CAPI': get_option('bindings').contains('capi'),
+    'WASM_BETA': get_option('bindings').contains('wasm_beta'),
+  },
+  section: 'Binding',
+  bool_yn: true,
+)
+
+summary(
+  {
+    'Svg2Png': svg2png,
+    'Lottie2Gif': lottie2gif,
+  },
+  section: 'Tool',
+  bool_yn: true,
+)
+
+summary(
+  {
+    'Lottie Expressions': lottie_expressions,
+    'OpenGL Variant': gl_variant,
+  },
+  section: 'Extra',
+  bool_yn: true,
+)

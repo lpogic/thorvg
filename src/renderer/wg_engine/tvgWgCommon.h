@@ -25,9 +25,6 @@
 
 #include "tvgWgBindGroups.h"
 
-#define WG_VERTEX_BUFFER_MIN_SIZE 2048
-#define WG_INDEX_BUFFER_MIN_SIZE 2048
-
 struct WgContext {
     // external webgpu handles
     WGPUInstance instance{};
@@ -70,6 +67,14 @@ struct WgContext {
 
     // release buffer objects
     void releaseBuffer(WGPUBuffer& buffer);
+
+    // command encoder
+    WGPUCommandEncoder createCommandEncoder();
+    void submitCommandEncoder(WGPUCommandEncoder encoder);
+    void releaseCommandEncoder(WGPUCommandEncoder& encoder);
+
+    void submit();
+    bool invalid();
 };
 
 #endif // _TVG_WG_COMMON_H_

@@ -29,25 +29,26 @@
 #include "tvgFill.h"
 #include "tvgLoader.h"
 
-#define TEXT(A) PIMPL(A, Text)
+#define TEXT(A) static_cast<TextImpl*>(A)
+#define CONST_TEXT(A) static_cast<const TextImpl*>(A)
 
-struct Text::Impl : Paint::Impl
+struct TextImpl : Text
 {
+    Paint::Impl impl;
     Shape* shape;   //text shape
     FontLoader* loader = nullptr;
     FontMetrics metrics;
     char* utf8 = nullptr;
     float fontSize;
     bool italic = false;
-    bool changed = false;
 
-    Impl(Text* p) : Paint::Impl(p), shape(Shape::gen())
+    TextImpl() : impl(Paint::Impl(this)), shape(Shape::gen())
     {
-        PAINT(shape)->parent = p;
+        PAINT(shape)->parent = this;
         shape->fill(FillRule::EvenOdd);
     }
 
-    ~Impl()
+    ~TextImpl()
     {
         tvg::free(utf8);
         LoaderMgr::retrieve(loader);
@@ -59,7 +60,8 @@ struct Text::Impl : Paint::Impl
         tvg::free(this->utf8);
         if (utf8) this->utf8 = tvg::duplicate(utf8);
         else this->utf8 = nullptr;
-        changed = true;
+
+        impl.mark(RenderUpdateFlag::Path);
 
         return Result::Success;
     }
@@ -83,11 +85,12 @@ struct Text::Impl : Paint::Impl
         }
         this->loader = static_cast<FontLoader*>(loader);
 
-        changed = true;
+        impl.mark(RenderUpdateFlag::Path);
+
         return Result::Success;
     }
 
-    RenderRegion bounds(RenderMethod* renderer)
+    RenderRegion bounds(RenderMethod* renderer) const
     {
         return SHAPE(shape)->bounds(renderer);
     }
@@ -95,7 +98,7 @@ struct Text::Impl : Paint::Impl
     bool render(RenderMethod* renderer)
     {
         if (!loader) return true;
-        renderer->blend(blendMethod);
+        renderer->blend(impl.blendMethod);
         return PAINT(shape)->render(renderer);
     }
 
@@ -104,21 +107,25 @@ struct Text::Impl : Paint::Impl
         if (!loader) return 0.0f;
 
         //reload
-        if (changed) {
-            loader->read(shape, utf8, metrics);
-            changed = false;
-        }
+        if (impl.marked(RenderUpdateFlag::Path)) loader->read(shape, utf8, metrics);
+
         return loader->transform(shape, metrics, fontSize, italic);
     }
 
-    RenderData update(RenderMethod* renderer, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag pFlag, TVG_UNUSED bool clipper)
+    bool skip(RenderUpdateFlag flag)
+    {
+        if (flag == RenderUpdateFlag::None) return true;
+        return false;
+    }
+
+    bool update(RenderMethod* renderer, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flag, TVG_UNUSED bool clipper)
     {
         auto scale = 1.0f / load();
-        if (tvg::zero(scale)) return nullptr;
+        if (tvg::zero(scale)) return false;
 
         //transform the gradient coordinates based on the final scaled font.
         auto fill = SHAPE(shape)->rs.fill;
-        if (fill && SHAPE(shape)->renderFlag & RenderUpdateFlag::Gradient) {
+        if (fill && SHAPE(shape)->impl.renderFlag & RenderUpdateFlag::Gradient) {
             if (fill->type() == Type::LinearGradient) {
                 LINEAR(fill)->x1 *= scale;
                 LINEAR(fill)->y1 *= scale;
@@ -133,8 +140,8 @@ struct Text::Impl : Paint::Impl
                 RADIAL(fill)->fr *= scale;
             }
         }
-
-        return PAINT(shape)->update(renderer, transform, clips, opacity, pFlag, false);
+        PAINT(shape)->update(renderer, transform, clips, opacity, flag, false);
+        return true;
     }
 
     Result bounds(Point* pt4, Matrix& m, bool obb, TVG_UNUSED bool stroking)
@@ -178,7 +185,5 @@ struct Text::Impl : Paint::Impl
             Result::Success : Result::Unknown;
     }
 };
-
-
 
 #endif //_TVG_TEXT_H

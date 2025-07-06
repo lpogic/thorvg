@@ -47,6 +47,8 @@ struct TvgEngineMethod
     }
 };
 
+#ifdef THORVG_SW_RASTER_SUPPORT
+
 struct TvgSwEngine : TvgEngineMethod
 {
     uint8_t* buffer = nullptr;
@@ -54,13 +56,13 @@ struct TvgSwEngine : TvgEngineMethod
     ~TvgSwEngine()
     {
         std::free(buffer);
-        Initializer::term(tvg::CanvasEngine::Sw);
+        Initializer::term();
         retrieveFont();
     }
 
     Canvas* init(string&) override
     {
-        Initializer::init(0, tvg::CanvasEngine::Sw);
+        Initializer::init(0);
         loadFont();
         return SwCanvas::gen();
     }
@@ -77,6 +79,8 @@ struct TvgSwEngine : TvgEngineMethod
         return val(typed_memory_view(w * h * 4, buffer));
     }
 };
+
+#endif
 
 
 #ifdef THORVG_WG_RASTER_SUPPORT
@@ -97,7 +101,7 @@ struct TvgWgEngine : TvgEngineMethod
     ~TvgWgEngine()
     {
         wgpuSurfaceRelease(surface);
-        Initializer::term(tvg::CanvasEngine::Wg);
+        Initializer::term();
         retrieveFont();
     }
 
@@ -112,7 +116,7 @@ struct TvgWgEngine : TvgEngineMethod
         surfaceDesc.nextInChain = &canvasDesc.chain;
         surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
 
-        Initializer::init(0, tvg::CanvasEngine::Wg);
+        Initializer::init(0);
         loadFont();
         return WgCanvas::gen();
     }
@@ -191,7 +195,7 @@ struct TvgGLEngine : TvgEngineMethod
     ~TvgGLEngine()
     {
         if (context) {
-            Initializer::term(tvg::CanvasEngine::Gl);
+            Initializer::term();
             emscripten_webgl_destroy_context(context);
             context = 0;
         }
@@ -215,7 +219,7 @@ struct TvgGLEngine : TvgEngineMethod
 
         emscripten_webgl_make_context_current(context);
 
-        if (Initializer::init(0, tvg::CanvasEngine::Gl) != Result::Success) return nullptr;
+        if (Initializer::init(0) != Result::Success) return nullptr;
         loadFont();
 
         return GlCanvas::gen();
@@ -243,12 +247,14 @@ public:
     {
         errorMsg = NoError;
 
+#ifdef THORVG_SW_RASTER_SUPPORT
         if (engine == "sw") this->engine = new TvgSwEngine;
+#endif
 #ifdef THORVG_GL_RASTER_SUPPORT
-        else if (engine == "gl") this->engine = new TvgGLEngine;
+        if (engine == "gl") this->engine = new TvgGLEngine;
 #endif
 #ifdef THORVG_WG_RASTER_SUPPORT
-        else if (engine == "wg") this->engine = new TvgWgEngine;
+        if (engine == "wg") this->engine = new TvgWgEngine;
 #endif
 
         if (!this->engine) {
@@ -507,9 +513,10 @@ private:
 int init()
 {
 #ifdef THORVG_WG_RASTER_SUPPORT
-    TvgWgEngine::init();
-#endif
+    return TvgWgEngine::init();
+#else
     return 0;
+#endif
 }
 
 

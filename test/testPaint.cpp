@@ -121,6 +121,9 @@ TEST_CASE("Bounding Box", "[tvgPaint]")
     Initializer::init(0);
 
     auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
+    uint32_t buffer[100*100];
+    canvas->target(buffer, 100, 100, 100, ColorSpace::ABGR8888);
+
     auto shape = Shape::gen();
     canvas->push(shape);
     canvas->sync();
@@ -138,7 +141,7 @@ TEST_CASE("Bounding Box", "[tvgPaint]")
     REQUIRE(w == 20.0f);
     REQUIRE(h == 100.0f);
 
-    REQUIRE(canvas->update(shape) == Result::Success);
+    REQUIRE(canvas->update() == Result::Success);
     Point pts[4];
     REQUIRE(shape->bounds(pts) == Result::Success);
     REQUIRE(pts[0].x == 100.0f);
@@ -162,7 +165,7 @@ TEST_CASE("Bounding Box", "[tvgPaint]")
     REQUIRE(w == 20.0f);
     REQUIRE(h == 200.0f);
 
-    REQUIRE(canvas->update(shape) == Result::Success);
+    REQUIRE(canvas->update() == Result::Success);
     REQUIRE(shape->bounds(pts) == Result::Success);
     REQUIRE(pts[0].x == 0.0f);
     REQUIRE(pts[3].x == 0.0f);
@@ -220,7 +223,9 @@ TEST_CASE("Composition", "[tvgPaint]")
 
     //Clipping
     auto comp = Shape::gen();
+    REQUIRE(shape->clip() == nullptr);
     REQUIRE(shape->clip(comp) == Result::Success);
+    REQUIRE(shape->clip() == comp);
 
     //AlphaMask
     comp = Shape::gen();

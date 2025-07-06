@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <list>
+#include <cstdarg>
 
 #ifdef TVG_API
     #undef TVG_API
@@ -65,6 +66,7 @@ namespace tvg
 
 class RenderMethod;
 class Animation;
+class Shape;
 
 /**
  * @defgroup ThorVG ThorVG
@@ -173,8 +175,8 @@ enum class MaskMethod : uint8_t
     None = 0,       ///< No Masking is applied.
     Alpha,          ///< Alpha Masking using the masking target's pixels as an alpha value.
     InvAlpha,       ///< Alpha Masking using the complement to the masking target's pixels as an alpha value.
-    Luma,           ///< Alpha Masking using the grayscale (0.2125R + 0.7154G + 0.0721*B) of the masking target's pixels. @since 0.9
-    InvLuma,        ///< Alpha Masking using the grayscale (0.2125R + 0.7154G + 0.0721*B) of the complement to the masking target's pixels. @since 0.11
+    Luma,           ///< Alpha Masking using the grayscale (0.2126R + 0.7152G + 0.0722*B) of the masking target's pixels. @since 0.9
+    InvLuma,        ///< Alpha Masking using the grayscale (0.2126R + 0.7152G + 0.0722*B) of the complement to the masking target's pixels. @since 0.11
     Add,            ///< Combines the target and source objects pixels using target alpha. (T * TA) + (S * (255 - TA)) (Experimental API)
     Subtract,       ///< Subtracts the source color from the target color while considering their respective target alpha. (T * TA) - (S * (255 - TA)) (Experimental API)
     Intersect,      ///< Computes the result by taking the minimum value between the target alpha and the source alpha and multiplies it with the target color. (T * min(TA, SA)) (Experimental API)
@@ -229,23 +231,11 @@ enum class BlendMethod : uint8_t
 enum class SceneEffect : uint8_t
 {
     ClearAll = 0,      ///< Reset all previously applied scene effects, restoring the scene to its original state.
-    GaussianBlur,      ///< Apply a blur effect with a Gaussian filter. Param(3) = {sigma(float)[> 0], direction(int)[both: 0 / horizontal: 1 / vertical: 2], border(int)[duplicate: 0 / wrap: 1], quality(int)[0 - 100]}
+    GaussianBlur,      ///< Apply a blur effect with a Gaussian filter. Param(4) = {sigma(double)[> 0], direction(int)[both: 0 / horizontal: 1 / vertical: 2], border(int)[duplicate: 0 / wrap: 1], quality(int)[0 - 100]}
     DropShadow,        ///< Apply a drop shadow effect with a Gaussian Blur filter. Param(8) = {color_R(int)[0 - 255], color_G(int)[0 - 255], color_B(int)[0 - 255], opacity(int)[0 - 255], angle(double)[0 - 360], distance(double), blur_sigma(double)[> 0], quality(int)[0 - 100]}
-    Fill,              ///< Override the scene content color with a given fill information (Experimental API). Param(5) = {color_R(int)[0 - 255], color_G(int)[0 - 255], color_B(int)[0 - 255], opacity(int)[0 - 255]}
-    Tint,              ///< Tinting the current scene color with a given black, white color paramters (Experimental API). Param(7) = {black_R(int)[0 - 255], black_G(int)[0 - 255], black_B(int)[0 - 255], white_R(int)[0 - 255], white_G(int)[0 - 255], white_B(int)[0 - 255], intensity(float)[0 - 100]}
+    Fill,              ///< Override the scene content color with a given fill information (Experimental API). Param(4) = {color_R(int)[0 - 255], color_G(int)[0 - 255], color_B(int)[0 - 255], opacity(int)[0 - 255]}
+    Tint,              ///< Tinting the current scene color with a given black, white color parameters (Experimental API). Param(7) = {black_R(int)[0 - 255], black_G(int)[0 - 255], black_B(int)[0 - 255], white_R(int)[0 - 255], white_G(int)[0 - 255], white_B(int)[0 - 255], intensity(double)[0 - 100]}
     Tritone            ///< Apply a tritone color effect to the scene using three color parameters for shadows, midtones, and highlights (Experimental API). Param(9) = {Shadow_R(int)[0 - 255], Shadow_G(int)[0 - 255], Shadow_B(int)[0 - 255], Midtone_R(int)[0 - 255], Midtone_G(int)[0 - 255], Midtone_B(int)[0 - 255], Highlight_R(int)[0 - 255], Highlight_G(int)[0 - 255], Highlight_B(int)[0 - 255]}
-};
-
-
-/**
- * @brief Enumeration specifying the engine type used for the graphics backend. For multiple backends bitwise operation is allowed.
- */
-enum class CanvasEngine : uint8_t
-{
-    All = 0,       ///< All feasible rasterizers. @since 1.0
-    Sw = (1 << 1), ///< CPU rasterizer.
-    Gl = (1 << 2), ///< OpenGL rasterizer.
-    Wg = (1 << 3), ///< WebGPU rasterizer. @since 0.15
 };
 
 
@@ -408,13 +398,13 @@ public:
      *
      * @param[in] clipper The shape object as the clipper.
      *
-     * @retval Result::NonSupport If the @p clipper type is not Shape.
-     * @retval Result::InsufficientCondition if the target has already belonged to another paint.
+     * @retval Result::InsufficientCondition if the @p clipper has already belonged to another paint.
      *
-     * @note @p clipper only supports the Shape type.
+     * @see Paint::clip()
+     *
      * @since 1.0
      */
-    Result clip(Paint* clipper) noexcept;
+    Result clip(Shape* clipper) noexcept;
 
     /**
      * @brief Sets the blending method for the paint object.
@@ -491,6 +481,19 @@ public:
     MaskMethod mask(const Paint** target) const noexcept;
 
     /**
+     * @brief Get the clipper shape of the paint object.
+     *
+     * This function returns the clipper that has been previously set to this paint object.
+     *
+     * @return The shape object used as the clipper, or @c nullptr if no clipper is set.
+     *
+     * @see Paint::clip(Shape* clipper)
+     *
+     * @since 1.0
+     */
+    Shape* clip() const noexcept;
+
+    /**
      * @brief Increment the reference count for the Paint instance.
      *
      * This method increases the reference count of the Paint object, allowing shared ownership and control over its lifetime.
@@ -504,7 +507,7 @@ public:
      *
      * @since 1.0
      */
-    uint8_t ref() noexcept;
+    uint16_t ref() noexcept;
 
     /**
      * @brief Decrement the reference count for the Paint instance.
@@ -521,7 +524,7 @@ public:
      *
      * @since 1.0
      */
-    uint8_t unref(bool free = true) noexcept;
+    uint16_t unref(bool free = true) noexcept;
 
     /**
      * @brief Retrieve the current reference count of the Paint instance.
@@ -535,7 +538,7 @@ public:
      *
      * @since 1.0
      */
-    uint8_t refCnt() const noexcept;
+    uint16_t refCnt() const noexcept;
 
     /**
      * @brief Returns the ID value of this class.
@@ -731,16 +734,12 @@ public:
     Result remove(Paint* paint = nullptr) noexcept;
 
     /**
-     * @brief Request the canvas to update the paint objects.
+     * @brief Requests the canvas to update the paint for up-to-date render preparation.
      *
-     * If a @c nullptr is passed all paint objects retained by the Canvas are updated,
-     * otherwise only the paint to which the given @p paint points.
-     *
-     * @param[in] paint A pointer to the Paint object or @c nullptr.
-     *
-     * @note The Update behavior can be asynchronous if the assigned thread number is greater than zero.
+     * @note Only modified paint instances will undergo the internal update process.
+     * @note The update operation may be asynchronous if the assigned thread count is greater than zero.
      */
-    Result update(Paint* paint = nullptr) noexcept;
+    Result update() noexcept;
 
     /**
      * @brief Requests the canvas to render Paint objects.
@@ -801,8 +800,10 @@ public:
  *
  * Besides the APIs inherited from the Fill class, it enables setting and getting the linear gradient bounds.
  * The behavior outside the gradient bounds depends on the value specified in the spread API.
+ *
+ * @warning This class is not designed for inheritance.
  */
-class TVG_API LinearGradient final : public Fill
+class TVG_API LinearGradient : public Fill
 {
 public:
     /**
@@ -863,8 +864,9 @@ public:
  *
  * @brief A class representing the radial gradient fill of the Shape object.
  *
+ * @warning This class is not designed for inheritance.
  */
-class TVG_API RadialGradient final : public Fill
+class TVG_API RadialGradient : public Fill
 {
 public:
     /**
@@ -885,6 +887,8 @@ public:
      * @retval Result::InvalidArguments in case the radius @p r or @p fr value is negative.
      *
      * @note In case the radius @p r is zero, an object is filled with a single color using the last color specified in the colorStops().
+     * @note In case the focal point (@p fx and @p fy) lies outside the end circle, it is projected onto the edge of the end circle.
+     * @note If the start circle doesn't fully fit inside the end circle (after possible repositioning), the @p fr is reduced accordingly.
      * @note By manipulating the position and size of the focal point, a wide range of visual effects can be achieved, such as directing
      * the gradient focus towards a specific edge or enhancing the depth and complexity of shading patterns.
      * If a focal effect is not desired, simply align the focal point (@p fx and @p fy) with the center of the end circle (@p cx and @p cy)
@@ -939,8 +943,10 @@ public:
  *
  * The stroke of Shape is an optional property in case the Shape needs to be represented with/without the outline borders.
  * It's efficient since the shape path and the stroking path can be shared with each other. It's also convenient when controlling both in one context.
+ *
+ * @warning This class is not designed for inheritance.
  */
-class TVG_API Shape final : public Paint
+class TVG_API Shape : public Paint
 {
 public:
     /**
@@ -1090,14 +1096,17 @@ public:
     /**
      * @brief Sets the dash pattern of the stroke.
      *
-     * @param[in] dashPattern The array of consecutive pair values of the dash length and the gap length.
+     * @param[in] dashPattern An array of alternating dash and gap lengths.
      * @param[in] cnt The length of the @p dashPattern array.
-     * @param[in] offset The shift of the starting point within the repeating dash pattern from which the path's dashing begins.
+     * @param[in] offset The shift of the starting point within the repeating dash pattern, from which the pattern begins to be applied.
      *
-     * @retval Result::InvalidArguments In case @p dashPattern is @c nullptr and @p cnt > 0, @p cnt is zero, any of the dash pattern values is zero or less.
+     * @retval Result::InvalidArguments In case @p dashPattern is @c nullptr and @p cnt > 0 or @p dashPattern is not @c nullptr and @p cnt is zero.
      *
      * @note To reset the stroke dash pattern, pass @c nullptr to @p dashPattern and zero to @p cnt.
-     * @warning @p cnt must be greater than 1 if the dash pattern is valid.
+     * @note Values of @p dashPattern less than zero are treated as zero.
+     * @note If all values in the @p dashPattern are equal to or less than 0, the dash is ignored.
+     * @note If the @p dashPattern contains an odd number of elements, the sequence is repeated in the same
+     * order to form an even-length pattern, preserving the alternation of dashes and gaps.
      *
      * @since 1.0
      */
@@ -1319,8 +1328,10 @@ public:
  *
  * @note Supported formats are depended on the available TVG loaders.
  * @note See Animation class if the picture data is animatable.
+ *
+ * @warning This class is not designed for inheritance.
  */
-class TVG_API Picture final : public Paint
+class TVG_API Picture : public Paint
 {
 public:
     /**
@@ -1450,8 +1461,10 @@ public:
  *
  * As a group, the scene can be transformed, made translucent and composited with other target paints,
  * its children will be affected by the scene world.
+ *
+ * @warning This class is not designed for inheritance.
  */
-class TVG_API Scene final : public Paint
+class TVG_API Scene : public Paint
 {
 public:
     /**
@@ -1508,12 +1521,13 @@ public:
     /**
      * @brief Apply a post-processing effect to the scene.
      *
-     * This function adds a specified scene effect, such as clearing all effects or applying a Gaussian blur,
-     * to the scene after it has been rendered. Multiple effects can be applied in sequence.
+     * This function adds a specified effect—such as clearing all effects, applying a Gaussian blur,
+     * or adding a drop shadow—to the scene after rendering. Multiple effects can be applied in sequence
+     * by calling this function multiple times.
      *
      * @param[in] effect The scene effect to apply. Options are defined in the SceneEffect enum.
      *                   For example, use SceneEffect::GaussianBlur to apply a blur with specific parameters.
-     * @param[in] ... Additional variadic parameters required for certain effects (e.g., sigma and direction for GaussianBlur).
+     * @param[in] ...    Additional variadic parameters required for certain effects (e.g., sigma and direction for GaussianBlur).
      *
      * @since 1.0
      */
@@ -1546,9 +1560,11 @@ public:
  *
  * @brief A class to represent text objects in a graphical context, allowing for rendering and manipulation of unicode text.
  *
+ * @warning This class is not designed for inheritance.
+ *
  * @since 0.15
  */
-class TVG_API Text final : public Paint
+class TVG_API Text : public Paint
 {
 public:
     /**
@@ -1854,35 +1870,33 @@ class TVG_API Initializer final
 {
 public:
     /**
-     * @brief Initializes TVG engines.
+     * @brief Initializes the ThorVG engine.
      *
-     * TVG requires the running-engine environment.
-     * TVG runs its own task-scheduler for parallelizing rendering tasks efficiently.
-     * You can indicate the number of threads, the count of which is designated @p threads.
-     * In the initialization step, TVG will generate/spawn the threads as set by @p threads count.
+     * ThorVG requires an active runtime environment to operate.
+     * Internally, it utilizes a task scheduler to efficiently parallelize rendering operations.
+     * You can specify the number of worker threads using the @p threads parameter.
+     * During initialization, ThorVG will spawn the specified number of threads.
      *
-     * @param[in] threads The number of additional threads. Zero indicates only the main thread is to be used.
-     * @param[in] engine The engine types to initialize. This is relative to the Canvas types, in which it will be used. For multiple backends bitwise operation is allowed.
+     * @param[in] threads The number of worker threads to create. A value of zero indicates that only the main thread will be used.
      *
-     * @retval Result::NonSupport In case the engine type is not supported on the system.
-     *
-     * @note The Initializer keeps track of the number of times it was called. Threads count is fixed at the first init() call.
+     * @note The initializer uses internal reference counting to track multiple calls.
+     *       The number of threads is fixed on the first call to init() and cannot be changed in subsequent calls.
      * @see Initializer::term()
      */
-    static Result init(uint32_t threads, CanvasEngine engine = tvg::CanvasEngine::All) noexcept;
+    static Result init(uint32_t threads) noexcept;
 
     /**
-     * @brief Terminates TVG engines.
+     * @brief Terminates the ThorVG engine.
      *
-     * @param[in] engine The engine types to terminate. This is relative to the Canvas types, in which it will be used. For multiple backends bitwise operation is allowed
+     * Cleans up resources and stops any internal threads initialized by init().
      *
-     * @retval Result::InsufficientCondition In case there is nothing to be terminated.
-     * @retval Result::NonSupport In case the engine type is not supported on the system.
+     * @retval Result::InsufficientCondition Returned if there is nothing to terminate (e.g., init() was not called).
      *
-     * @note Initializer does own reference counting for multiple calls.
+     * @note The initializer maintains a reference count for safe repeated use.
+     *       Only the final call to term() will fully shut down the engine.
      * @see Initializer::init()
      */
-    static Result term(CanvasEngine engine = tvg::CanvasEngine::All) noexcept;
+    static Result term() noexcept;
 
     /**
      * @brief Retrieves the version of the TVG engine.

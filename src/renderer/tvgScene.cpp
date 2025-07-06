@@ -23,15 +23,12 @@
 #include "tvgScene.h"
 
 
-Scene::Scene()
-{
-    pImpl = new Impl(this);
-}
+Scene::Scene() = default;
 
 
 Scene* Scene::gen() noexcept
 {
-    return new Scene;
+    return new SceneImpl;
 }
 
 
@@ -56,7 +53,7 @@ Result Scene::remove(Paint* paint) noexcept
 
 const list<Paint*>& Scene::paints() const noexcept
 {
-    return SCENE(this)->paints;
+    return CONST_SCENE(this)->paints;
 }
 
 
@@ -64,6 +61,7 @@ Result Scene::push(SceneEffect effect, ...) noexcept
 {
     va_list args;
     va_start(args, effect);
-
-    return SCENE(this)->push(effect, args);
+    auto ret = SCENE(this)->push(effect, args);
+    va_end(args);
+    return ret;
 }

@@ -21,23 +21,19 @@
  */
 
 #include "tvgCanvas.h"
+#include "tvgTaskScheduler.h"
 
 #ifdef THORVG_GL_RASTER_SUPPORT
     #include "tvgGlRenderer.h"
 #endif
 
-GlCanvas::GlCanvas()
-{
-#ifdef THORVG_GL_RASTER_SUPPORT
-    pImpl->renderer = GlRenderer::gen();
-    pImpl->renderer->ref();
-#endif
-}
-
+GlCanvas::GlCanvas() = default;
 
 GlCanvas::~GlCanvas()
 {
-    //TODO:
+#ifdef THORVG_GL_RASTER_SUPPORT
+    GlRenderer::term();
+#endif
 }
 
 
@@ -55,7 +51,7 @@ Result GlCanvas::target(void* context, int32_t id, uint32_t w, uint32_t h, Color
     if (!renderer) return Result::MemoryCorruption;
 
     if (!renderer->target(context, id, w, h)) return Result::Unknown;
-    pImpl->vport = {0, 0, (int32_t)w, (int32_t)h};
+    pImpl->vport = {{0, 0}, {(int32_t)w, (int32_t)h}};
     renderer->viewport(pImpl->vport);
 
     //Paints must be updated again with this new target.
@@ -70,8 +66,14 @@ Result GlCanvas::target(void* context, int32_t id, uint32_t w, uint32_t h, Color
 GlCanvas* GlCanvas::gen() noexcept
 {
 #ifdef THORVG_GL_RASTER_SUPPORT
-    if (GlRenderer::init() <= 0) return nullptr;
-    return new GlCanvas;
+    if (engineInit > 0) {
+        auto renderer = GlRenderer::gen(TaskScheduler::threads());
+        if (!renderer) return nullptr;
+        renderer->ref();
+        auto ret = new GlCanvas;
+        ret->pImpl->renderer = renderer;
+        return ret;
+    }
 #endif
     return nullptr;
 }

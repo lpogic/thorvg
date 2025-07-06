@@ -4,7 +4,7 @@ if lib_type == 'static'
     examples_compiler_flags += ['-DTVG_STATIC']
 endif
 
-if target_opengles
+if gl_variant == 'OpenGL ES'
     examples_compiler_flags += '-DTHORVG_GL_TARGET_GLES=1'
 endif
 
@@ -46,6 +46,7 @@ source_file = [
     'MultiCanvas.cpp',
     'Opacity.cpp',
     'Path.cpp',
+    'Particles.cpp',
     'PictureJpg.cpp',
     'PicturePng.cpp',
     'PictureRaw.cpp',

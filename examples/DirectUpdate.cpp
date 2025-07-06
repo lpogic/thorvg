@@ -93,8 +93,6 @@ struct UserExample : tvgexam::Example
         if (tvgexam::verify(solid->reset())) {
             //Solid Shape
             solid->appendRect(-100 + (w * progress), -100 + (h * progress), 200, 200, (100 * progress), (100 * progress));
-            solid->fill(127, 255, 255);
-            solid->strokeFill(0, 0, 255);
             solid->strokeWidth(30 * progress);
 
             //Gradient Shape
@@ -116,5 +114,5 @@ struct UserExample : tvgexam::Example
 
 int main(int argc, char **argv)
 {
-    return tvgexam::main(new UserExample, argc, argv);
+    return tvgexam::main(new UserExample, argc, argv, false, 960, 960);
 }

@@ -23,50 +23,10 @@
 #ifndef _TVG_GL_TESSELLATOR_H_
 #define _TVG_GL_TESSELLATOR_H_
 
-#include <cstdint>
 #include "tvgGlCommon.h"
 
 namespace tvg
 {
-
-class ObjectHeap;
-struct Vertex;
-struct Edge;
-struct Polygon;
-struct MonotonePolygon;
-struct VertexList;
-struct ActiveEdgeList;
-struct RenderShape;
-
-class Tessellator final
-{
-public:
-    Tessellator(GlGeometryBuffer* buffer);
-    ~Tessellator();
-    void tessellate(const Array<const RenderShape*> &shapes);
-
-private:
-    void visitShape(const RenderPath& path);
-    void buildMesh();
-    void mergeVertices();
-    bool simplifyMesh();
-    bool tessMesh();
-    bool matchFillRule(int32_t winding);
-    Edge *makeEdge(Vertex* p1, Vertex* p2);
-    bool checkIntersection(Edge* left, Edge* right, ActiveEdgeList* ael, Vertex** current);
-    bool splitEdge(Edge* edge, Vertex* v, ActiveEdgeList* ael, Vertex** current);
-    bool intersectPairEdge(Edge* left, Edge* right, ActiveEdgeList* ael, Vertex** current);
-    Polygon *makePoly(Vertex* v, int32_t winding);
-    void emitPoly(MonotonePolygon* poly);
-    void emitTriangle(Vertex* p1, Vertex* p2, Vertex* p3);
-
-    FillRule fillRule = FillRule::NonZero;
-    ObjectHeap* pHeap;
-    Array<VertexList*> outlines;
-    VertexList* pMesh;
-    Polygon* pPolygon;
-    GlGeometryBuffer* buffer;
-};
 
 class Stroker
 {
@@ -79,7 +39,6 @@ class Stroker
     };
 public:
     Stroker(GlGeometryBuffer* buffer, const Matrix& matrix);
-    ~Stroker() = default;
     void stroke(const RenderShape *rshape, const RenderPath& path);
     RenderRegion bounds() const;
 
@@ -120,11 +79,12 @@ class DashStroke
 {
 public:
     DashStroke(Array<PathCommand>* cmds, Array<Point>* pts, const float* patterns, uint32_t patternCnt, float offset, float length);
-    void doStroke(const RenderPath& path);
+    void doStroke(const RenderPath& path, bool drawPoint);
 
 private:
-    void dashLineTo(const Point& pt);
-    void dashCubicTo(const Point& pt1, const Point& pt2, const Point& pt3);
+    void drawPoint(const Point& p);
+    void dashLineTo(const Point& pt, bool drawPoint);
+    void dashCubicTo(const Point& pt1, const Point& pt2, const Point& pt3, bool drawPoint);
     void moveTo(const Point& pt);
     void lineTo(const Point& pt);
     void cubicTo(const Point& pt1, const Point& pt2, const Point& pt3);
@@ -147,7 +107,6 @@ class BWTessellator
 {
 public:
     BWTessellator(GlGeometryBuffer* buffer);
-    ~BWTessellator() = default;
     void tessellate(const RenderPath& path, const Matrix& matrix);
     RenderRegion bounds() const;
 
@@ -156,7 +115,7 @@ private:
     void pushTriangle(uint32_t a, uint32_t b, uint32_t c);
 
     GlGeometryBuffer* mBuffer;
-    BBox bbox = {{}, {}};
+    BBox bbox = {};
 };
 
 }  // namespace tvg

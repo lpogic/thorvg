@@ -386,7 +386,7 @@ struct LottieTextRange
 
 struct LottieFont
 {
-    enum Origin : uint8_t { Local = 0, CssURL, ScriptURL, FontURL, Embedded };
+    enum Origin : uint8_t {Local = 0, CssURL, ScriptURL, FontURL};
 
     ~LottieFont()
     {
@@ -408,7 +408,7 @@ struct LottieFont
     char* style = nullptr;
     size_t dataSize = 0;
     float ascent = 0.0f;
-    Origin origin = Embedded;
+    Origin origin = Local;
 
     void prepare();
 };
@@ -638,6 +638,12 @@ struct LottieTransform : LottieObject
         LottieFloat x = 0.0f;
         LottieFloat y = 0.0f;
     };
+
+    SeparateCoord* separateCoord()
+    {
+        if (!coords) coords = new SeparateCoord;
+        return coords;
+    }
 
     struct RotationEx
     {
@@ -951,6 +957,7 @@ struct LottieGroup : LottieObject, LottieRenderPooler<tvg::Shape>
 
     Scene* scene = nullptr;
     Array<LottieObject*> children;
+    BlendMethod blendMethod = BlendMethod::Normal;
 
     bool reqFragment : 1;   //requirement to fragment the render context
     bool buildDone : 1;     //completed in building the composition.
@@ -974,7 +981,7 @@ struct LottieLayer : LottieGroup
 
     char* name = nullptr;
     LottieLayer* parent = nullptr;
-    LottieFloat timeRemap = 0.0f;
+    LottieFloat timeRemap = -1.0f;
     LottieLayer* comp = nullptr;  //Precompositor, current layer is belonges.
     LottieTransform* transform = nullptr;
     Array<LottieMask*> masks;
@@ -1000,7 +1007,6 @@ struct LottieLayer : LottieGroup
     } cache;
 
     MaskMethod matteType = MaskMethod::None;
-    BlendMethod blendMethod = BlendMethod::Normal;
     Type type = Null;
     bool autoOrient = false;
     bool matteSrc = false;
@@ -1082,6 +1088,11 @@ struct LottieSlot
 struct LottieComposition
 {
     ~LottieComposition();
+
+    void clear()
+    {
+        if (root && root->scene) root->scene->remove();
+    }
 
     float duration() const
     {

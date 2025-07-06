@@ -28,49 +28,36 @@
 #include "tvgWgShaderTypes.h"
 
 struct WgMeshData {
-    WGPUBuffer bufferPosition{};
-    WGPUBuffer bufferTexCoord{};
-    WGPUBuffer bufferIndex{};
-    size_t vertexCount{};
-    size_t indexCount{};
+    Array<Point> vbuffer;
+    Array<Point> tbuffer;
+    Array<uint32_t> ibuffer;
+    size_t voffset{};
+    size_t toffset{};
+    size_t ioffset{};
 
-    void draw(WgContext& context, WGPURenderPassEncoder renderPassEncoder);
-    void drawFan(WgContext& context, WGPURenderPassEncoder renderPassEncoder);
-    void drawImage(WgContext& context, WGPURenderPassEncoder renderPassEncoder);
-
-    void update(WgContext& context, const WgVertexBuffer& vertexBuffer);
-    void update(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd);
-    void bbox(WgContext& context, const Point pmin, const Point pmax);
-    void imageBox(WgContext& context, float w, float h);
-    void blitBox(WgContext& context);
-    void release(WgContext& context);
-};
-
-class WgMeshDataPool {
-private:
-    Array<WgMeshData*> mPool;
-    Array<WgMeshData*> mList;
-public:
-    static WgMeshDataPool* gMeshDataPool;
-    WgMeshData* allocate(WgContext& context);
-    void free(WgContext& context, WgMeshData* meshData);
-    void release(WgContext& context);
+    void update(const WgVertexBuffer& vertexBuffer);
+    void update(const WgIndexedVertexBuffer& vertexBufferInd);
+    void bbox(const Point pmin, const Point pmax);
+    void imageBox(float w, float h);
+    void blitBox();
 };
 
 struct WgMeshDataGroup {
     Array<WgMeshData*> meshes{};
     
-    void append(WgContext& context, const WgVertexBuffer& vertexBuffer);
-    void append(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd);
-    void append(WgContext& context, const Point pmin, const Point pmax);
-    void release(WgContext& context);
+    void append(const WgVertexBuffer& vertexBuffer);
+    void append(const WgIndexedVertexBuffer& vertexBufferInd);
+    void append(const Point pmin, const Point pmax);
+    void release();
 };
 
 struct WgImageData {
     WGPUTexture texture{};
     WGPUTextureView textureView{};
+    WGPUBindGroup bindGroup{};
 
     void update(WgContext& context, const RenderSurface* surface);
+    void update(WgContext& context, const Fill* fill);
     void release(WgContext& context);
 };
 
@@ -79,37 +66,29 @@ enum class WgRenderRasterType { Solid = 0, Gradient, Image };
 
 struct WgRenderSettings
 {
-    WGPUBuffer bufferGroupSolid{};
-    WGPUBindGroup bindGroupSolid{};
-    WGPUTexture texGradient{};
-    WGPUTextureView texViewGradient{};
-    WGPUBuffer bufferGroupGradient{};
-    WGPUBuffer bufferGroupTransfromGrad{};
-    WGPUBindGroup bindGroupGradient{};
+    uint32_t bindGroupInd{};
+    WgShaderTypePaintSettings settings;
+    WgImageData gradientData;
     WgRenderSettingsType fillType{};
     WgRenderRasterType rasterType{};
     bool skip{};
 
-    void updateFill(WgContext& context, const Fill* fill);
-    void updateColor(WgContext& context, const RenderColor& c);
+    void update(WgContext& context, const tvg::Matrix& transform, tvg::ColorSpace cs, uint8_t opacity);
+    void update(WgContext& context, const Fill* fill);
+    void update(WgContext& context, const RenderColor& c);
     void release(WgContext& context);
 };
 
 struct WgRenderDataPaint
 {
-    WGPUBuffer bufferModelMat{};
-    WGPUBuffer bufferBlendSettings{};
-    WGPUBindGroup bindGroupPaint{};
-    RenderRegion viewport{};
     BBox aabb{{},{}};
-    float opacity{};
+    RenderRegion viewport{};
     Array<WgRenderDataPaint*> clips;
 
     virtual ~WgRenderDataPaint() {};
     virtual void release(WgContext& context);
     virtual Type type() { return Type::Undefined; };
 
-    void update(WgContext& context, const tvg::Matrix& transform, tvg::ColorSpace cs, uint8_t opacity);
     void updateClips(tvg::Array<tvg::RenderData> &clips);
 };
 
@@ -127,13 +106,13 @@ struct WgRenderDataShape: public WgRenderDataPaint
     bool strokeFirst{};
     FillRule fillRule{};
 
-    void appendShape(WgContext& context, const WgVertexBuffer& vertexBuffer);
-    void appendStroke(WgContext& context, const WgIndexedVertexBuffer& vertexBufferInd);
+    void appendShape(const WgVertexBuffer& vertexBuffer);
+    void appendStroke(const WgIndexedVertexBuffer& vertexBufferInd);
     void updateBBox(Point pmin, Point pmax);
     void updateAABB(const Matrix& tr);
-    void updateMeshes(WgContext& context, const RenderShape& rshape, const Matrix& tr, WgGeometryBufferPool* pool);
-    void proceedStrokes(WgContext& context, const RenderStroke* rstroke, const WgVertexBuffer& buff, WgGeometryBufferPool* pool);
-    void releaseMeshes(WgContext& context);
+    void updateMeshes(const RenderShape& rshape, const Matrix& tr, WgGeometryBufferPool* pool);
+    void proceedStrokes(const RenderStroke* rstroke, const WgVertexBuffer& buff, WgGeometryBufferPool* pool);
+    void releaseMeshes();
     void release(WgContext& context) override;
     Type type() override { return Type::Shape; };
 };
@@ -150,7 +129,7 @@ public:
 
 struct WgRenderDataPicture: public WgRenderDataPaint
 {
-    WGPUBindGroup bindGroupPicture{};
+    WgRenderSettings renderSettings{};
     WgImageData imageData{};
     WgMeshData meshData{};
 
@@ -222,6 +201,71 @@ public:
     WgRenderDataEffectParams* allocate(WgContext& context);
     void free(WgContext& context, WgRenderDataEffectParams* renderData);
     void release(WgContext& context);
+};
+
+class WgStageBufferGeometry {
+private:
+    Array<uint8_t> vbuffer;
+    Array<uint8_t> ibuffer;
+    uint32_t vmaxcount{};
+public:
+    WGPUBuffer vbuffer_gpu{};
+    WGPUBuffer ibuffer_gpu{};
+
+    void append(WgMeshData* meshData);
+    void append(WgMeshDataGroup* meshDataGroup);
+    void append(WgRenderDataShape* renderDataShape);
+    void append(WgRenderDataPicture* renderDataPicture);
+    void initialize(WgContext& context){};
+    void release(WgContext& context);
+    void clear();
+    void flush(WgContext& context);
+};
+
+// typed uniform stage buffer with related bind groups handling
+template<typename T>
+class WgStageBufferUniform {
+private:
+    Array<T> ubuffer;
+    WGPUBuffer ubuffer_gpu{};
+    Array<WGPUBindGroup> bbuffer;
+public:
+    // append uniform data to cpu staged buffer and return related bind group index
+    uint32_t append(const T& value) {
+        ubuffer.push(value);
+        return ubuffer.count - 1;
+    }
+
+    void flush(WgContext& context) {
+        // flush data to gpu buffer from cpu memory including reserved data to prevent future gpu buffer reallocations
+        bool bufferChanged = context.allocateBufferUniform(ubuffer_gpu, (void*)ubuffer.data, ubuffer.reserved*sizeof(T));
+        // if gpu buffer handle was changed we must to remove all created binding groups
+        if (bufferChanged) releaseBindGroups(context);
+        // allocate bind groups for all new data items
+        for (uint32_t i = bbuffer.count; i < ubuffer.count; i++)
+            bbuffer.push(context.layouts.createBindGroupBuffer1Un(ubuffer_gpu, i*sizeof(T), sizeof(T)));
+        assert(bbuffer.count >= ubuffer.count);
+    }
+
+    // please, use index that was returned from append method
+    WGPUBindGroup operator[](const uint32_t index) const {
+        return bbuffer[index];
+    }
+
+    void clear() {
+        ubuffer.clear();
+    }
+
+    void release(WgContext& context) {
+        context.releaseBuffer(ubuffer_gpu);
+        releaseBindGroups(context);
+    }
+
+    void releaseBindGroups(WgContext& context) {
+        ARRAY_FOREACH(p, bbuffer)
+            context.layouts.releaseBindGroup(*p);
+        bbuffer.clear();
+    }
 };
 
 #endif // _TVG_WG_RENDER_DATA_H_

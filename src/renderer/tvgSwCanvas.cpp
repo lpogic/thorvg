@@ -21,6 +21,7 @@
  */
 
 #include "tvgCanvas.h"
+#include "tvgTaskScheduler.h"
 #include "tvgLoadModule.h"
 
 #ifdef THORVG_SW_RASTER_SUPPORT
@@ -28,18 +29,13 @@
 #endif
 
 
-SwCanvas::SwCanvas()
-{
-#ifdef THORVG_SW_RASTER_SUPPORT
-    pImpl->renderer = SwRenderer::gen();
-    pImpl->renderer->ref();
-#endif
-}
-
+SwCanvas::SwCanvas() = default;
 
 SwCanvas::~SwCanvas()
 {
-    //TODO:
+#ifdef THORVG_SW_RASTER_SUPPORT
+    SwRenderer::term();
+#endif
 }
 
 
@@ -58,7 +54,7 @@ Result SwCanvas::target(uint32_t* buffer, uint32_t stride, uint32_t w, uint32_t 
     if (!renderer) return Result::MemoryCorruption;
 
     if (!renderer->target(buffer, stride, w, h, cs)) return Result::InvalidArguments;
-    pImpl->vport = {0, 0, (int32_t)w, (int32_t)h};
+    pImpl->vport = {{0, 0}, {(int32_t)w, (int32_t)h}};
     renderer->viewport(pImpl->vport);
 
     //FIXME: The value must be associated with an individual canvas instance.
@@ -76,8 +72,13 @@ Result SwCanvas::target(uint32_t* buffer, uint32_t stride, uint32_t w, uint32_t 
 SwCanvas* SwCanvas::gen() noexcept
 {
 #ifdef THORVG_SW_RASTER_SUPPORT
-    if (SwRenderer::init() <= 0) return nullptr;
-    return new SwCanvas;
+    if (engineInit > 0) {
+        auto renderer = SwRenderer::gen(TaskScheduler::threads());
+        renderer->ref();
+        auto ret = new SwCanvas;
+        ret->pImpl->renderer = renderer;
+        return ret;
+    }
 #endif
     return nullptr;
 }

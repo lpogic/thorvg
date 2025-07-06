@@ -27,40 +27,39 @@
 #include "tvgMath.h"
 #include "tvgPaint.h"
 
-#define SHAPE(A) PIMPL(A, Shape)
+#define SHAPE(A) static_cast<ShapeImpl*>(A)
+#define CONST_SHAPE(A) static_cast<const ShapeImpl*>(A)
 
-struct Shape::Impl : Paint::Impl
+struct ShapeImpl : Shape
 {
+    Paint::Impl impl;
     RenderShape rs;
-    uint8_t compFlag = CompositionFlag::Invalid;
     uint8_t opacity;    //for composition
 
-    Impl(Shape* s) : Paint::Impl(s)
+    ShapeImpl() : impl(Paint::Impl(this))
     {
     }
 
     bool render(RenderMethod* renderer)
     {
-        if (!rd) return false;
+        if (!impl.rd) return false;
 
         RenderCompositor* cmp = nullptr;
 
-        renderer->blend(blendMethod);
+        renderer->blend(impl.blendMethod);
 
-        if (compFlag) {
-            cmp = renderer->target(bounds(renderer), renderer->colorSpace(), static_cast<CompositionFlag>(compFlag));
+        if (impl.cmpFlag) {
+            cmp = renderer->target(bounds(renderer), renderer->colorSpace(), impl.cmpFlag);
             renderer->beginComposite(cmp, MaskMethod::None, opacity);
         }
 
-        auto ret = renderer->renderShape(rd);
+        auto ret = renderer->renderShape(impl.rd);
         if (cmp) renderer->endComposite(cmp);
         return ret;
     }
 
     bool needComposition(uint8_t opacity)
     {
-        compFlag = CompositionFlag::Invalid;
-
         if (opacity == 0) return false;
 
         //Shape composition is only necessary when stroking & fill are valid.
@@ -69,16 +68,16 @@ struct Shape::Impl : Paint::Impl
 
         //translucent fill & stroke
         if (opacity < 255) {
-            compFlag = CompositionFlag::Opacity;
+            impl.mark(CompositionFlag::Opacity);
             return true;
         }
 
         //Composition test
         const Paint* target;
-        auto method = paint->mask(&target);
+        auto method = PAINT(this)->mask(&target);
         if (!target) return false;
 
-        if ((target->pImpl->opacity == 255 || target->pImpl->opacity == 0) && target->type() == Type::Shape) {
+        if ((target->pImpl->opacity == 255 || target->pImpl->opacity == 0) && target->type() == tvg::Type::Shape) {
             auto shape = static_cast<const Shape*>(target);
             if (!shape->fill()) {
                 uint8_t r, g, b, a;
@@ -91,14 +90,18 @@ struct Shape::Impl : Paint::Impl
             }
         }
 
-        compFlag = CompositionFlag::Masking;
+        impl.mark(CompositionFlag::Masking);
         return true;
     }
 
-    RenderData update(RenderMethod* renderer, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag pFlag, bool clipper)
+    bool skip(RenderUpdateFlag flag)
     {
-        if (static_cast<RenderUpdateFlag>(pFlag | renderFlag) == RenderUpdateFlag::None) return rd;
+        if (flag == RenderUpdateFlag::None) return true;
+        return false;
+    }
 
+    bool update(RenderMethod* renderer, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flag, bool clipper)
+    {
         if (needComposition(opacity)) {
             /* Overriding opacity value. If this scene is half-translucent,
                It must do intermediate composition with that opacity value. */ 
@@ -106,14 +109,13 @@ struct Shape::Impl : Paint::Impl
             opacity = 255;
         }
 
-        rd = renderer->prepare(rs, rd, transform, clips, opacity, static_cast<RenderUpdateFlag>(pFlag | renderFlag), clipper);
-        return rd;
+        impl.rd = renderer->prepare(rs, impl.rd, transform, clips, opacity, flag, clipper);
+        return true;
     }
 
     RenderRegion bounds(RenderMethod* renderer)
     {
-        if (!rd) return {0, 0, 0, 0};
-        return renderer->region(rd);
+        return renderer->region(impl.rd);
     }
 
     Result bounds(Point* pt4, Matrix& m, bool obb, bool stroking)
@@ -178,7 +180,7 @@ struct Shape::Impl : Paint::Impl
     {
         rs.path.cmds.push(PathCommand::LineTo);
         rs.path.pts.push({x, y});
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
     }
 
     void cubicTo(float cx1, float cy1, float cx2, float cy2, float x, float y)
@@ -188,7 +190,7 @@ struct Shape::Impl : Paint::Impl
         rs.path.pts.push({cx2, cy2});
         rs.path.pts.push({x, y});
 
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
     }
 
     void close()
@@ -196,14 +198,14 @@ struct Shape::Impl : Paint::Impl
         //Don't close multiple times.
         if (rs.path.cmds.count > 0 && rs.path.cmds.last() == PathCommand::Close) return;
         rs.path.cmds.push(PathCommand::Close);
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
     }
 
     void strokeWidth(float width)
     {
         if (!rs.stroke) rs.stroke = new RenderStroke();
         rs.stroke->width = width;
-        renderFlag |= RenderUpdateFlag::Stroke;
+        impl.mark(RenderUpdateFlag::Stroke);
     }
 
     void trimpath(const RenderTrimPath& trim)
@@ -216,7 +218,7 @@ struct Shape::Impl : Paint::Impl
         if (tvg::equal(rs.stroke->trim.begin, trim.begin) && tvg::equal(rs.stroke->trim.end, trim.end) && rs.stroke->trim.simultaneous == trim.simultaneous) return;
 
         rs.stroke->trim = trim;
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
     }
 
     bool trimpath(float* begin, float* end)
@@ -236,14 +238,14 @@ struct Shape::Impl : Paint::Impl
     {
         if (!rs.stroke) rs.stroke = new RenderStroke();
         rs.stroke->cap = cap;
-        renderFlag |= RenderUpdateFlag::Stroke;
+        impl.mark(RenderUpdateFlag::Stroke);
     }
 
     void strokeJoin(StrokeJoin join)
     {
         if (!rs.stroke) rs.stroke = new RenderStroke();
         rs.stroke->join = join;
-        renderFlag |= RenderUpdateFlag::Stroke;
+        impl.mark(RenderUpdateFlag::Stroke);
     }
 
     Result strokeMiterlimit(float miterlimit)
@@ -253,7 +255,7 @@ struct Shape::Impl : Paint::Impl
         if (miterlimit < 0.0f) return Result::InvalidArguments;
         if (!rs.stroke) rs.stroke = new RenderStroke();
         rs.stroke->miterlimit = miterlimit;
-        renderFlag |= RenderUpdateFlag::Stroke;
+        impl.mark(RenderUpdateFlag::Stroke);
 
         return Result::Success;
     }
@@ -264,12 +266,12 @@ struct Shape::Impl : Paint::Impl
         if (rs.stroke->fill) {
             delete(rs.stroke->fill);
             rs.stroke->fill = nullptr;
-            renderFlag |= RenderUpdateFlag::GradientStroke;
+            impl.mark(RenderUpdateFlag::GradientStroke);
         }
 
         rs.stroke->color = {r, g, b, a};
 
-        renderFlag |= RenderUpdateFlag::Stroke;
+        impl.mark(RenderUpdateFlag::Stroke);
     }
 
     Result strokeFill(Fill* f)
@@ -281,15 +283,14 @@ struct Shape::Impl : Paint::Impl
         rs.stroke->fill = f;
         rs.stroke->color.a = 0;
 
-        renderFlag |= RenderUpdateFlag::Stroke;
-        renderFlag |= RenderUpdateFlag::GradientStroke;
+        impl.mark(RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke);
 
         return Result::Success;
     }
 
     Result strokeDash(const float* pattern, uint32_t cnt, float offset)
     {
-        if ((cnt == 1) || (!pattern && cnt > 0) || (pattern && cnt == 0)) return Result::InvalidArguments;
+        if ((!pattern && cnt > 0) || (pattern && cnt == 0)) return Result::InvalidArguments;
         if (!rs.stroke) rs.stroke = new RenderStroke;
         //Reset dash
         auto& dash = rs.stroke->dash;
@@ -301,17 +302,13 @@ struct Shape::Impl : Paint::Impl
             if (!dash.pattern) dash.pattern = tvg::malloc<float*>(sizeof(float) * cnt);
             dash.length = 0.0f;
             for (uint32_t i = 0; i < cnt; ++i) {
-                if (pattern[i] < DASH_PATTERN_THRESHOLD) {
-                    dash.count = 0;
-                    return Result::InvalidArguments;
-                }
-                dash.pattern[i] = pattern[i];
+                dash.pattern[i] = pattern[i] < 0.0f ? 0.0f : pattern[i];
                 dash.length += dash.pattern[i];
             }
         }
         rs.stroke->dash.count = cnt;
         rs.stroke->dash.offset = offset;
-        renderFlag |= RenderUpdateFlag::Stroke;
+        impl.mark(RenderUpdateFlag::Stroke);
 
         return Result::Success;
     }
@@ -319,14 +316,14 @@ struct Shape::Impl : Paint::Impl
     bool strokeFirst()
     {
         if (!rs.stroke) return true;
-        return rs.stroke->strokeFirst;
+        return rs.stroke->first;
     }
 
-    void strokeFirst(bool strokeFirst)
+    void strokeFirst(bool first)
     {
         if (!rs.stroke) rs.stroke = new RenderStroke();
-        rs.stroke->strokeFirst = strokeFirst;
-        renderFlag |= RenderUpdateFlag::Stroke;
+        rs.stroke->first = first;
+        impl.mark(RenderUpdateFlag::Stroke);
     }
 
     Result fill(Fill* f)
@@ -335,7 +332,7 @@ struct Shape::Impl : Paint::Impl
 
         if (rs.fill && rs.fill != f) delete(rs.fill);
         rs.fill = f;
-        renderFlag |= RenderUpdateFlag::Gradient;
+        impl.mark(RenderUpdateFlag::Gradient);
 
         return Result::Success;
     }
@@ -345,20 +342,20 @@ struct Shape::Impl : Paint::Impl
         if (rs.fill) {
             delete(rs.fill);
             rs.fill = nullptr;
-            renderFlag |= RenderUpdateFlag::Gradient;
+            impl.mark(RenderUpdateFlag::Gradient);
         }
 
         if (r == rs.color.r && g == rs.color.g && b == rs.color.b && a == rs.color.a) return;
 
         rs.color = {r, g, b, a};
-        renderFlag |= RenderUpdateFlag::Color;
+        impl.mark(RenderUpdateFlag::Color);
     }
 
     void resetPath()
     {
         rs.path.cmds.clear();
         rs.path.pts.clear();
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
     }
 
     Result appendPath(const PathCommand *cmds, uint32_t cmdCnt, const Point* pts, uint32_t ptsCnt)
@@ -367,7 +364,7 @@ struct Shape::Impl : Paint::Impl
 
         grow(cmdCnt, ptsCnt);
         append(cmds, cmdCnt, pts, ptsCnt);
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
 
         return Result::Success;
     }
@@ -403,7 +400,7 @@ struct Shape::Impl : Paint::Impl
 
         rs.path.pts.count += 13;
 
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
     }
 
     void appendRect(float x, float y, float w, float h, float rx, float ry, bool cw)
@@ -478,7 +475,7 @@ struct Shape::Impl : Paint::Impl
             rs.path.cmds.count += 10;
             rs.path.pts.count += 17;
         }
-        renderFlag |= RenderUpdateFlag::Path;
+        impl.mark(RenderUpdateFlag::Path);
     }
 
     Paint* duplicate(Paint* ret)
@@ -491,7 +488,7 @@ struct Shape::Impl : Paint::Impl
         delete(dup->rs.fill);
 
         //Default Properties
-        dup->renderFlag = RenderUpdateFlag::All;
+        dup->impl.mark(RenderUpdateFlag::All);
         dup->rs.rule = rs.rule;
         dup->rs.color = rs.color;
 
@@ -517,7 +514,7 @@ struct Shape::Impl : Paint::Impl
 
     void reset()
     {
-        PAINT(paint)->reset();
+        PAINT(this)->reset();
         rs.path.cmds.clear();
         rs.path.pts.clear();
 

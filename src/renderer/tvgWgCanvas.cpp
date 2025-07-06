@@ -21,26 +21,22 @@
  */
 
 #include "tvgCanvas.h"
+#include "tvgTaskScheduler.h"
 
 #ifdef THORVG_WG_RASTER_SUPPORT
     #include "tvgWgRenderer.h"
 #endif
 
 
-WgCanvas::WgCanvas()
-{
-#ifdef THORVG_WG_RASTER_SUPPORT
-    pImpl->renderer = WgRenderer::gen();
-    pImpl->renderer->ref();
-#endif
-}
-
+WgCanvas::WgCanvas() = default;
 
 WgCanvas::~WgCanvas()
 {
 #ifdef THORVG_WG_RASTER_SUPPORT
     auto renderer = static_cast<WgRenderer*>(pImpl->renderer);
     renderer->target(nullptr, nullptr, nullptr, 0, 0);
+
+    WgRenderer::term();
 #endif
 }
 
@@ -59,7 +55,7 @@ Result WgCanvas::target(void* device, void* instance, void* target, uint32_t w, 
     if (!renderer) return Result::MemoryCorruption;
 
     if (!renderer->target((WGPUDevice)device, (WGPUInstance)instance, target, w, h, type)) return Result::Unknown;
-    pImpl->vport = {0, 0, (int32_t)w, (int32_t)h};
+    pImpl->vport = {{0, 0}, {(int32_t)w, (int32_t)h}};
     renderer->viewport(pImpl->vport);
 
     //Paints must be updated again with this new target.
@@ -74,8 +70,13 @@ Result WgCanvas::target(void* device, void* instance, void* target, uint32_t w, 
 WgCanvas* WgCanvas::gen() noexcept
 {
 #ifdef THORVG_WG_RASTER_SUPPORT
-    if (WgRenderer::init() <= 0) return nullptr;
-    return new WgCanvas;
+    if (engineInit > 0) {
+        auto renderer = WgRenderer::gen(TaskScheduler::threads());
+        renderer->ref();
+        auto ret = new WgCanvas;
+        ret->pImpl->renderer = renderer;
+        return ret;
+    }
 #endif
     return nullptr;
 }

@@ -20,7 +20,6 @@
  * SOFTWARE.
  */
 
-#include <string>
 #include "tvgGlShaderSrc.h"
 
 #define TVG_COMPOSE_SHADER(shader) #shader
@@ -75,12 +74,14 @@ const char* GRADIENT_VERT_SHADER = TVG_COMPOSE_SHADER(
 );
 
 
-std::string STR_GRADIENT_FRAG_COMMON_VARIABLES = TVG_COMPOSE_SHADER(
+//See: GlRenderer::initShaders()
+const char* STR_GRADIENT_FRAG_COMMON_VARIABLES = TVG_COMPOSE_SHADER(
     const int MAX_STOP_COUNT = 16;                                                                          \n
     in vec2 vPos;                                                                                           \n
 );
 
-std::string STR_GRADIENT_FRAG_COMMON_FUNCTIONS = TVG_COMPOSE_SHADER(
+//See: GlRenderer::initShaders()
+const char* STR_GRADIENT_FRAG_COMMON_FUNCTIONS = TVG_COMPOSE_SHADER(
     float gradientStep(float edge0, float edge1, float x)                                                   \n
     {                                                                                                       \n
         // linear                                                                                           \n
@@ -170,7 +171,8 @@ std::string STR_GRADIENT_FRAG_COMMON_FUNCTIONS = TVG_COMPOSE_SHADER(
     }                                                                                                       \n
 );
 
-std::string STR_LINEAR_GRADIENT_VARIABLES = TVG_COMPOSE_SHADER(
+//See: GlRenderer::initShaders()
+const char* STR_LINEAR_GRADIENT_VARIABLES = TVG_COMPOSE_SHADER(
     layout(std140) uniform GradientInfo {                                                                   \n
         vec4  nStops;                                                                                       \n
         vec2  gradStartPos;                                                                                 \n
@@ -180,7 +182,8 @@ std::string STR_LINEAR_GRADIENT_VARIABLES = TVG_COMPOSE_SHADER(
     } uGradientInfo;                                                                                        \n
 );
 
-std::string STR_LINEAR_GRADIENT_MAIN = TVG_COMPOSE_SHADER(
+//See: GlRenderer::initShaders()
+const char* STR_LINEAR_GRADIENT_MAIN = TVG_COMPOSE_SHADER(
     out vec4 FragColor;                                                                                     \n
     void main()                                                                                             \n
     {                                                                                                       \n
@@ -195,7 +198,8 @@ std::string STR_LINEAR_GRADIENT_MAIN = TVG_COMPOSE_SHADER(
     }                                                                                                       \n
 );
 
-std::string STR_RADIAL_GRADIENT_VARIABLES = TVG_COMPOSE_SHADER(
+//See: GlRenderer::initShaders()
+const char* STR_RADIAL_GRADIENT_VARIABLES = TVG_COMPOSE_SHADER(
     layout(std140) uniform GradientInfo {                                                                   \n
         vec4  nStops;                                                                                       \n
         vec4  centerPos;                                                                                    \n
@@ -205,7 +209,8 @@ std::string STR_RADIAL_GRADIENT_VARIABLES = TVG_COMPOSE_SHADER(
     } uGradientInfo ;                                                                                       \n
 );
 
-std::string STR_RADIAL_GRADIENT_MAIN = TVG_COMPOSE_SHADER(
+//See: GlRenderer::initShaders()
+const char* STR_RADIAL_GRADIENT_MAIN = TVG_COMPOSE_SHADER(
     out vec4 FragColor;                                                                                     \n
                                                                                                             \n
     mat3 radial_matrix(vec2 p0, vec2 p1)                                                                    \n
@@ -313,23 +318,6 @@ std::string STR_RADIAL_GRADIENT_MAIN = TVG_COMPOSE_SHADER(
         FragColor =  vec4(color.rgb * color.a, color.a);                                                    \n
     }
 );
-
-std::string STR_LINEAR_GRADIENT_FRAG_SHADER =
-STR_GRADIENT_FRAG_COMMON_VARIABLES +
-STR_LINEAR_GRADIENT_VARIABLES +
-STR_GRADIENT_FRAG_COMMON_FUNCTIONS +
-STR_LINEAR_GRADIENT_MAIN;
-
-const char* LINEAR_GRADIENT_FRAG_SHADER = STR_LINEAR_GRADIENT_FRAG_SHADER.c_str();
-
-std::string STR_RADIAL_GRADIENT_FRAG_SHADER =
-STR_GRADIENT_FRAG_COMMON_VARIABLES +
-STR_RADIAL_GRADIENT_VARIABLES +
-STR_GRADIENT_FRAG_COMMON_FUNCTIONS +
-STR_RADIAL_GRADIENT_MAIN;
-
-const char* RADIAL_GRADIENT_FRAG_SHADER = STR_RADIAL_GRADIENT_FRAG_SHADER.c_str();
-
 
 const char* IMAGE_VERT_SHADER = TVG_COMPOSE_SHADER(
     uniform float uDepth;                                                                   \n
@@ -752,7 +740,6 @@ void main()
 const char* GAUSSIAN_VERTICAL = R"(
 uniform sampler2D uSrcTexture;
 layout(std140) uniform Gaussian {
-    int level;
     float sigma;
     float scale;
     float extend;
@@ -788,7 +775,6 @@ void main()
 const char* GAUSSIAN_HORIZONTAL = R"(
 uniform sampler2D uSrcTexture;
 layout(std140) uniform Gaussian {
-    int level;
     float sigma;
     float scale;
     float extend;
@@ -825,7 +811,6 @@ const char* EFFECT_DROPSHADOW = R"(
 uniform sampler2D uSrcTexture;
 uniform sampler2D uBlrTexture;
 layout(std140) uniform DropShadow {
-    int level;
     float sigma;
     float scale;
     float extend;
@@ -876,11 +861,11 @@ out vec4 FragColor;
 void main()
 {
     vec4 orig = texture(uSrcTexture, vUV);
-    float luma = dot(orig.rgb, vec3(0.2125, 0.7154, 0.0721));
+    float luma = dot(orig.rgb, vec3(0.2126, 0.7152, 0.0722));
     vec4 black = uParams.params[0];
     vec4 white = uParams.params[1];
     float intens = uParams.params[2].r;
-    FragColor = mix(orig, mix(white, black, luma), intens) * orig.a;
+    FragColor = mix(orig, mix(black, white, luma), intens) * orig.a;
 } 
 )";
 
@@ -896,7 +881,7 @@ out vec4 FragColor;
 void main()
 {
     vec4 orig = texture(uSrcTexture, vUV);
-    float luma = dot(orig.rgb, vec3(0.2125, 0.7154, 0.0721));
+    float luma = dot(orig.rgb, vec3(0.2126, 0.7152, 0.0722));
     vec4 shadow = uParams.params[0];
     vec4 midtone = uParams.params[1];
     vec4 highlight = uParams.params[2];

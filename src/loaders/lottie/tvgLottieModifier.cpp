@@ -27,6 +27,12 @@
 /* Internal Class Implementation                                        */
 /************************************************************************/
 
+static bool _colinear(const Point* p)
+{
+    return tvg::zero(*p - *(p + 1)) && tvg::zero(*(p + 2) - *(p + 3));
+}
+
+
 static void _roundCorner(Array<PathCommand>& cmds, Array<Point>& pts, Point& prev, Point& curr, Point& next, float r)
 {
     auto lenPrev = length(prev - curr);
@@ -46,16 +52,9 @@ static void _roundCorner(Array<PathCommand>& cmds, Array<Point>& pts, Point& pre
 }
 
 
-static bool _zero(Point& p1, Point& p2)
-{
-    constexpr float epsilon = 1e-3f;
-    return fabsf(p1.x / p2.x - 1.0f) < epsilon && fabsf(p1.y / p2.y - 1.0f) < epsilon;
-}
-
-
 static bool _intersect(Line& line1, Line& line2, Point& intersection, bool& inside)
 {
-    if (_zero(line1.pt2, line2.pt1)) {
+    if (tvg::zero(line1.pt2 - line2.pt1)) {
         intersection = line1.pt2;
         inside = true;
         return true;
@@ -115,9 +114,12 @@ void LottieOffsetModifier::corner(RenderPath& out, Line& line, Line& nextLine, u
                 auto norm = normal(line.pt1, line.pt2);
                 auto nextNorm = normal(nextLine.pt1, nextLine.pt2);
                 auto miterDirection = (norm + nextNorm) / length(norm + nextNorm);
+                if (1.0f <= miterLimit * fabsf(miterDirection.x * norm.x + miterDirection.y * norm.y)) {
+                    out.cmds.push(PathCommand::LineTo);
+                    out.pts.push(intersect);
+                }
                 out.cmds.push(PathCommand::LineTo);
-                if (1.0f <= miterLimit * fabsf(miterDirection.x * norm.x + miterDirection.y * norm.y)) out.pts.push(intersect);
-                else out.pts.push(nextLine.pt1);
+                out.pts.push(nextLine.pt1);
             } else {
                 out.cmds.push(PathCommand::LineTo);
                 out.pts.push(nextLine.pt1);
@@ -159,7 +161,7 @@ void LottieOffsetModifier::line(RenderPath& out, PathCommand* inCmds, uint32_t i
     Line nextLine = state.firstLine;
     if (inCmds[curCmd + 1] == PathCommand::LineTo) nextLine = _offset(inPts[curPt + degenerated], inPts[curPt + 1 + degenerated], offset);
     else if (inCmds[curCmd + 1] == PathCommand::CubicTo) nextLine = _offset(inPts[curPt + 1 + degenerated], inPts[curPt + 2 + degenerated], offset);
-    else if (inCmds[curCmd + 1] == PathCommand::Close && !_zero(inPts[curPt + degenerated], inPts[state.movetoInIndex + degenerated]))
+    else if (inCmds[curCmd + 1] == PathCommand::Close && !tvg::zero(inPts[curPt + degenerated] - inPts[state.movetoInIndex + degenerated]))
         nextLine = _offset(inPts[curPt + degenerated], inPts[state.movetoInIndex + degenerated], offset);
 
     corner(out, state.line, nextLine, state.movetoOutIndex, inCmds[curCmd + 1] == PathCommand::Close);
@@ -192,14 +194,10 @@ bool LottieRoundnessModifier::modifyPath(PathCommand* inCmds, uint32_t inCmdsCnt
                 break;
             }
             case PathCommand::CubicTo: {
-                auto& prev = inPts[iPts - 1];
-                auto& curr = inPts[iPts + 2];
-                if (iCmds < inCmdsCnt - 1 &&
-                    tvg::zero(inPts[iPts - 1] - inPts[iPts]) &&
-                    tvg::zero(inPts[iPts + 1] - inPts[iPts + 2])) {
-                    if (inCmds[iCmds + 1] == PathCommand::CubicTo &&
-                        tvg::zero(inPts[iPts + 2] - inPts[iPts + 3]) &&
-                        tvg::zero(inPts[iPts + 4] - inPts[iPts + 5])) {
+                if (iCmds < inCmdsCnt - 1 && _colinear(inPts + iPts - 1)) {
+                    auto& prev = inPts[iPts - 1];
+                    auto& curr = inPts[iPts + 2];
+                    if (inCmds[iCmds + 1] == PathCommand::CubicTo && _colinear(inPts + iPts + 2)) {
                         _roundCorner(path.cmds, path.pts, prev, curr, inPts[iPts + 5], r);
                         iPts += 3;
                         break;
@@ -381,7 +379,7 @@ bool LottieOffsetModifier::modifyPath(PathCommand* inCmds, uint32_t inCmdsCnt, P
             iPt += 3;
         }
         else {
-            if (!_zero(inPts[iPt - 1], inPts[state.movetoInIndex])) {
+            if (!tvg::zero(inPts[iPt - 1] - inPts[state.movetoInIndex])) {
                 out.cmds.push(PathCommand::LineTo);
                 corner(out, state.line, state.firstLine, state.movetoOutIndex, true);
             }

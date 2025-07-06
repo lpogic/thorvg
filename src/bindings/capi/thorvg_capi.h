@@ -1,20 +1,3 @@
-/*!
-* @file thorvg_capi.h
-*
-* @brief The module provides C bindings for the ThorVG library.
-* Please refer to src/examples/Capi.cpp to find the thorvg_capi usage examples.
-*
-* The thorvg_capi module allows to implement the ThorVG client and provides
-* the following functionalities:
-* - drawing shapes: line, curve, polygon, circle, user-defined, ...
-* - filling: solid, linear and radial gradient
-* - scene graph & affine transformation (translation, rotation, scale, ...)
-* - stroking: width, join, cap, dash
-* - composition: blending, masking, path clipping
-* - pictures: SVG, PNG, JPG, bitmap
-*
-*/
-
 #ifndef __THORVG_CAPI_H__
 #define __THORVG_CAPI_H__
 
@@ -108,18 +91,6 @@ typedef struct _Tvg_Accessor Tvg_Accessor;
 
 
 /**
-* @brief Enumeration specifying the engine type used for the graphics backend. For multiple backends bitwise operation is allowed.
-*
-* @ingroup ThorVGCapi_Initializer
-*/
-typedef enum {
-    TVG_ENGINE_SW = (1 << 1),   ///< CPU rasterizer
-    TVG_ENGINE_GL = (1 << 2),   ///< OpenGL rasterizer
-    TVG_ENGINE_WG = (1 << 3)    ///< WebGPU rasterizer
-} Tvg_Engine;
-
-
-/**
  * @brief Enumeration specifying the result from the APIs.
  *
  * All ThorVG APIs could potentially return one of the values in the list.
@@ -155,11 +126,17 @@ typedef enum {
  * @ingroup ThorVGCapi_Paint
  */
 typedef enum {
-    TVG_MASK_METHOD_NONE = 0,      ///< No masking is applied.
-    TVG_MASK_METHOD_ALPHA,         ///< The pixels of the source and the target are alpha blended. As a result, only the part of the source, which intersects with the target is visible.
-    TVG_MASK_METHOD_INVERSE_ALPHA, ///< The pixels of the source and the complement to the target's pixels are alpha blended. As a result, only the part of the source which is not covered by the target is visible.
-    TVG_MASK_METHOD_LUMA,          ///< The source pixels are converted to grayscale (luma value) and alpha blended with the target. As a result, only the part of the source which intersects with the target is visible. @since 0.9
-    TVG_MASK_METHOD_INVERSE_LUMA   ///< The source pixels are converted to grayscale (luma value) and complement to the target's pixels are alpha blended. As a result, only the part of the source which is not covered by the target is visible. @since 0.14
+    TVG_MASK_METHOD_NONE = 0,      ///< No Masking is applied.
+    TVG_MASK_METHOD_ALPHA,         ///< Alpha Masking using the masking target's pixels as an alpha value.
+    TVG_MASK_METHOD_INVERSE_ALPHA, ///< Alpha Masking using the complement to the masking target's pixels as an alpha value.
+    TVG_MASK_METHOD_LUMA,          ///< Alpha Masking using the grayscale (0.2126R + 0.7152G + 0.0722*B) of the masking target's pixels. @since 0.9
+    TVG_MASK_METHOD_INVERSE_LUMA,  ///< Alpha Masking using the grayscale (0.2126R + 0.7152G + 0.0722*B) of the complement to the masking target's pixels. @since 0.11
+    TVG_MASK_METHOD_ADD,           ///< Combines the target and source objects pixels using target alpha. (T * TA) + (S * (255 - TA)) (Experimental API)
+    TVG_MASK_METHOD_SUBTRACT,      ///< Subtracts the source color from the target color while considering their respective target alpha. (T * TA) - (S * (255 - TA)) (Experimental API)
+    TVG_MASK_METHOD_INTERSECT,     ///< Computes the result by taking the minimum value between the target alpha and the source alpha and multiplies it with the target color. (T * min(TA, SA)) (Experimental API)
+    TVG_MASK_METHOD_DIFFERENCE,    ///< Calculates the absolute difference between the target color and the source color multiplied by the complement of the target alpha. abs(T - S * (255 - TA)) (Experimental API)
+    TVG_MASK_METHOD_LIGHTEN,       ///< Where multiple masks intersect, the highest transparency value is used. (Experimental API)
+    TVG_MASK_METHOD_DARKEN         ///< Where multiple masks intersect, the lowest transparency value is used. (Experimental API)
 } Tvg_Mask_Method;
 
 /**
@@ -189,21 +166,6 @@ typedef enum {
     TVG_BLEND_METHOD_ADD,               ///< Simply adds pixel values of one layer with the other. (S + D)
     TVG_BLEND_METHOD_HARDMIX            ///< Reserved. Not supported.
 } Tvg_Blend_Method;
-
-
-/**
- * @see Tvg_Type
- * @deprecated
- */
-typedef enum {
-    TVG_IDENTIFIER_UNDEF = 0,   ///< Undefined type.
-    TVG_IDENTIFIER_SHAPE,       ///< A shape type paint.
-    TVG_IDENTIFIER_SCENE,       ///< A scene type paint.
-    TVG_IDENTIFIER_PICTURE,     ///< A picture type paint.
-    TVG_IDENTIFIER_LINEAR_GRAD, ///< A linear gradient type.
-    TVG_IDENTIFIER_RADIAL_GRAD, ///< A radial gradient type.
-    TVG_IDENTIFIER_TEXT         ///< A text type paint.
-} Tvg_Identifier;
 
 
 /**
@@ -342,43 +304,36 @@ typedef struct
 /* Engine API                                                           */
 /************************************************************************/
 /*!
-* @brief Initializes TVG engines.
+* @brief Initializes the ThorVG engine.
 *
-* TVG requires the running-engine environment.
-* TVG runs its own task-scheduler for parallelizing rendering tasks efficiently.
-* You can indicate the number of threads, the count of which is designated @p threads.
-* In the initialization step, TVG will generate/spawn the threads as set by @p threads count.
+* ThorVG requires an active runtime environment to operate.
+* Internally, it utilizes a task scheduler to efficiently parallelize rendering operations.
+* You can specify the number of worker threads using the @p threads parameter.
+* During initialization, ThorVG will spawn the specified number of threads.
 *
-* @param[in] engine_method The engine types to initialize. This is relative to the Canvas types, in which it will be used. For multiple backends bitwise operation is allowed.
-* @param[in] threads The number of additional threads used to perform rendering. Zero indicates only the main thread is to be used.
+* @param[in] threads The number of worker threads to create. A value of zero indicates that only the main thread will be used.
 *
 * @return Tvg_Result enumeration.
-* @retval TVG_RESULT_INVALID_ARGUMENT Unknown engine type.
-* @retval TVG_RESULT_NOT_SUPPORTED Unsupported engine type.
 *
-* @note The Initializer keeps track of the number of times it was called. Threads count is fixed at the first init() call.
+* @note The initializer uses internal reference counting to track multiple calls.
+*       The number of threads is fixed on the first call to tvg_engine_init() and cannot be changed in subsequent calls.
 * @see tvg_engine_term()
-* @see Tvg_Engine
 */
-TVG_API Tvg_Result tvg_engine_init(Tvg_Engine engine_method, unsigned threads);
+TVG_API Tvg_Result tvg_engine_init(unsigned threads);
 
 
 /*!
-* @brief Terminates TVG engines.
+* @brief Terminates the ThorVG engine.
 *
-* It should be called in case of termination of the TVG client with the same engine types as were passed when tvg_engine_init() was called.
-*
-* @param engine_method The engine types to terminate. This is relative to the Canvas types, in which it will be used. For multiple backends bitwise operation is allowed
+* Cleans up resources and stops any internal threads initialized by tvg_engine_init().
 *
 * @return Tvg_Result enumeration.
-* @retval TVG_RESULT_INSUFFICIENT_CONDITION Nothing to be terminated.
-* @retval TVG_RESULT_INVALID_ARGUMENT Unknown engine type.
-* @retval TVG_RESULT_NOT_SUPPORTED Unsupported engine type.
+* @retval TVG_RESULT_INSUFFICIENT_CONDITION Returned if there is nothing to terminate (e.g., tvg_engine_init() was not called).
 *
+* @note The initializer maintains a reference count for safe repeated use. Only the final call to tvg_engine_term() will fully shut down the engine.
 * @see tvg_engine_init()
-* @see Tvg_Engine
 */
-TVG_API Tvg_Result tvg_engine_term(Tvg_Engine engine_method);
+TVG_API Tvg_Result tvg_engine_term();
 
 
 /**
@@ -644,23 +599,6 @@ TVG_API Tvg_Result tvg_canvas_update(Tvg_Canvas* canvas);
 
 
 /*!
-* @brief Updates the given Tvg_Paint object from the canvas before the rendering.
-*
-* If a client application using the TVG library does not update the entire canvas with tvg_canvas_update() in the frame
-* rendering process, Tvg_Paint objects previously added to the canvas should be updated manually with this function.
-*
-* @param[in] canvas The Tvg_Canvas object to which the @p paint belongs.
-* @param[in] paint The Tvg_Paint object to be updated.
-*
-* @return Tvg_Result enumeration.
-* @retval TVG_RESULT_INVALID_ARGUMENT In case a @c nullptr is passed as the argument.
-*
-* @see tvg_canvas_update()
-*/
-TVG_API Tvg_Result tvg_canvas_update_paint(Tvg_Canvas* canvas, Tvg_Paint* paint);
-
-
-/*!
 * @brief Requests the canvas to draw the Tvg_Paint objects.
 *
 * All paints from the given canvas will be rasterized to the buffer.
@@ -759,7 +697,7 @@ TVG_API Tvg_Result tvg_paint_del(Tvg_Paint* paint);
  *
  * @since 1.0
  */
-TVG_API uint8_t tvg_paint_ref(Tvg_Paint* paint);
+TVG_API uint16_t tvg_paint_ref(Tvg_Paint* paint);
 
 
 /**
@@ -778,7 +716,7 @@ TVG_API uint8_t tvg_paint_ref(Tvg_Paint* paint);
  *
  * @since 1.0
  */
-TVG_API uint8_t tvg_paint_unref(Tvg_Paint* paint, bool free);
+TVG_API uint16_t tvg_paint_unref(Tvg_Paint* paint, bool free);
 
 
 /**
@@ -795,7 +733,7 @@ TVG_API uint8_t tvg_paint_unref(Tvg_Paint* paint, bool free);
  *
  * @since 1.0
  */
-TVG_API uint8_t tvg_paint_get_ref(const Tvg_Paint* paint);
+TVG_API uint16_t tvg_paint_get_ref(const Tvg_Paint* paint);
 
 
 /*!
@@ -985,7 +923,7 @@ TVG_API Tvg_Result tvg_paint_set_mask_method(Tvg_Paint* paint, Tvg_Paint* target
 TVG_API Tvg_Result tvg_paint_get_mask_method(const Tvg_Paint* paint, const Tvg_Paint** target, Tvg_Mask_Method* method);
 
 
-/*!
+/**
 * @brief Clip the drawing region of the paint object.
 *
 * This function restricts the drawing area of the paint object to the specified shape's paths.
@@ -998,10 +936,24 @@ TVG_API Tvg_Result tvg_paint_get_mask_method(const Tvg_Paint* paint, const Tvg_P
 * @retval TVG_RESULT_INSUFFICIENT_CONDITION if the target has already belonged to another paint.
 * @retval TVG_RESULT_NOT_SUPPORTED If the @p clipper type is not Shape.
 *
+* @see tvg_paint_get_clip()
+
 * @since 1.0
 */
-TVG_API Tvg_Result tvg_paint_clip(Tvg_Paint* paint, Tvg_Paint* clipper);
+TVG_API Tvg_Result tvg_paint_set_clip(Tvg_Paint* paint, Tvg_Paint* clipper);
 
+/**
+ * @brief Get the clipper shape of the paint object.
+ *
+ * This function returns the clipper that has been previously set to this paint object.
+ *
+ * @return The shape object used as the clipper, or @c nullptr if no clipper is set.
+ *
+ * @see tvg_paint_set_clip()
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Paint* tvg_paint_get_clip(const Tvg_Paint* paint);
 
 /**
  * @brief Retrieves the parent paint object.
@@ -1349,14 +1301,18 @@ TVG_API Tvg_Result tvg_shape_get_stroke_gradient(const Tvg_Paint* paint, Tvg_Gra
 * @brief Sets the shape's stroke dash pattern.
 *
 * @param[in] paint A Tvg_Paint pointer to the shape object.
-* @param[in] dashPattern The array of consecutive pair values of the dash length and the gap length.
+* @param[in] dashPattern An array of alternating dash and gap lengths.
 * @param[in] cnt The size of the @p dashPattern array.
-* @param[in] offset The shift of the starting point within the repeating dash pattern from which the path's dashing begins.
+* @param[in] offset The shift of the starting point within the repeating dash pattern, from which the pattern begins to be applied.
 *
 * @return Tvg_Result enumeration.
-* @retval TVG_RESULT_INVALID_ARGUMENT An invalid pointer passed as an argument and @p cnt > 0, the given length of the array is less than two or any of the @p dashPattern values is zero or less.
+* @retval TVG_RESULT_INVALID_ARGUMENT In case @p dashPattern is @c nullptr and @p cnt > 0 or @p dashPattern is not @c nullptr and @p cnt is zero.
 *
 * @note To reset the stroke dash pattern, pass @c nullptr to @p dashPattern and zero to @p cnt.
+* @note Values of @p dashPattern less than zero are treated as zero.
+* @note If all values in the @p dashPattern are equal to or less than 0, the dash is ignored.
+* @note If the @p dashPattern contains an odd number of elements, the sequence is repeated in the same
+* order to form an even-length pattern, preserving the alternation of dashes and gaps.
 * @since 1.0
 */
 TVG_API Tvg_Result tvg_shape_set_stroke_dash(Tvg_Paint* paint, const float* dashPattern, uint32_t cnt, float offset);
@@ -1675,6 +1631,8 @@ TVG_API Tvg_Result tvg_linear_gradient_get(Tvg_Gradient* grad, float* x1, float*
 * @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Gradient pointer or the radius @p r or @p fr value is negative.
 *
 * @note In case the radius @p r is zero, an object is filled with a single color using the last color specified in the specified in the tvg_gradient_set_color_stops().
+* @note In case the focal point (@p fx and @p fy) lies outside the end circle, it is projected onto the edge of the end circle.
+* @note If the start circle doesn't fully fit inside the end circle (after possible repositioning), the @p fr is reduced accordingly.
 * @note By manipulating the position and size of the focal point, a wide range of visual effects can be achieved, such as directing
 * the gradient focus towards a specific edge or enhancing the depth and complexity of shading patterns.
 * If a focal effect is not desired, simply align the focal point (@p fx and @p fy) with the center of the end circle (@p cx and @p cy)
@@ -1991,6 +1949,7 @@ TVG_API Tvg_Paint* tvg_scene_new(void);
  */
 TVG_API Tvg_Result tvg_scene_push(Tvg_Paint* scene, Tvg_Paint* paint);
 
+
 /**
  * @brief Adds a paint object to the scene.
  *
@@ -2010,6 +1969,7 @@ TVG_API Tvg_Result tvg_scene_push(Tvg_Paint* scene, Tvg_Paint* paint);
  */
 TVG_API Tvg_Result tvg_scene_push_at(Tvg_Paint* scene, Tvg_Paint* target, Tvg_Paint* at);
 
+
 /**
  * @brief Removes a paint object from the scene.
  *
@@ -2025,6 +1985,116 @@ TVG_API Tvg_Result tvg_scene_push_at(Tvg_Paint* scene, Tvg_Paint* target, Tvg_Pa
  * @since 1.0
  */
 TVG_API Tvg_Result tvg_scene_remove(Tvg_Paint* scene, Tvg_Paint* paint);
+
+
+/**
+ * @brief Resets all previously applied scene effects.
+ *
+ * This function clears all effects that have been applied to the scene,
+ * restoring it to its original state without any post-processing.
+ *
+ * @param[in] scene A pointer to the Tvg_Paint scene object.
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Result tvg_scene_reset_effects(Tvg_Paint* scene);
+
+
+/**
+ * @brief Applies a Gaussian blur effect to the scene.
+ *
+ * This function applies a Gaussian blur filter to the scene as a post-processing effect.
+ * The blur can be applied in different directions with configurable border handling and quality settings.
+ *
+ * @param[in] scene A pointer to the Tvg_Paint scene object.
+ * @param[in] sigma The blur radius (sigma) value. Must be greater than 0.
+ * @param[in] direction Blur direction: 0 = both directions, 1 = horizontal only, 2 = vertical only.
+ * @param[in] border Border handling method: 0 = duplicate, 1 = wrap.
+ * @param[in] quality Blur quality level [0 - 100].
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Result tvg_scene_push_effect_gaussian_blur(Tvg_Paint* scene, double sigma, int direction, int border, int quality);
+
+
+/**
+ * @brief Applies a drop shadow effect to the scene.
+ *
+ * This function applies a drop shadow with a Gaussian blur to the scene. The shadow 
+ * can be customized using color, opacity, angle, distance, blur radius (sigma), 
+ * and quality parameters.
+ *
+ * @param[in] scene A pointer to the Tvg_Paint scene object.
+ * @param[in] r Red channel value of the shadow color [0 - 255].
+ * @param[in] g Green channel value of the shadow color [0 - 255].
+ * @param[in] b Blue channel value of the shadow color [0 - 255].
+ * @param[in] a Alpha (opacity) channel value of the shadow [0 - 255].
+ * @param[in] angle Shadow direction in degrees [0 - 360].
+ * @param[in] distance Distance of the shadow from the original object.
+ * @param[in] sigma Gaussian blur sigma value for the shadow. Must be > 0.
+ * @param[in] quality Blur quality level [0 - 100].
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Result tvg_scene_push_effect_drop_shadow(Tvg_Paint* scene, int r, int g, int b, int a, double angle, double distance, double sigma, int quality);
+
+
+/**
+ * @brief Applies a fill color effect to the scene.
+ *
+ * This function overrides the scene's content colors with the specified fill color.
+ *
+ * @param[in] scene A pointer to the Tvg_Paint scene object.
+ * @param[in] r Red color channel value [0 - 255].
+ * @param[in] g Green color channel value [0 - 255].
+ * @param[in] b Blue color channel value [0 - 255].
+ * @param[in] a Alpha (opacity) channel value [0 - 255].
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Result tvg_scene_push_effect_fill(Tvg_Paint* scene, int r, int g, int b, int a);
+
+
+/**
+ * @brief Applies a tint effect to the scene.
+ *
+ * This function tints the current scene using specified black and white color values,
+ * modulated by a given intensity.
+ *
+ * @param[in] scene A pointer to the Tvg_Paint scene object.
+ * @param[in] black_r Red component of the black color [0 - 255].
+ * @param[in] black_g Green component of the black color [0 - 255].
+ * @param[in] black_b Blue component of the black color [0 - 255].
+ * @param[in] white_r Red component of the white color [0 - 255].
+ * @param[in] white_g Green component of the white color [0 - 255].
+ * @param[in] white_b Blue component of the white color [0 - 255].
+ * @param[in] intensity Tint intensity value [0 - 100].
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Result tvg_scene_push_effect_tint(Tvg_Paint* scene, int black_r, int black_g, int black_b, int white_r, int white_g, int white_b, double intensity);
+
+
+/**
+ * @brief Applies a tritone color effect to the scene.
+ *
+ * This function applies a tritone color effect to the given scene using three sets of RGB values 
+ * representing shadow, midtone, and highlight colors.
+ *
+ * @param[in] scene A pointer to the Tvg_Paint scene object.
+ * @param[in] shadow_r Red component of the shadow color [0 - 255].
+ * @param[in] shadow_g Green component of the shadow color [0 - 255].
+ * @param[in] shadow_b Blue component of the shadow color [0 - 255].
+ * @param[in] midtone_r Red component of the midtone color [0 - 255].
+ * @param[in] midtone_g Green component of the midtone color [0 - 255].
+ * @param[in] midtone_b Blue component of the midtone color [0 - 255].
+ * @param[in] highlight_r Red component of the highlight color [0 - 255].
+ * @param[in] highlight_g Green component of the highlight color [0 - 255].
+ * @param[in] highlight_b Blue component of the highlight color [0 - 255].
+ *
+ * @since 1.0
+ */
+TVG_API Tvg_Result tvg_scene_push_effect_tritone(Tvg_Paint* scene, int shadow_r, int shadow_g, int shadow_b, int midtone_r, int midtone_g, int midtone_b, int highlight_r, int highlight_g, int highlight_b);
 
 /** \} */   // end defgroup ThorVGCapi_Scene
 

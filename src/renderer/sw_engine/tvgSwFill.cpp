@@ -67,10 +67,10 @@ static uint32_t _estimateAAMargin(const Fill* fdata)
     constexpr float marginScalingFactor = 800.0f;
 
     if (fdata->type() == Type::RadialGradient) {
-        auto radius = RADIAL(fdata)->r;
+        auto radius = CONST_RADIAL(fdata)->r;
         return tvg::zero(radius) ? 0 : static_cast<uint32_t>(marginScalingFactor / radius);
     } else {
-        auto grad = LINEAR(fdata);
+        auto grad = CONST_LINEAR(fdata);
         Point p1 {grad->x1, grad->y1};
         Point p2 {grad->x2, grad->y2};
         auto len = length(&p1, &p2);
@@ -226,7 +226,7 @@ bool _prepareLinear(SwFill* fill, const LinearGradient* linear, const Matrix& pT
     fill->linear.dy /= len;
     fill->linear.offset = -fill->linear.dx * x1 - fill->linear.dy * y1;
 
-    auto transform = pTransform * linear->transform();
+    const auto& transform = pTransform * linear->transform();
 
     Matrix itransform;
     if (!inverse(&transform, &itransform)) return false;
@@ -245,11 +245,7 @@ bool _prepareRadial(SwFill* fill, const RadialGradient* radial, const Matrix& pT
 {
     float cx, cy, r, fx, fy, fr;
     radial->radial(&cx, &cy, &r, &fx, &fy, &fr);
-
-    if (tvg::zero(r)) {
-        fill->solid = true;
-        return true;
-    }
+    if ((fill->solid = !CONST_RADIAL(radial)->correct(fx, fy, fr))) return true;
 
     fill->radial.dr = r - fr;
     fill->radial.dx = cx - fx;
@@ -258,28 +254,11 @@ bool _prepareRadial(SwFill* fill, const RadialGradient* radial, const Matrix& pT
     fill->radial.fx = fx;
     fill->radial.fy = fy;
     fill->radial.a = fill->radial.dr * fill->radial.dr - fill->radial.dx * fill->radial.dx - fill->radial.dy * fill->radial.dy;
+    constexpr float precision = 0.01f;
+    if (fill->radial.a < precision) fill->radial.a = precision;
+    fill->radial.invA = 1.0f / fill->radial.a;
 
-    //This condition fulfills the SVG 1.1 std:
-    //the focal point, if outside the end circle, is moved to be on the end circle
-    //See: the SVG 2 std requirements: https://www.w3.org/TR/SVG2/pservers.html#RadialGradientNotes
-    if (fill->radial.a < 0) {
-        auto dist = sqrtf(fill->radial.dx * fill->radial.dx + fill->radial.dy * fill->radial.dy);
-        fill->radial.fx = cx + r * (fx - cx) / dist;
-        fill->radial.fy = cy + r * (fy - cy) / dist;
-        fill->radial.dx = cx - fill->radial.fx;
-        fill->radial.dy = cy - fill->radial.fy;
-        // Prevent loss of precision on Apple Silicon when dr=dy and dx=0 due to FMA
-        // https://github.com/thorvg/thorvg/issues/2014
-        auto dr2 = fill->radial.dr * fill->radial.dr;
-        auto dx2 = fill->radial.dx * fill->radial.dx;
-        auto dy2 = fill->radial.dy * fill->radial.dy;
-
-        fill->radial.a = dr2 - dx2 - dy2;
-    }
-
-    if (fill->radial.a > 0) fill->radial.invA = 1.0f / fill->radial.a;
-
-    auto transform = pTransform * radial->transform();
+    const auto& transform = pTransform * radial->transform();
 
     Matrix itransform;
     if (!inverse(&transform, &itransform)) return false;

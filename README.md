@@ -1,5 +1,6 @@
 [![Discord](https://img.shields.io/badge/Community-5865f2?style=flat&logo=discord&logoColor=white)](https://discord.gg/n25xj6J6HM)
 [![ThorVGPT](https://img.shields.io/badge/ThorVGPT-76A99C?style=flat&logo=openai&logoColor=white)](https://chat.openai.com/g/g-Ht3dYIwLO-thorvgpt)
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/thorvg/thorvg)
 [![OpenCollective](https://img.shields.io/badge/OpenCollective-84B5FC?style=flat&logo=opencollective&logoColor=white)](https://opencollective.com/thorvg)
 [![License](https://img.shields.io/badge/licence-MIT-green.svg?style=flat)](LICENSE)
 ![BinarySize](https://img.shields.io/badge/Size->150kb-black)
@@ -42,6 +43,8 @@ The following list shows primitives that are supported by ThorVG: <br />
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_primitives.png">
 </p>
+
+### Structural Design
 ​ThorVG is designed for a wide range of programs, offering adaptability for integration and use in various applications and systems. It achieves this through a single binary with selectively buildable, modular components in a building block style. This ensures both optimal size and easy maintenance. <br />
 <br/>
 <p align="center">
@@ -52,6 +55,8 @@ If your program includes the main renderer, you can seamlessly utilize ThorVG AP
 <p align="center">
   <img width="900" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_flow.png">
 </p>
+
+### Threading
 ThorVG incorporates a threading mechanism that aims to seamlessly acquire subsequent scenes without unnecessary delays. It operates using a finely-tuned task scheduler based on thread pools, encompassing various tasks such as encoding, decoding, updating, and rendering. This design ensures that all tasks can effectively leverage multi-processing capabilities.<br />
 <br />
 The task scheduler has been meticulously crafted to conceal complexity, streamline integration, and enhance user convenience. Therefore, the policy it employs is optional, allowing users to select it based on their specific requirements.<br />
@@ -59,6 +64,18 @@ The task scheduler has been meticulously crafted to conceal complexity, streamli
 <p align="center">
   <img width="900" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_thread.png">
 </p>
+
+### Smart Rendering
+ThorVG supports smart partial rendering, enabling more efficient rendering workflows by updating only the portions of a vector scene that have changed. By internally tracking modified regions, it minimizes unnecessary redraws and optimizes overall performance. This feature delivers significant performance benefits, especially in animations and interactive graphics where only part of the scene changes between frames. By avoiding full-scene rendering, it can reduce computational workload—making it particularly well-suited for mobile and embedded systems where energy efficiency is essential. It also help to ensure smoother visual updates, especially for dynamic UIs and real-time animations, where rendering responsiveness is critical.<br/>
+<br/>
+<p align="center">
+  <img width="700" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_partial.png">
+</p>
+
+The figure above illustrates geometry changes and highlights the minimal redraw region (outlined in red) that needs to be updated. Only the modified area between the previous and current frames is selectively redrawn, significantly enhancing performance. For a showcase, please visit [this page](https://hermet.github.io/partial-test/), which demonstrates a partial rendering performance comparison using ThorVG's software renderer. <br/>
+<br />
+
+### Render Backends
 Today, ThorVG provides its own implementation of multiple raster engines, allowing you to choose the one that best suits your app and system preferences.<br/>
 <br/>
 
@@ -67,6 +84,8 @@ Today, ThorVG provides its own implementation of multiple raster engines, allowi
 - WebGL
 - WebGPU
 <br/>
+
+### WebGPU Support
 ThorVG is ahead of the curve, particularly in the web ecosystem. WebGPU introduces next-generation APIs similar to Vulkan, leveraging compute shaders and providing low-overhead, modern GPU access for more aggressive optimization strategies and broader applications. Building on this, ThorVG fully supports vector rendering features within its specification on top of WebGPU. Additionally, by abstracting underlying hardware graphics accelerations such as Metal, Vulkan, and DirectX, ThorVG ensures seamless adoption across various systems, regardless of the installed hardware accelerations.<br/>
 <br/>
 <p align="center">
@@ -98,7 +117,7 @@ ThorVG is actively under development, continuously expanding its support for ess
     - [LVGL](#lvgl)
     - [Tizen](#tizen)
   - [References](#references)
-  - [APIs](#apis)
+  - [Documentation](#documentation)
   - [Examples](#examples)    
   - [Tools](#tools)
     - [ThorVG Viewer](#thorvg-viewer)
@@ -285,7 +304,7 @@ tvg::Initializer::term();
 <br />
 ## SVG
 
-ThorVG facilitates [SVG Tiny Specification](https://www.w3.org/TR/SVGTiny12/) rendering via its dedicated SVG interpreter. Adhering to the SVG Tiny Specification, the implementation maintains a lightweight profile, rendering it particularly advantageous for embedded systems. While ThorVG comprehensively adheres to most of the SVG Tiny specs, certain features remain unsupported within the current framework. These include:</br>
+ThorVG facilitates [SVG Tiny Specification](https://www.w3.org/TR/SVGTiny12/) rendering via its dedicated SVG interpreter. Adhering to the SVG Tiny Specification, the implementation maintains a lightweight profile, rendering it particularly advantageous for embedded systems. While ThorVG comprehensively adheres to [most of the SVG Tiny specs](https://github.com/thorvg/thorvg/wiki/SVG-Support), certain features remain unsupported within the current framework. These include:</br>
 
  - Animation 
  - Interactivity
@@ -294,7 +313,7 @@ ThorVG facilitates [SVG Tiny Specification](https://www.w3.org/TR/SVGTiny12/) re
 The figure below highlights ThorVG's SVG rendering capabilities:
 
 <p align="center">
-  <img width="780" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_svg.png">
+  <img width="780" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/example_svg.jpg">
 </p>
 
 The following code snippet shows how to draw SVG image using ThorVG:
@@ -420,8 +439,10 @@ ThorVG has been integrated into the [Tizen](https://www.tizen.org) platform as t
 [Back to contents](#contents)
 <br />
 <br />
-## APIs
-The ThorVG API documentation can be accessed at [thorvg.org/apis](https://www.thorvg.org/apis), and is also available in the [C++ API](https://github.com/thorvg/thorvg/blob/main/inc/thorvg.h), [C API](https://github.com/thorvg/thorvg/blob/main/src/bindings/capi/thorvg_capi.h) within this repository.
+## Documentation
+The ThorVG API documentation is available at [thorvg.org/apis](https://www.thorvg.org/apis), and can also be found directly in this repository via the [C++ API](https://github.com/thorvg/thorvg/blob/main/inc/thorvg.h) and [C API](https://github.com/thorvg/thorvg/blob/main/src/bindings/capi/thorvg_capi.h). 
+
+For comprehensive and well-structured technical information, please visit the [DeepWiki](https://deepwiki.com/thorvg/thorvg), which offers in-depth guidance on ThorVG's architecture, features, and usage.
 
 [Back to contents](#contents)
 <br />
@@ -529,14 +550,16 @@ meson setup builddir -Dbindings="capi"
 <br />
 <br />
 ## Dependencies
-ThorVG offers versatile support for image loading, accommodating both static and external loaders. This flexibility ensures that, even in environments without external libraries, users can still leverage static loaders as a reliable alternative. At its foundation, the ThorVG core library is engineered to function autonomously, free from external dependencies. However, it is important to note that ThorVG also encompasses a range of optional feature extensions, each with its specific set of dependencies. The dependencies associated with these selective features are outlined as follows:
+ThorVG provides flexible image loading capabilities, supporting both static and external loaders. This design ensures that even in environments lacking external libraries, users can rely on built-in static loaders for core functionality. At its core, the ThorVG library is fully self-contained and operates without mandatory external dependencies. However, several optional feature extensions are available, each with its own set of dependencies.
 
-* GL engine: [OpenGL v3.3](https://www.khronos.org/opengl/) or [GLES v3.0](https://www.khronos.org/opengles/)
-* WG engine: [webgpu-native](https://github.com/gfx-rs/wgpu-native)
-* External PNG support: [libpng](https://github.com/glennrp/libpng)
-* External JPG support: [turbojpeg](https://github.com/libjpeg-turbo/libjpeg-turbo)
-* External WebP support: [libwebp](https://developers.google.com/speed/webp/download)
-* Examples: [SDL2](https://www.libsdl.org/)
+The following outlines the dependencies for these optional features:
+
+* **GL Engine**: [OpenGL 3.3](https://www.khronos.org/opengl/), [OpenGL ES 3.0](https://www.khronos.org/opengles/), or a browser with [WebGL2](https://www.khronos.org/webgl/) support.
+* **WG Engine**: [webgpu-native v0.22](https://github.com/gfx-rs/wgpu-native) or a browser with [WebGPU](https://www.w3.org/TR/webgpu/) support.
+* **PNG Loader** (external): [libpng](https://github.com/pnggroup/libpng)
+* **JPEG Loader** (external): [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo)
+* **WebP Loader** (external): [libwebp](https://developers.google.com/speed/webp/download)
+* **Examples**: [SDL2](https://www.libsdl.org/)
 
 [Back to contents](#contents)
 <br />

@@ -27,6 +27,7 @@
 #include "tvgGlRenderTask.h"
 #include "tvgGlProgram.h"
 #include "tvgGlShaderSrc.h"
+#include "tvgFill.h"
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
@@ -34,17 +35,7 @@
 
 #define NOISE_LEVEL 0.5f
 
-static atomic<int32_t> initEngineCnt{};
-static atomic<int32_t> rendererCnt{};
-
-
-static void _termEngine()
-{
-    if (rendererCnt > 0) return;
-
-    //TODO: Clean up global resources
-}
-
+static atomic<int32_t> rendererCnt{-1};
 
 void GlRenderer::clearDisposes()
 {
@@ -61,6 +52,8 @@ void GlRenderer::clearDisposes()
 void GlRenderer::flush()
 {
     clearDisposes();
+
+    mRootTarget.reset();
 
     ARRAY_FOREACH(p, mComposePool) delete(*p);
     mComposePool.clear();
@@ -88,6 +81,7 @@ void GlRenderer::currentContext()
 
 GlRenderer::GlRenderer()
 {
+    ++rendererCnt;
 }
 
 
@@ -99,7 +93,7 @@ GlRenderer::~GlRenderer()
 
     ARRAY_FOREACH(p, mPrograms) delete(*p);
 
-    if (rendererCnt == 0 && initEngineCnt == 0) _termEngine();
+
 }
 
 
@@ -107,9 +101,34 @@ void GlRenderer::initShaders()
 {
     mPrograms.reserve((int)RT_None);
 
+#if 1  //for optimization
+    #define LINEAR_TOTAL_LENGTH 2770
+    #define RADIAL_TOTAL_LENGTH 5272
+#else
+    #define COMMON_TOTAL_LENGTH strlen(STR_GRADIENT_FRAG_COMMON_VARIABLES) + strlen(STR_GRADIENT_FRAG_COMMON_FUNCTIONS) + 1
+    #define LINEAR_TOTAL_LENGTH strlen(STR_LINEAR_GRADIENT_VARIABLES) + strlen(STR_LINEAR_GRADIENT_MAIN) + COMMON_TOTAL_LENGTH
+    #define RADIAL_TOTAL_LENGTH strlen(STR_RADIAL_GRADIENT_VARIABLES) + strlen(STR_RADIAL_GRADIENT_MAIN) + COMMON_TOTAL_LENGTH
+#endif
+
+    char linearGradientFragShader[LINEAR_TOTAL_LENGTH];
+    snprintf(linearGradientFragShader, LINEAR_TOTAL_LENGTH, "%s%s%s%s",
+        STR_GRADIENT_FRAG_COMMON_VARIABLES,
+        STR_LINEAR_GRADIENT_VARIABLES,
+        STR_GRADIENT_FRAG_COMMON_FUNCTIONS,
+        STR_LINEAR_GRADIENT_MAIN
+    );
+
+    char radialGradientFragShader[RADIAL_TOTAL_LENGTH];
+    snprintf(radialGradientFragShader, RADIAL_TOTAL_LENGTH, "%s%s%s%s",
+        STR_GRADIENT_FRAG_COMMON_VARIABLES,
+        STR_RADIAL_GRADIENT_VARIABLES,
+        STR_GRADIENT_FRAG_COMMON_FUNCTIONS,
+        STR_RADIAL_GRADIENT_MAIN
+    );
+
     mPrograms.push(new GlProgram(COLOR_VERT_SHADER, COLOR_FRAG_SHADER));
-    mPrograms.push(new GlProgram(GRADIENT_VERT_SHADER, LINEAR_GRADIENT_FRAG_SHADER));
-    mPrograms.push(new GlProgram(GRADIENT_VERT_SHADER, RADIAL_GRADIENT_FRAG_SHADER));
+    mPrograms.push(new GlProgram(GRADIENT_VERT_SHADER, linearGradientFragShader));
+    mPrograms.push(new GlProgram(GRADIENT_VERT_SHADER, radialGradientFragShader));
     mPrograms.push(new GlProgram(IMAGE_VERT_SHADER, IMAGE_FRAG_SHADER));
 
     // compose Renderer
@@ -165,10 +184,10 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdat
         bbox.intersect(vp);
     }
 
-    auto x = bbox.x - vp.x;
-    auto y = bbox.y - vp.y;
-    auto w = bbox.w;
-    auto h = bbox.h;
+    auto x = bbox.sx() - vp.sx();
+    auto y = bbox.sy() - vp.sy();
+    auto w = bbox.sw();
+    auto h = bbox.sh();
 
     GlRenderTask* task = nullptr;
     if (mBlendMethod != BlendMethod::Normal && !complexBlend) task = new GlSimpleBlendTask(mBlendMethod, mPrograms[RT_Color]);
@@ -181,7 +200,8 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdat
         return;
     }
 
-    task->setViewport({x, vp.h - y - h, w, h});
+    y = vp.sh() - y - h;
+    task->setViewport({{x, y}, {x + w, y + h}});
 
     GlRenderTask* stencilTask = nullptr;
 
@@ -194,7 +214,7 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const RenderColor& c, RenderUpdat
     auto a = MULTIPLY(c.a, sdata.opacity);
 
     if (flag & RenderUpdateFlag::Stroke) {
-        float strokeWidth = sdata.rshape->strokeWidth() * getScaleFactor(sdata.geometry.matrix);
+        float strokeWidth = sdata.rshape->strokeWidth() * scaling(sdata.geometry.matrix);
         if (strokeWidth < MIN_GL_STROKE_WIDTH) {
             float alpha = strokeWidth / MIN_GL_STROKE_WIDTH;
             a = MULTIPLY(a, static_cast<uint8_t>(alpha * 255));
@@ -250,7 +270,6 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFla
 {
     auto vp = currentPass()->getViewport();
     auto bbox = sdata.geometry.viewport;
-
     bbox.intersect(vp);
 
     const Fill::ColorStop* stops = nullptr;
@@ -259,13 +278,9 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFla
 
     GlRenderTask* task = nullptr;
 
-    if (fill->type() == Type::LinearGradient) {
-        task = new GlRenderTask(mPrograms[RT_LinGradient]);
-    } else if (fill->type() == Type::RadialGradient) {
-        task = new GlRenderTask(mPrograms[RT_RadGradient]);
-    } else {
-        return;
-    }
+    if (fill->type() == Type::LinearGradient) task = new GlRenderTask(mPrograms[RT_LinGradient]);
+    else if (fill->type() == Type::RadialGradient) task = new GlRenderTask(mPrograms[RT_RadGradient]);
+    else return;
 
     task->setDrawDepth(depth);
 
@@ -275,13 +290,11 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFla
     }
 
     auto complexBlend = beginComplexBlending(bbox, sdata.geometry.getBounds());
-
     if (complexBlend) vp = currentPass()->getViewport();
 
-    auto x = bbox.x - vp.x;
-    auto y = bbox.y - vp.y;
-
-    task->setViewport({x, vp.h - y - bbox.h, bbox.w, bbox.h});
+    auto x = bbox.sx() - vp.sx();
+    auto y = vp.sh() - (bbox.sy() - vp.sy()) - bbox.sh();
+    task->setViewport({{x, y}, {x + bbox.sw(), y + bbox.sh()}});
 
     GlRenderTask* stencilTask = nullptr;
     GlStencilMode stencilMode = sdata.geometry.getStencilMode(flag);
@@ -400,6 +413,7 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFla
 
         float x, y, r, fx, fy, fr;
         radialFill->radial(&x, &y, &r, &fx, &fy, &fr);
+        CONST_RADIAL(radialFill)->correct(fx, fy, fr);
 
         gradientBlock.centerPos[0] = fx;
         gradientBlock.centerPos[1] = fy;
@@ -480,22 +494,18 @@ void GlRenderer::drawClip(Array<RenderData>& clips)
 
     for (uint32_t i = 0; i < clips.count; ++i) {
         auto sdata = static_cast<GlShape*>(clips[i]);
-
         auto clipTask = new GlRenderTask(mPrograms[RT_Stencil]);
-
         clipTask->setDrawDepth(clipDepths[i]);
 
         auto flag = (sdata->geometry.stroke.vertex.count > 0) ? RenderUpdateFlag::Stroke : RenderUpdateFlag::Path;
         sdata->geometry.draw(clipTask, &mGpuBuffer, flag);
 
         auto bbox = sdata->geometry.viewport;
-
         bbox.intersect(vp);
 
-        auto x = bbox.x - vp.x;
-        auto y = bbox.y - vp.y;
-
-        clipTask->setViewport({x, vp.h - y - bbox.h, bbox.w, bbox.h});
+        auto x = bbox.sx() - vp.sx();
+        auto y = vp.sh() - (bbox.sy() - vp.sy()) - bbox.sh();
+        clipTask->setViewport({{x, y}, {x + bbox.sw(), y + bbox.sh()}});
 
         float matrix44[16];
         currentPass()->getMatrix(matrix44, sdata->geometry.matrix);
@@ -511,7 +521,7 @@ void GlRenderer::drawClip(Array<RenderData>& clips)
         maskTask->addVertexLayout(GlVertexLayout{0, 2, 2 * sizeof(float), identityVertexOffset});
         maskTask->addBindResource(GlBindingResource{0, loc, mGpuBuffer.getBufferId(), mat4Offset, 16 * sizeof(float), });
         maskTask->setDrawRange(identityIndexOffset, 6);
-        maskTask->setViewport({0, 0, static_cast<int32_t>(vp.w), static_cast<int32_t>(vp.h)});
+        maskTask->setViewport({{0, 0}, {vp.sw(), vp.sh()}});
 
         currentPass()->addRenderTask(new GlClipTask(clipTask, maskTask));
     }
@@ -525,11 +535,10 @@ GlRenderPass* GlRenderer::currentPass()
 
 bool GlRenderer::beginComplexBlending(const RenderRegion& vp, RenderRegion bounds)
 {
-    if (vp.w == 0 || vp.h == 0) return false;
+    if (vp.invalid()) return false;
 
     bounds.intersect(vp);
-
-    if (bounds.w == 0 || bounds.h == 0) return false;
+    if (bounds.invalid()) return false;
 
     if (mBlendMethod == BlendMethod::Normal || mBlendMethod == BlendMethod::Add || mBlendMethod == BlendMethod::Darken || mBlendMethod == BlendMethod::Lighten) return false;
 
@@ -555,37 +564,26 @@ void GlRenderer::endBlendingCompose(GlRenderTask* stencilTask, const Matrix& mat
     if (mBlendPool.count < 2) mBlendPool.push(new GlRenderTargetPool(surface.w, surface.h));
     auto dstCopyFbo = mBlendPool[1]->getRenderTarget(vp);
 
-    {
-        const auto& passVp = currentPass()->getViewport();
-
-        auto x = vp.x;
-        auto y = vp.y;
-        auto w = vp.w;
-        auto h = vp.h;
-
-        stencilTask->setViewport({x, passVp.h - y - h, w, h});
-    }
+    auto x = vp.sx();
+    auto y = currentPass()->getViewport().sh() - vp.sy() - vp.sh();
+    stencilTask->setViewport({{x, y}, {x + vp.sw(), y + vp.sh()}});
 
     stencilTask->setDrawDepth(currentPass()->nextDrawDepth());
 
-    {
-        // set view matrix
-        float matrix44[16];
-        currentPass()->getMatrix(matrix44, matrix);
-        uint32_t viewOffset = mGpuBuffer.push(matrix44, 16 * sizeof(float), true);
-        stencilTask->addBindResource(GlBindingResource{
-            0,
-            stencilTask->getProgram()->getUniformBlockIndex("Matrix"),
-            mGpuBuffer.getBufferId(),
-            viewOffset,
-            16 * sizeof(float),
-        });
-    }
+    // set view matrix
+    float matrix44[16];
+    currentPass()->getMatrix(matrix44, matrix);
+    uint32_t viewOffset = mGpuBuffer.push(matrix44, 16 * sizeof(float), true);
+    stencilTask->addBindResource(GlBindingResource{
+        0,
+        stencilTask->getProgram()->getUniformBlockIndex("Matrix"),
+        mGpuBuffer.getBufferId(),
+        viewOffset,
+        16 * sizeof(float),
+    });
 
     auto task = new GlComplexBlendTask(getBlendProgram(), currentPass()->getFbo(), dstCopyFbo, stencilTask, composeTask);
-
     prepareCmpTask(task, vp, blendPass->getFboWidth(), blendPass->getFboHeight());
-
     task->setDrawDepth(currentPass()->nextDrawDepth());
 
     // src and dst texture
@@ -616,8 +614,7 @@ GlProgram* GlRenderer::getBlendProgram()
 
 void GlRenderer::prepareBlitTask(GlBlitTask* task)
 {
-    RenderRegion region{0, 0, static_cast<int32_t>(surface.w), static_cast<int32_t>(surface.h)};
-    prepareCmpTask(task, region, surface.w, surface.h);
+    prepareCmpTask(task, {{0, 0}, {int32_t(surface.w), int32_t(surface.h)}}, surface.w, surface.h);
     task->addBindResource(GlBindingResource{0, task->getColorTexture(), task->getProgram()->getUniformLocation("uSrcTexture")});
 }
 
@@ -632,13 +629,13 @@ void GlRenderer::prepareCmpTask(GlRenderTask* task, const RenderRegion& vp, uint
     auto taskVp = vp;
     taskVp.intersect(passVp);
 
-    auto x = taskVp.x - passVp.x;
-    auto y = taskVp.y - passVp.y;
-    auto w = taskVp.w;
-    auto h = taskVp.h;
+    auto x = taskVp.sx() - passVp.sx();
+    auto y = taskVp.sy() - passVp.sy();
+    auto w = taskVp.sw();
+    auto h = taskVp.sh();
 
-    float rw = static_cast<float>(passVp.w);
-    float rh = static_cast<float>(passVp.h);
+    float rw = static_cast<float>(passVp.w());
+    float rh = static_cast<float>(passVp.h());
 
     float l = static_cast<float>(x);
     float t = static_cast<float>(rh - y);
@@ -689,10 +686,9 @@ void GlRenderer::prepareCmpTask(GlRenderTask* task, const RenderRegion& vp, uint
 
     task->addVertexLayout(GlVertexLayout{0, 2, 4 * sizeof(float), vertexOffset});
     task->addVertexLayout(GlVertexLayout{1, 2, 4 * sizeof(float), vertexOffset + 2 * sizeof(float)});
-
     task->setDrawRange(indexOffset, indices.count);
-
-    task->setViewport({x, static_cast<int32_t>((passVp.h - y - h)), w, h});
+    y = (passVp.sh() - y - h);
+    task->setViewport({{x, y}, {x + w, y + h}});
 }
 
 
@@ -725,11 +721,11 @@ void GlRenderer::endRenderPass(RenderCompositor* cmp)
         if (program && !selfPass->isEmpty() && !maskPass->isEmpty()) {
             auto prev_task = maskPass->endRenderPass<GlComposeTask>(nullptr, currentPass()->getFboId());
             prev_task->setDrawDepth(currentPass()->nextDrawDepth());
-            prev_task->setRenderSize(static_cast<uint32_t>(glCmp->bbox.w), static_cast<uint32_t>(glCmp->bbox.h));
+            prev_task->setRenderSize(glCmp->bbox.w(), glCmp->bbox.h());
             prev_task->setViewport(glCmp->bbox);
 
             auto compose_task = selfPass->endRenderPass<GlDrawBlitTask>(program, currentPass()->getFboId());
-            compose_task->setRenderSize(static_cast<uint32_t>(glCmp->bbox.w), static_cast<uint32_t>(glCmp->bbox.h));
+            compose_task->setRenderSize(glCmp->bbox.w(), glCmp->bbox.h());
             compose_task->setPrevTask(prev_task);
 
             prepareCmpTask(compose_task, glCmp->bbox, selfPass->getFboWidth(), selfPass->getFboHeight());
@@ -738,7 +734,7 @@ void GlRenderer::endRenderPass(RenderCompositor* cmp)
             compose_task->addBindResource(GlBindingResource{1, maskPass->getTextureId(), program->getUniformLocation("uMaskTexture")});
 
             compose_task->setDrawDepth(currentPass()->nextDrawDepth());
-            compose_task->setParentSize(static_cast<uint32_t>(currentPass()->getViewport().w), static_cast<uint32_t>(currentPass()->getViewport().h));
+            compose_task->setParentSize(currentPass()->getViewport().w(), currentPass()->getViewport().h());
             currentPass()->addRenderTask(compose_task);
         }
 
@@ -751,7 +747,7 @@ void GlRenderer::endRenderPass(RenderCompositor* cmp)
 
         if (!renderPass->isEmpty()) {
             auto task = renderPass->endRenderPass<GlDrawBlitTask>(mPrograms[RT_Image], currentPass()->getFboId());
-            task->setRenderSize(static_cast<uint32_t>(glCmp->bbox.w), static_cast<uint32_t>(glCmp->bbox.h));
+            task->setRenderSize(glCmp->bbox.w(), glCmp->bbox.h());
             prepareCmpTask(task, glCmp->bbox, renderPass->getFboWidth(), renderPass->getFboHeight());
             task->setDrawDepth(currentPass()->nextDrawDepth());
 
@@ -779,7 +775,7 @@ void GlRenderer::endRenderPass(RenderCompositor* cmp)
 
             // texture id
             task->addBindResource(GlBindingResource{0, renderPass->getTextureId(), task->getProgram()->getUniformLocation("uTexture")});
-            task->setParentSize(static_cast<uint32_t>(currentPass()->getViewport().w), static_cast<uint32_t>(currentPass()->getViewport().h));
+            task->setParentSize(currentPass()->getViewport().w(), currentPass()->getViewport().h());
             currentPass()->addRenderTask(std::move(task));
         }
         delete(renderPass);
@@ -793,6 +789,8 @@ void GlRenderer::endRenderPass(RenderCompositor* cmp)
 
 bool GlRenderer::clear()
 {
+    if (mRootTarget.invalid()) return false;
+
     mClearBuffer = true;
     return true;
 }
@@ -816,9 +814,8 @@ bool GlRenderer::target(void* context, int32_t id, uint32_t w, uint32_t h)
 
     currentContext();
 
-    mRootTarget = GlRenderTarget(surface.w, surface.h);
-    mRootTarget.setViewport({0, 0, static_cast<int32_t>(surface.w), static_cast<int32_t>(surface.h)});
-    mRootTarget.init(mTargetFboId);
+    mRootTarget.setViewport({{0, 0}, {int32_t(surface.w), int32_t(surface.h)}});
+    mRootTarget.init(surface.w, surface.h, mTargetFboId);
 
     return true;
 }
@@ -845,7 +842,7 @@ bool GlRenderer::sync()
     prepareBlitTask(task);
 
     task->mClearBuffer = mClearBuffer;
-    task->setTargetViewport({0, 0, static_cast<int32_t>(surface.w), static_cast<int32_t>(surface.h)});
+    task->setTargetViewport({{0, 0}, {int32_t(surface.w), int32_t(surface.h)}});
 
     if (mGpuBuffer.flushToGPU()) {
         mGpuBuffer.bind();
@@ -858,6 +855,9 @@ bool GlRenderer::sync()
 
     clearDisposes();
 
+    // Reset clear buffer flag to default (false) after use.    
+    mClearBuffer = false; 
+
     delete task;
 
     return true;
@@ -866,12 +866,13 @@ bool GlRenderer::sync()
 
 RenderRegion GlRenderer::region(RenderData data)
 {
-    if (currentPass()->isEmpty()) return {0, 0, 0, 0};
+    auto pass = currentPass();
+    if (!data || !pass || pass->isEmpty()) return {};
 
     auto shape = reinterpret_cast<GlShape*>(data);
     auto bounds = shape->geometry.getBounds();
 
-    auto const& vp = currentPass()->getViewport();
+    auto const& vp = pass->getViewport();
     bounds.intersect(vp);
 
     return bounds;
@@ -880,6 +881,8 @@ RenderRegion GlRenderer::region(RenderData data)
 
 bool GlRenderer::preRender()
 {
+    if (mRootTarget.invalid()) return false;
+
     currentContext();
     if (mPrograms.empty()) initShaders();
     mRenderPassStack.push(new GlRenderPass(&mRootTarget));
@@ -914,20 +917,11 @@ bool GlRenderer::beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_
     cmp->opacity = opacity;
 
     uint32_t index = mRenderPassStack.count - 1;
-
-    if (index >= mComposePool.count) {
-        mComposePool.push( new GlRenderTargetPool(surface.w, surface.h));
-    }
+    if (index >= mComposePool.count) mComposePool.push( new GlRenderTargetPool(surface.w, surface.h));
 
     auto glCmp = static_cast<GlCompositor*>(cmp);
-
-    if (glCmp->bbox.w > 0 && glCmp->bbox.h > 0) {
-        auto renderTarget = mComposePool[index]->getRenderTarget(glCmp->bbox);
-        mRenderPassStack.push(new GlRenderPass(renderTarget));
-    } else {
-        // empty render pass
-        mRenderPassStack.push(new GlRenderPass(nullptr));
-    }
+    if (glCmp->bbox.valid()) mRenderPassStack.push(new GlRenderPass(mComposePool[index]->getRenderTarget(glCmp->bbox)));
+    else mRenderPassStack.push(new GlRenderPass(nullptr));
 
     return true;
 }
@@ -959,7 +953,6 @@ void GlRenderer::effectGaussianBlurUpdate(RenderEffectGaussianBlur* effect, cons
     blur->sigma = effect->sigma;
     blur->scale = std::sqrt(transform.e11 * transform.e11 + transform.e12 * transform.e12);
     blur->extend = 2 * blur->sigma * blur->scale;
-    blur->level = int(GL_GAUSSIAN_MAX_LEVEL * ((effect->quality - 1) * 0.01f)) + 1;
     effect->rd = blur;
     effect->valid = true;
 }
@@ -978,7 +971,6 @@ void GlRenderer::effectDropShadowUpdate(RenderEffectDropShadow* effect, const Ma
     };
     dropShadow->sigma = sigma;
     dropShadow->scale = scale;
-    dropShadow->level = int(GL_GAUSSIAN_MAX_LEVEL * ((effect->quality - 1) * 0.01f)) + 1;
     dropShadow->color[3] = effect->color[3] / 255.0f;
     //Drop shadow effect applies blending in the shader (GL_BLEND disabled), so the color should be premultiplied:
     dropShadow->color[0] = effect->color[0] / 255.0f * dropShadow->color[3];
@@ -1048,12 +1040,12 @@ bool GlRenderer::effectGaussianBlurRegion(RenderEffectGaussianBlur* effect)
 {
     auto gaussianBlur = (GlGaussianBlur*)effect->rd;
     if (effect->direction != 2) {
-        effect->extend.x = -gaussianBlur->extend;
-        effect->extend.w = +gaussianBlur->extend * 2;
+        effect->extend.min.x = -gaussianBlur->extend;
+        effect->extend.max.x = +gaussianBlur->extend;
     }
     if (effect->direction != 1) {
-        effect->extend.y = -gaussianBlur->extend;
-        effect->extend.h = +gaussianBlur->extend * 2;
+        effect->extend.min.y = -gaussianBlur->extend;
+        effect->extend.max.y = +gaussianBlur->extend;
     }
     return true;
 };
@@ -1062,10 +1054,10 @@ bool GlRenderer::effectGaussianBlurRegion(RenderEffectGaussianBlur* effect)
 bool GlRenderer::effectDropShadowRegion(RenderEffectDropShadow* effect)
 {
     auto gaussianBlur = (GlDropShadow*)effect->rd;
-    effect->extend.x = -gaussianBlur->extend;
-    effect->extend.w = +gaussianBlur->extend * 2;
-    effect->extend.y = -gaussianBlur->extend;
-    effect->extend.h = +gaussianBlur->extend * 2;
+    effect->extend.min.x = -gaussianBlur->extend;
+    effect->extend.max.x = +gaussianBlur->extend;
+    effect->extend.min.y = -gaussianBlur->extend;
+    effect->extend.max.y = +gaussianBlur->extend;
     return true;
 };
 
@@ -1115,7 +1107,6 @@ bool GlRenderer::render(TVG_UNUSED RenderCompositor* cmp, const RenderEffect* ef
     auto voffset = mGpuBuffer.push((void*)vdata, sizeof(vdata));
     auto ioffset = mGpuBuffer.pushIndex((void*)idata, sizeof(idata));
 
-    // effect gaussian blur
     if (effect->type == SceneEffect::GaussianBlur) {
         // get gaussian programs
         GlProgram* programHorz = mPrograms[RT_GaussianHorz];
@@ -1131,7 +1122,7 @@ bool GlRenderer::render(TVG_UNUSED RenderCompositor* cmp, const RenderEffect* ef
         // create gaussian blur tasks
         auto gaussianTask = new GlGaussianBlurTask(dstFbo, dstCopyFbo0, dstCopyFbo1);
         gaussianTask->effect = (RenderEffectGaussianBlur*)effect;
-        gaussianTask->setViewport({0, 0, vp.w, vp.h});
+        gaussianTask->setViewport({{0, 0}, {vp.sw(), vp.sh()}});
         // horizontal blur task and geometry
         gaussianTask->horzTask = new GlRenderTask(programHorz);
         gaussianTask->horzTask->addBindResource(GlBindingResource{0, programHorz->getUniformBlockIndex("Gaussian"), mGpuBuffer.getBufferId(), blurOffset, sizeof(GlGaussianBlur)});
@@ -1144,8 +1135,7 @@ bool GlRenderer::render(TVG_UNUSED RenderCompositor* cmp, const RenderEffect* ef
         gaussianTask->vertTask->setDrawRange(ioffset, 6);
         // add task to render pipeline
         pass->addRenderTask(gaussianTask);
-    } // effect drop shadow
-    else if (effect->type == SceneEffect::DropShadow) {
+    } else if (effect->type == SceneEffect::DropShadow) {
         // get programs
         GlProgram* program = mPrograms[RT_DropShadow];
         GlProgram* programHorz = mPrograms[RT_GaussianHorz];
@@ -1161,7 +1151,7 @@ bool GlRenderer::render(TVG_UNUSED RenderCompositor* cmp, const RenderEffect* ef
         // create gaussian blur tasks
         auto task = new GlEffectDropShadowTask(program, dstFbo, dstCopyFbo0, dstCopyFbo1);
         task->effect = (RenderEffectDropShadow*)effect;
-        task->setViewport({0, 0, vp.w, vp.h});
+        task->setViewport({{0, 0}, {vp.sw(), vp.sh()}});
         task->addBindResource(GlBindingResource{0, program->getUniformBlockIndex("DropShadow"), mGpuBuffer.getBufferId(), paramsOffset, sizeof(GlDropShadow)});
         task->addVertexLayout(GlVertexLayout{0, 2, 2 * sizeof(float), voffset});
         task->setDrawRange(ioffset, 6);
@@ -1177,8 +1167,7 @@ bool GlRenderer::render(TVG_UNUSED RenderCompositor* cmp, const RenderEffect* ef
         task->vertTask->setDrawRange(ioffset, 6);
         // add task to render pipeline
         pass->addRenderTask(task);
-    } // effect fill, tint, tritone
-    else if ((effect->type == SceneEffect::Fill) || (effect->type == SceneEffect::Tint) || (effect->type == SceneEffect::Tritone)) {
+    } else if ((effect->type == SceneEffect::Fill) || (effect->type == SceneEffect::Tint) || (effect->type == SceneEffect::Tritone)) {
         GlProgram* program{};
         if (effect->type == SceneEffect::Fill) program = mPrograms[RT_EffectFill];
         else if (effect->type == SceneEffect::Tint) program = mPrograms[RT_EffectTint];
@@ -1192,14 +1181,14 @@ bool GlRenderer::render(TVG_UNUSED RenderCompositor* cmp, const RenderEffect* ef
         auto paramsOffset = mGpuBuffer.push(params, sizeof(GlEffectParams), true);
         // create and setup task
         auto task = new GlEffectColorTransformTask(program, dstFbo, dstCopyFbo);
-        task->setViewport({0, 0, vp.w, vp.h});
+        task->setViewport({{0, 0}, {vp.sw(), vp.sh()}});
         task->addBindResource(GlBindingResource{0, program->getUniformBlockIndex("Params"), mGpuBuffer.getBufferId(), paramsOffset, sizeof(GlEffectParams)});
         task->addVertexLayout(GlVertexLayout{0, 2, 2 * sizeof(float), voffset});
         task->setDrawRange(ioffset, 6);
         // add task to render pipeline
         pass->addRenderTask(task);
-    }
-    return false;
+    } else return false;
+    return true;
 }
 
 
@@ -1235,25 +1224,18 @@ bool GlRenderer::blend(BlendMethod method)
 bool GlRenderer::renderImage(void* data)
 {
     auto sdata = static_cast<GlShape*>(data);
-
     if (!sdata) return false;
 
-    if (currentPass()->isEmpty()) return true;
+    if (currentPass()->isEmpty() || !(sdata->updateFlag & RenderUpdateFlag::Image)) return true;
 
-    if ((sdata->updateFlag & RenderUpdateFlag::Image) == 0) return true;
     auto vp = currentPass()->getViewport();
-
     auto bbox = sdata->geometry.viewport;
-
     bbox.intersect(vp);
+    if (bbox.invalid()) return true;
 
-    if (bbox.w <= 0 || bbox.h <= 0) return true;
-
-    auto x = bbox.x - vp.x;
-    auto y = bbox.y - vp.y;
-
-
-    int32_t drawDepth = currentPass()->nextDrawDepth();
+    auto x = bbox.sx() - vp.sx();
+    auto y = bbox.sy() - vp.sy();
+    auto drawDepth = currentPass()->nextDrawDepth();
 
     if (!sdata->clips.empty()) drawClip(sdata->clips);
 
@@ -1266,7 +1248,6 @@ bool GlRenderer::renderImage(void* data)
     }
 
     bool complexBlend = beginComplexBlending(bbox, sdata->geometry.getBounds());
-
     if (complexBlend) vp = currentPass()->getViewport();
 
     // matrix buffer
@@ -1295,7 +1276,11 @@ bool GlRenderer::renderImage(void* data)
     // texture id
     task->addBindResource(GlBindingResource{0, sdata->texId, task->getProgram()->getUniformLocation("uTexture")});
 
-    task->setViewport({x, vp.h - y - bbox.h, bbox.w, bbox.h});
+    y = vp.sh() - y - bbox.sh();
+    auto x2 = x + bbox.sw();
+    auto y2 = y + bbox.sh();
+
+    task->setViewport({{x, y}, {x2, y2}});
 
     currentPass()->addRenderTask(task);
 
@@ -1311,33 +1296,25 @@ bool GlRenderer::renderImage(void* data)
 
 bool GlRenderer::renderShape(RenderData data)
 {
-    auto sdata = static_cast<GlShape*>(data);
-
     if (currentPass()->isEmpty()) return true;
 
+    auto sdata = static_cast<GlShape*>(data);
     if (sdata->updateFlag == RenderUpdateFlag::None) return true;
 
-    const auto& vp = currentPass()->getViewport();
-
     auto bbox = sdata->geometry.viewport;
-    bbox.intersect(vp);
-
-    if (bbox.w <= 0 || bbox.h <= 0) return true;
+    bbox.intersect(currentPass()->getViewport());
+    if (bbox.invalid()) return true;
 
     int32_t drawDepth1 = 0, drawDepth2 = 0;
 
-    size_t flags = static_cast<size_t>(sdata->updateFlag);
-
-    if (flags == 0) return false;
-
-    if (flags & (RenderUpdateFlag::Gradient | RenderUpdateFlag::Color)) drawDepth1 = currentPass()->nextDrawDepth();
-
-    if (flags & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)) drawDepth2 = currentPass()->nextDrawDepth();
+    if (sdata->updateFlag == RenderUpdateFlag::None) return false;
+    if (sdata->updateFlag & (RenderUpdateFlag::Gradient | RenderUpdateFlag::Color)) drawDepth1 = currentPass()->nextDrawDepth();
+    if (sdata->updateFlag & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)) drawDepth2 = currentPass()->nextDrawDepth();
 
     if (!sdata->clips.empty()) drawClip(sdata->clips);
 
     auto processFill = [&]() {
-        if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient)) {
+        if (sdata->updateFlag & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient)) {
             if (const auto& gradient = sdata->rshape->fill) {
                 drawPrimitive(*sdata, gradient, RenderUpdateFlag::Gradient, drawDepth1);
             } else if (sdata->rshape->color.a > 0) {
@@ -1348,7 +1325,7 @@ bool GlRenderer::renderShape(RenderData data)
 
     auto processStroke = [&]() {
         if (!sdata->rshape->stroke) return;
-        if (flags & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)) {
+        if (sdata->updateFlag & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)) {
             if (const auto& gradient = sdata->rshape->strokeFill()) {
                 drawPrimitive(*sdata, gradient, RenderUpdateFlag::GradientStroke, drawDepth2);
             } else if (sdata->rshape->stroke->color.a > 0) {
@@ -1357,7 +1334,7 @@ bool GlRenderer::renderShape(RenderData data)
         }
     };
 
-    if (sdata->rshape->stroke && sdata->rshape->stroke->strokeFirst) {
+    if (sdata->rshape->strokeFirst()) {
         processStroke();
         processFill();
     } else {
@@ -1404,8 +1381,6 @@ static GLuint _genTexture(RenderSurface* image)
 
 RenderData GlRenderer::prepare(RenderSurface* image, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags)
 {
-    if (flags == RenderUpdateFlag::None) return data;
-
     auto sdata = static_cast<GlShape*>(data);
 
     if (!sdata) sdata = new GlShape;
@@ -1423,11 +1398,11 @@ RenderData GlRenderer::prepare(RenderSurface* image, RenderData data, const Matr
     }
 
     sdata->geometry.matrix = transform;
-    sdata->geometry.viewport = mViewport;
+    sdata->geometry.viewport = vport;
 
     sdata->geometry.tesselate(image, flags);
 
-    if (!clips.empty()) {
+    if (flags & RenderUpdateFlag::Clip) {
         sdata->clips.clear();
         sdata->clips.push(clips);
     }
@@ -1451,7 +1426,6 @@ RenderData GlRenderer::prepare(const RenderShape& rshape, RenderData data, const
     sdata->viewWd = static_cast<float>(surface.w);
     sdata->viewHt = static_cast<float>(surface.h);
     sdata->updateFlag = RenderUpdateFlag::None;
-
     sdata->geometry = GlGeometry();
     sdata->opacity = opacity;
 
@@ -1459,33 +1433,29 @@ RenderData GlRenderer::prepare(const RenderShape& rshape, RenderData data, const
     auto alphaF = rshape.color.a;
     auto alphaS = rshape.stroke ? rshape.stroke->color.a : 0;
 
-    if ( ((flags & RenderUpdateFlag::Gradient) == 0) &&
-         ((flags & RenderUpdateFlag::Color) && alphaF == 0) &&
-         ((flags & RenderUpdateFlag::Stroke) && alphaS == 0) )
-    {
+    if ((flags & RenderUpdateFlag::Gradient) == 0 && ((flags & RenderUpdateFlag::Color) && alphaF == 0) && ((flags & RenderUpdateFlag::Stroke) && alphaS == 0)) {
         return sdata;
     }
 
     if (clipper) {
         sdata->updateFlag = (rshape.stroke && (rshape.stroke->width > 0)) ? RenderUpdateFlag::Stroke : RenderUpdateFlag::Path;
     } else {
-        if (alphaF) sdata->updateFlag = static_cast<RenderUpdateFlag>(RenderUpdateFlag::Color | sdata->updateFlag);
-        if (rshape.fill) sdata->updateFlag = static_cast<RenderUpdateFlag>(RenderUpdateFlag::Gradient | sdata->updateFlag);
-        if (alphaS) sdata->updateFlag = static_cast<RenderUpdateFlag>(RenderUpdateFlag::Stroke | sdata->updateFlag);
-        if (rshape.strokeFill()) sdata->updateFlag = static_cast<RenderUpdateFlag>(RenderUpdateFlag::GradientStroke | sdata->updateFlag);
+        if (alphaF) sdata->updateFlag = (RenderUpdateFlag::Color | sdata->updateFlag);
+        if (rshape.fill) sdata->updateFlag = (RenderUpdateFlag::Gradient | sdata->updateFlag);
+        if (alphaS) sdata->updateFlag = (RenderUpdateFlag::Stroke | sdata->updateFlag);
+        if (rshape.strokeFill()) sdata->updateFlag = (RenderUpdateFlag::GradientStroke | sdata->updateFlag);
     }
 
     if (sdata->updateFlag == RenderUpdateFlag::None) return sdata;
 
     sdata->geometry.matrix = transform;
-    sdata->geometry.viewport = mViewport;
+    sdata->geometry.viewport = vport;
 
-    if (sdata->updateFlag & (RenderUpdateFlag::Color | RenderUpdateFlag::Stroke | RenderUpdateFlag::Gradient | RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform | RenderUpdateFlag::Path))
-    {
+    if (sdata->updateFlag & (RenderUpdateFlag::Color | RenderUpdateFlag::Stroke | RenderUpdateFlag::Gradient | RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform | RenderUpdateFlag::Path)) {
         if (!sdata->geometry.tesselate(rshape, sdata->updateFlag)) return sdata;
     }
 
-    if (!clipper && !clips.empty()) {
+    if (flags & RenderUpdateFlag::Clip) {
         sdata->clips.clear();
         sdata->clips.push(clips);
     }
@@ -1494,21 +1464,10 @@ RenderData GlRenderer::prepare(const RenderShape& rshape, RenderData data, const
 }
 
 
-RenderRegion GlRenderer::viewport()
-{
-    return mViewport;
-}
-
-
-bool GlRenderer::viewport(const RenderRegion& vp)
-{
-    mViewport = vp;
-    return true;
-}
-
-
 bool GlRenderer::preUpdate()
 {
+    if (mRootTarget.invalid()) return false;
+
     currentContext();
     return true;
 }
@@ -1520,45 +1479,41 @@ bool GlRenderer::postUpdate()
 }
 
 
-bool GlRenderer::init(uint32_t threads)
+void GlRenderer::damage(TVG_UNUSED RenderData rd, TVG_UNUSED const RenderRegion& region)
 {
-    if ((initEngineCnt++) > 0) return true;
-
-    //TODO: runtime linking?
-
-    return true;
+    //TODO
 }
 
 
-int32_t GlRenderer::init()
+bool GlRenderer::partial(bool disable)
 {
-    return initEngineCnt;
+    //TODO
+    return false;
 }
 
 
 bool GlRenderer::term()
 {
-    if ((--initEngineCnt) > 0) return true;
+    if (rendererCnt > 0) return false;
 
-    initEngineCnt = 0;
+    glTerm();
 
-   _termEngine();
+    rendererCnt = -1;
 
     return true;
 }
 
 
-GlRenderer* GlRenderer::gen()
+GlRenderer* GlRenderer::gen(TVG_UNUSED uint32_t threads)
 {
-    //TODO: GL minimum version check, should be replaced with the runtime linking in GlRenderer::init()
-    GLint vMajor, vMinor;
-    glGetIntegerv(GL_MAJOR_VERSION, &vMajor);
-    glGetIntegerv(GL_MINOR_VERSION, &vMinor);
-    if (vMajor < TVG_REQUIRE_GL_MAJOR_VER || (vMajor ==  TVG_REQUIRE_GL_MAJOR_VER && vMinor <  TVG_REQUIRE_GL_MINOR_VER)) {
-        TVGERR("GL_ENGINE", "OpenGL/ES version is not satisfied. Current: v%d.%d, Required: v%d.%d", vMajor, vMinor, TVG_REQUIRE_GL_MAJOR_VER, TVG_REQUIRE_GL_MINOR_VER);
-        return nullptr;
+    //initialize engine
+    if (rendererCnt == -1) {
+        if (!glInit()) {
+            TVGERR("GL_ENGINE", "Failed GL initialization!");
+            return nullptr;
+        }    
+        rendererCnt = 0;
     }
-    TVGLOG("GL_ENGINE", "OpenGL/ES version = v%d.%d", vMajor, vMinor);
 
-    return new GlRenderer();
+    return new GlRenderer;
 }

@@ -70,6 +70,7 @@ public:
         RT_None,
     };
 
+    //main features
     bool preUpdate() override;
     RenderData prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper) override;
     RenderData prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags) override;
@@ -80,28 +81,29 @@ public:
     bool postRender() override;
     void dispose(RenderData data) override;;
     RenderRegion region(RenderData data) override;
-    RenderRegion viewport() override;
-    bool viewport(const RenderRegion& vp) override;
     bool blend(BlendMethod method) override;
     ColorSpace colorSpace() override;
     const RenderSurface* mainSurface() override;
-
     bool target(void* context, int32_t id, uint32_t w, uint32_t h);
     bool sync() override;
     bool clear() override;
 
+    //composition
     RenderCompositor* target(const RenderRegion& region, ColorSpace cs, CompositionFlag flags) override;
     bool beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity) override;
     bool endComposite(RenderCompositor* cmp) override;
 
+    //post effects
     void prepare(RenderEffect* effect, const Matrix& transform) override;
     bool region(RenderEffect* effect) override;
     bool render(RenderCompositor* cmp, const RenderEffect* effect, bool direct) override;
     void dispose(RenderEffect* effect) override;
 
-    static GlRenderer* gen();
-    static bool init(TVG_UNUSED uint32_t threads);
-    static int32_t init();
+    //partial rendering
+    void damage(RenderData rd, const RenderRegion& region) override;
+    bool partial(bool disable) override;
+
+    static GlRenderer* gen(uint32_t threads);
     static bool term();
 
 private:
@@ -139,7 +141,6 @@ private:
     void* mContext = nullptr;
     RenderSurface surface;
     GLint mTargetFboId = 0;
-    RenderRegion mViewport;
     GlStageBuffer mGpuBuffer;
     GlRenderTarget mRootTarget;
     Array<GlProgram*> mPrograms;
@@ -155,7 +156,7 @@ private:
     } mDisposed;
 
     BlendMethod mBlendMethod = BlendMethod::Normal;
-    bool mClearBuffer = true;  //FIXME: clear buffer should be optional (default is false)
+    bool mClearBuffer = false;
 };
 
 #endif /* _TVG_GL_RENDERER_H_ */

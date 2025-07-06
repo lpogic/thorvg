@@ -26,8 +26,11 @@
 #include "tvgCommon.h"
 #include "tvgMath.h"
 
-#define LINEAR(A) PIMPL(A, LinearGradient)
-#define RADIAL(A) PIMPL(A, RadialGradient)
+#define LINEAR(A) static_cast<LinearGradientImpl*>(A)
+#define CONST_LINEAR(A) static_cast<const LinearGradientImpl*>(A)
+
+#define RADIAL(A) static_cast<RadialGradientImpl*>(A)
+#define CONST_RADIAL(A) static_cast<const RadialGradientImpl*>(A)
 
 struct Fill::Impl
 {
@@ -41,13 +44,13 @@ struct Fill::Impl
         tvg::free(colorStops);
     }
 
-    void copy(Fill::Impl* dup)
+    void copy(const Fill::Impl& dup)
     {
-        cnt = dup->cnt;
-        spread = dup->spread;
-        colorStops = tvg::malloc<ColorStop*>(sizeof(ColorStop) * dup->cnt);
-        if (dup->cnt > 0) memcpy(colorStops, dup->colorStops, sizeof(ColorStop) * dup->cnt);
-        transform = dup->transform;
+        cnt = dup.cnt;
+        spread = dup.spread;
+        colorStops = tvg::malloc<ColorStop*>(sizeof(ColorStop) * dup.cnt);
+        if (dup.cnt > 0) memcpy(colorStops, dup.colorStops, sizeof(ColorStop) * dup.cnt);
+        transform = dup.transform;
     }
 
     Result update(const ColorStop* colorStops, uint32_t cnt)
@@ -72,21 +75,26 @@ struct Fill::Impl
 
         return Result::Success;
     }
-
-    virtual Fill* duplicate() = 0;
 };
 
 
-struct RadialGradient::Impl : Fill::Impl
+struct RadialGradientImpl : RadialGradient
 {
+    Fill::Impl impl;
+
     float cx = 0.0f, cy = 0.0f;
     float fx = 0.0f, fy = 0.0f;
     float r = 0.0f, fr = 0.0f;
 
-    Fill* duplicate() override
+    RadialGradientImpl()
+    {
+        Fill::pImpl = &impl;
+    }
+
+    Fill* duplicate() const
     {
         auto ret = RadialGradient::gen();
-        RADIAL(ret)->copy(this);
+        RADIAL(ret)->impl.copy(this->impl);
         RADIAL(ret)->cx = cx;
         RADIAL(ret)->cy = cy;
         RADIAL(ret)->r = r;
@@ -122,20 +130,63 @@ struct RadialGradient::Impl : Fill::Impl
 
         return Result::Success;
     }
+
+    //TODO: remove this logic once SVG 2.0 is adopted by sw and wg engines (gl already supports it); lottie-specific handling will then be delegated entirely to the loader
+    //clamp focal point and shrink start circle if needed to avoid invalid gradient setup
+    bool correct(float& fx, float& fy, float& fr) const
+    {
+        constexpr float precision = 0.01f;
+
+        //a solid fill case. It can be handled by engine.
+        if (this->r < precision) return false;
+
+        fx = this->fx;
+        fy = this->fy;
+        fr = this->fr;
+
+        auto dx = this->cx - this->fx;
+        auto dy = this->cy - this->fy;
+        auto dist = sqrtf(dx * dx + dy * dy);
+
+        //move the focal point to the edge (just inside) if it's outside the end circle
+        if (this->r - dist <  precision) {
+            //handle special case: small radius and small distance -> shift focal point to avoid div-by-zero
+            if (dist < precision) dist = dx = precision;
+            auto scale = this->r * (1.0f - precision) / dist;
+            fx = this->cx - dx * scale;
+            fy = this->cy - dy * scale;
+            dx = this->cx - fx;
+            dy = this->cy - fy;
+            dist = sqrtf(dx * dx + dy * dy);
+        }
+
+        //if the start circle doesn't fit entirely within the end circle, shrink it (with epsilon margin)
+        auto maxFr = (this->r - dist) * (1.0f - precision);
+        if (this->fr > maxFr) fr = std::max(0.0f, maxFr);
+
+        return true;
+    }
 };
 
 
-struct LinearGradient::Impl : Fill::Impl
+struct LinearGradientImpl :  LinearGradient
 {
+    Fill::Impl impl;
+
     float x1 = 0.0f;
     float y1 = 0.0f;
     float x2 = 0.0f;
     float y2 = 0.0f;
 
-    Fill* duplicate() override
+    LinearGradientImpl()
+    {
+        Fill::pImpl = &impl;
+    }
+
+    Fill* duplicate() const
     {
         auto ret = LinearGradient::gen();
-        LINEAR(ret)->copy(this);
+        LINEAR(ret)->impl.copy(this->impl);
         LINEAR(ret)->x1 = x1;
         LINEAR(ret)->y1 = y1;
         LINEAR(ret)->x2 = x2;

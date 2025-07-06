@@ -45,6 +45,11 @@ static inline void operator|=(RenderUpdateFlag& a, const RenderUpdateFlag b)
     a = RenderUpdateFlag(uint16_t(a) | uint16_t(b));
 }
 
+static inline RenderUpdateFlag operator|(const RenderUpdateFlag a, const RenderUpdateFlag b)
+{
+    return RenderUpdateFlag(uint16_t(a) | uint16_t(b));
+}
+
 struct RenderSurface
 {
     union {
@@ -88,17 +93,133 @@ struct RenderCompositor
 
 struct RenderRegion
 {
-    int32_t x, y, w, h;
+    struct {
+        int32_t x, y;
+    } min;
+
+    struct {
+        int32_t x, y;
+    } max;
+
+    static constexpr RenderRegion intersect(const RenderRegion& lhs, const RenderRegion& rhs)
+    {
+        RenderRegion ret = {{std::max(lhs.min.x, rhs.min.x), std::max(lhs.min.y, rhs.min.y)}, {std::min(lhs.max.x, rhs.max.x), std::min(lhs.max.y, rhs.max.y)}};
+        // Not intersected: collapse to zero-area region
+        if (ret.min.x > ret.max.x) ret.max.x = ret.min.x;
+        if (ret.min.y > ret.max.y) ret.max.y = ret.min.y;
+        return ret;
+    }
+
+    static constexpr RenderRegion add(const RenderRegion& lhs, const RenderRegion& rhs)
+    {
+        return {{std::min(lhs.min.x, rhs.min.x), std::min(lhs.min.y, rhs.min.y)}, {std::max(lhs.max.x, rhs.max.x), std::max(lhs.max.y, rhs.max.y)}};
+    }
 
     void intersect(const RenderRegion& rhs);
-    void add(const RenderRegion& rhs);
+
+    void add(const RenderRegion& rhs)
+    {
+        if (rhs.min.x < min.x) min.x = rhs.min.x;
+        if (rhs.min.y < min.y) min.y = rhs.min.y;
+        if (rhs.max.x > max.x) max.x = rhs.max.x;
+        if (rhs.max.y > max.y) max.y = rhs.max.y;
+    }
+
+    bool contained(const RenderRegion& rhs)
+    {
+        return (min.x <= rhs.min.x && max.x >= rhs.max.x && min.y <= rhs.min.y && max.y >= rhs.max.y);
+    }
+
+    bool intersected(const RenderRegion& rhs) const
+    {
+        return (rhs.min.x < max.x && rhs.max.x > min.x && rhs.min.y < max.y && rhs.max.y > min.y);
+    }
 
     bool operator==(const RenderRegion& rhs) const
     {
-        if (x == rhs.x && y == rhs.y && w == rhs.w && h == rhs.h) return true;
-        return false;
+        return (min.x == rhs.min.x && min.y == rhs.min.y && max.x == rhs.max.x && max.y == rhs.max.y);
     }
+
+    void reset() { min.x = min.y = max.x = max.y = 0; }
+    bool valid() const { return (max.x > min.x && max.y > min.y); }
+    bool invalid() const { return !valid(); }
+
+    int32_t sx() const { return min.x; }
+    int32_t sy() const { return min.y; }
+    int32_t sw() const { return max.x - min.x; }
+    int32_t sh() const { return max.y - min.y; }
+
+    uint32_t x() const { return (uint32_t) sx(); }
+    uint32_t y() const { return (uint32_t) sy(); }
+    uint32_t w() const { return (uint32_t) sw(); }
+    uint32_t h() const { return (uint32_t) sh(); }
 };
+
+
+#ifdef THORVG_PARTIAL_RENDER_SUPPORT
+    struct RenderDirtyRegion
+    {
+    public:
+        static constexpr const int PARTITIONING = 16;   //must be N*N
+
+        void init(uint32_t w, uint32_t h);
+        void commit();
+        bool add(const RenderRegion& bbox);
+        bool add(const RenderRegion& prv, const RenderRegion& cur);  //collect the old and new dirty regions together
+        void clear();
+
+        bool deactivate(bool on)
+        {
+            std::swap(on, disabled);
+            return on;
+        }
+
+        bool deactivated()
+        {
+            return disabled;
+        }
+
+        const RenderRegion& partition(int idx)
+        {
+            return partitions[idx].region;
+        }
+
+        const Array<RenderRegion>& get(int idx)
+        {
+            return partitions[idx].list[partitions[idx].current];
+        }
+
+    private:
+        void subdivide(Array<RenderRegion>& targets, uint32_t idx, RenderRegion& lhs, RenderRegion& rhs);
+
+        struct Partition
+        {
+            RenderRegion region;
+            Array<RenderRegion> list[2];  //double buffer swapping
+            uint8_t current = 0;  //double buffer swapping list index. 0 or 1
+        };
+
+        Key key;
+        Partition partitions[PARTITIONING];
+        bool disabled = false;
+    };
+#else
+    struct RenderDirtyRegion
+    {
+        static constexpr const int PARTITIONING = 16;   //must be N*N
+
+        void init(uint32_t w, uint32_t h) {}
+        void commit() {}
+        bool add(TVG_UNUSED const RenderRegion& bbox) { return true; }
+        bool add(TVG_UNUSED const RenderRegion& prv, TVG_UNUSED const RenderRegion& cur) { return true; }
+        void clear() {}
+        bool deactivate(TVG_UNUSED bool on) { return true; }
+        bool deactivated() { return true; }
+        const RenderRegion& partition(TVG_UNUSED int idx) { static RenderRegion tmp{}; return tmp; }
+        const Array<RenderRegion>& get(TVG_UNUSED int idx) { static Array<RenderRegion> tmp; return tmp; }
+    };
+#endif
+
 
 struct RenderPath
 {
@@ -144,7 +265,7 @@ struct RenderStroke
     RenderTrimPath trim;
     StrokeCap cap = StrokeCap::Square;
     StrokeJoin join = StrokeJoin::Bevel;
-    bool strokeFirst = false;
+    bool first = false;
 
     void operator=(const RenderStroke& rhs)
     {
@@ -168,7 +289,7 @@ struct RenderStroke
         miterlimit = rhs.miterlimit;
         cap = rhs.cap;
         join = rhs.join;
-        strokeFirst = rhs.strokeFirst;
+        first = rhs.first;
         trim = rhs.trim;
     }
 
@@ -205,6 +326,11 @@ struct RenderShape
     {
         if (!stroke) return false;
         return stroke->trim.valid();
+    }
+
+    bool strokeFirst() const
+    {
+        return (stroke && stroke->first) ? true : false;
     }
 
     float strokeWidth() const
@@ -261,7 +387,7 @@ struct RenderShape
 struct RenderEffect
 {
     RenderData rd = nullptr;
-    RenderRegion extend = {0, 0, 0, 0};
+    RenderRegion extend{};
     SceneEffect type;
     bool valid = false;
 
@@ -342,7 +468,7 @@ struct RenderEffectTint : RenderEffect
         inst->white[0] = va_arg(args, int);
         inst->white[1] = va_arg(args, int);
         inst->white[2] = va_arg(args, int);
-        inst->intensity = (uint8_t)(va_arg(args, double) * 2.55);
+        inst->intensity = (uint8_t)(static_cast<float>(va_arg(args, double)) * 2.55f);
         inst->type = SceneEffect::Tint;
         return inst;
     }
@@ -374,13 +500,20 @@ struct RenderEffectTritone : RenderEffect
 class RenderMethod
 {
 private:
-    uint32_t refCnt = 0;        //reference count
+    uint32_t refCnt = 0;
     Key key;
 
+protected:
+    RenderRegion vport;         //viewport
+
 public:
+    //common implementation
     uint32_t ref();
     uint32_t unref();
+    RenderRegion viewport();
+    bool viewport(const RenderRegion& vp);
 
+    //main features
     virtual ~RenderMethod() {}
     virtual bool preUpdate() = 0;
     virtual RenderData prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper) = 0;
@@ -392,23 +525,26 @@ public:
     virtual bool postRender() = 0;
     virtual void dispose(RenderData data) = 0;
     virtual RenderRegion region(RenderData data) = 0;
-    virtual RenderRegion viewport() = 0;
-    virtual bool viewport(const RenderRegion& vp) = 0;
     virtual bool blend(BlendMethod method) = 0;
     virtual ColorSpace colorSpace() = 0;
     virtual const RenderSurface* mainSurface() = 0;
-
     virtual bool clear() = 0;
     virtual bool sync() = 0;
 
+    //composition
     virtual RenderCompositor* target(const RenderRegion& region, ColorSpace cs, CompositionFlag flags) = 0;
     virtual bool beginComposite(RenderCompositor* cmp, MaskMethod method, uint8_t opacity) = 0;
     virtual bool endComposite(RenderCompositor* cmp) = 0;
 
+    //post effects
     virtual void prepare(RenderEffect* effect, const Matrix& transform) = 0;
     virtual bool region(RenderEffect* effect) = 0;
     virtual bool render(RenderCompositor* cmp, const RenderEffect* effect, bool direct) = 0;
     virtual void dispose(RenderEffect* effect) = 0;
+
+    //partial rendering
+    virtual void damage(RenderData rd, const RenderRegion& region) = 0;
+    virtual bool partial(bool disable) = 0;
 };
 
 static inline bool MASK_REGION_MERGING(MaskMethod method)
