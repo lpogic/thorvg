@@ -27,30 +27,6 @@
 #include "tvgWgGeometry.h"
 #include "tvgWgShaderTypes.h"
 
-struct WgMeshData {
-    Array<Point> vbuffer;
-    Array<Point> tbuffer;
-    Array<uint32_t> ibuffer;
-    size_t voffset{};
-    size_t toffset{};
-    size_t ioffset{};
-
-    void update(const WgVertexBuffer& vertexBuffer);
-    void update(const WgIndexedVertexBuffer& vertexBufferInd);
-    void bbox(const Point pmin, const Point pmax);
-    void imageBox(float w, float h);
-    void blitBox();
-};
-
-struct WgMeshDataGroup {
-    Array<WgMeshData*> meshes{};
-    
-    void append(const WgVertexBuffer& vertexBuffer);
-    void append(const WgIndexedVertexBuffer& vertexBufferInd);
-    void append(const Point pmin, const Point pmax);
-    void release();
-};
-
 struct WgImageData {
     WGPUTexture texture{};
     WGPUTextureView textureView{};
@@ -96,22 +72,18 @@ struct WgRenderDataShape: public WgRenderDataPaint
 {
     WgRenderSettings renderSettingsShape{};
     WgRenderSettings renderSettingsStroke{};
-    WgMeshDataGroup meshGroupShapes{};
-    WgMeshDataGroup meshGroupShapesBBox{};
-    WgMeshData meshDataBBox{};
-    WgMeshDataGroup meshGroupStrokes{};
-    WgMeshDataGroup meshGroupStrokesBBox{};
-    Point pMin{};
-    Point pMax{};
+    WgMeshData meshBBox{};
+    WgMeshData meshShape{};
+    WgMeshData meshShapeBBox{};
+    WgMeshData meshStrokes{};
+    WgMeshData meshStrokesBBox{};
     bool strokeFirst{};
     FillRule fillRule{};
+    BBox bbox;
 
-    void appendShape(const WgVertexBuffer& vertexBuffer);
-    void appendStroke(const WgIndexedVertexBuffer& vertexBufferInd);
-    void updateBBox(Point pmin, Point pmax);
-    void updateAABB(const Matrix& tr);
-    void updateMeshes(const RenderShape& rshape, const Matrix& tr, WgGeometryBufferPool* pool);
-    void proceedStrokes(const RenderStroke* rstroke, const WgVertexBuffer& buff, WgGeometryBufferPool* pool);
+    void updateBBox(BBox bb);
+    void updateAABB(const Matrix& matrix);
+    void updateMeshes(const RenderShape& rshape, RenderUpdateFlag flag, const Matrix& matrix);
     void releaseMeshes();
     void release(WgContext& context) override;
     Type type() override { return Type::Shape; };
@@ -148,28 +120,6 @@ public:
     void release(WgContext& context);
 };
 
-struct WgRenderDataViewport
-{
-    WGPUBindGroup bindGroupViewport{};
-    WGPUBuffer bufferViewport{};
-
-    void update(WgContext& context, const RenderRegion& region);
-    void release(WgContext& context);
-};
-
-class WgRenderDataViewportPool {
-private:
-    // pool contains all created but unused render data for viewport
-    Array<WgRenderDataViewport*> mPool;
-    // list contains all created render data for viewport
-    // to ensure that all created instances will be released
-    Array<WgRenderDataViewport*> mList;
-public:
-    WgRenderDataViewport* allocate(WgContext& context);
-    void free(WgContext& context, WgRenderDataViewport* renderData);
-    void release(WgContext& context);
-};
-
 // gaussian blur, drop shadow, fill, tint, tritone
 #define WG_GAUSSIAN_MAX_LEVEL 3
 struct WgRenderDataEffectParams
@@ -177,15 +127,14 @@ struct WgRenderDataEffectParams
     WGPUBindGroup bindGroupParams{};
     WGPUBuffer bufferParams{};
     uint32_t extend{};
-    uint32_t level{};
     Point offset{};
 
-    void update(WgContext& context, const WgShaderTypeEffectParams& effectParams);
-    void update(WgContext& context, const RenderEffectGaussianBlur* gaussian, const Matrix& transform);
-    void update(WgContext& context, const RenderEffectDropShadow* dropShadow, const Matrix& transform);
-    void update(WgContext& context, const RenderEffectFill* fill);
-    void update(WgContext& context, const RenderEffectTint* tint);
-    void update(WgContext& context, const RenderEffectTritone* tritone);
+    void update(WgContext& context, WgShaderTypeEffectParams& effectParams);
+    void update(WgContext& context, RenderEffectGaussianBlur* gaussian, const Matrix& transform);
+    void update(WgContext& context, RenderEffectDropShadow* dropShadow, const Matrix& transform);
+    void update(WgContext& context, RenderEffectFill* fill);
+    void update(WgContext& context, RenderEffectTint* tint);
+    void update(WgContext& context, RenderEffectTritone* tritone);
     void release(WgContext& context);
 };
 
@@ -207,13 +156,11 @@ class WgStageBufferGeometry {
 private:
     Array<uint8_t> vbuffer;
     Array<uint8_t> ibuffer;
-    uint32_t vmaxcount{};
 public:
     WGPUBuffer vbuffer_gpu{};
     WGPUBuffer ibuffer_gpu{};
 
     void append(WgMeshData* meshData);
-    void append(WgMeshDataGroup* meshDataGroup);
     void append(WgRenderDataShape* renderDataShape);
     void append(WgRenderDataPicture* renderDataPicture);
     void initialize(WgContext& context){};

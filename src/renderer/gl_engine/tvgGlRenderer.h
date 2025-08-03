@@ -28,6 +28,7 @@
 #include "tvgGlRenderTask.h"
 #include "tvgGlGpuBuffer.h"
 #include "tvgGlRenderPass.h"
+#include "tvgGlEffect.h"
 
 class GlRenderer : public RenderMethod
 {
@@ -60,13 +61,6 @@ public:
         RT_DifferenceBlend,
         RT_ExclusionBlend,
 
-        RT_GaussianVert,
-        RT_GaussianHorz,
-        RT_DropShadow,
-        RT_EffectFill,
-        RT_EffectTint,
-        RT_EffectTritone,
-
         RT_None,
     };
 
@@ -84,9 +78,11 @@ public:
     bool blend(BlendMethod method) override;
     ColorSpace colorSpace() override;
     const RenderSurface* mainSurface() override;
-    bool target(void* context, int32_t id, uint32_t w, uint32_t h);
     bool sync() override;
     bool clear() override;
+    bool intersectsShape(RenderData data, const RenderRegion& region) override;
+    bool intersectsImage(RenderData data, const RenderRegion& region) override;
+    bool target(void* context, int32_t id, uint32_t w, uint32_t h);
 
     //composition
     RenderCompositor* target(const RenderRegion& region, ColorSpace cs, CompositionFlag flags) override;
@@ -125,15 +121,6 @@ private:
     void prepareCmpTask(GlRenderTask* task, const RenderRegion& vp, uint32_t cmpWidth, uint32_t cmpHeight);
     void endRenderPass(RenderCompositor* cmp);
 
-    void effectGaussianBlurUpdate(RenderEffectGaussianBlur* effect, const Matrix& transform);
-    void effectDropShadowUpdate(RenderEffectDropShadow* effect, const Matrix& transform);
-    void effectFillUpdate(RenderEffectFill* effect, const Matrix& transform);
-    void effectTintUpdate(RenderEffectTint* effect, const Matrix& transform);
-    void effectTritoneUpdate(RenderEffectTritone* effect, const Matrix& transform);
-
-    bool effectGaussianBlurRegion(RenderEffectGaussianBlur* effect);
-    bool effectDropShadowRegion(RenderEffectDropShadow* effect);
-
     void flush();
     void clearDisposes();
     void currentContext();
@@ -143,6 +130,7 @@ private:
     GLint mTargetFboId = 0;
     GlStageBuffer mGpuBuffer;
     GlRenderTarget mRootTarget;
+    GlEffect mEffect;
     Array<GlProgram*> mPrograms;
     Array<GlRenderTargetPool*> mComposePool;
     Array<GlRenderTargetPool*> mBlendPool;

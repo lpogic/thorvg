@@ -45,7 +45,6 @@ struct TextImpl : Text
     TextImpl() : impl(Paint::Impl(this)), shape(Shape::gen())
     {
         PAINT(shape)->parent = this;
-        shape->fill(FillRule::EvenOdd);
     }
 
     ~TextImpl()
@@ -143,6 +142,13 @@ struct TextImpl : Text
         PAINT(shape)->update(renderer, transform, clips, opacity, flag, false);
         return true;
     }
+
+    bool intersects(const RenderRegion& region)
+    {
+        if (load() == 0.0f) return false;
+        return SHAPE(shape)->intersects(region);
+    }
+
 
     Result bounds(Point* pt4, Matrix& m, bool obb, TVG_UNUSED bool stroking)
     {

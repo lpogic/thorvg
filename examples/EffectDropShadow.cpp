@@ -34,8 +34,6 @@ struct UserExample : tvgexam::Example
 
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
-        if (!canvas) return false;
-
         //background
         auto bg = tvg::Shape::gen();
         bg->appendRect(0, 0, w, h);
@@ -94,8 +92,6 @@ struct UserExample : tvgexam::Example
 
     bool update(tvg::Canvas* canvas, uint32_t elapsed) override
     {
-        if (!canvas) return false;
-
         auto progress = tvgexam::progress(elapsed, 2.5f, true);   //2.5 seconds
 
         //Clear the previously applied effects
@@ -107,7 +103,7 @@ struct UserExample : tvgexam::Example
         scene2->push(tvg::SceneEffect::DropShadow, 65, 143, 222, (int)(255.0f * progress), 135.0, 10.0, 3.0, 100);
 
         scene3->push(tvg::SceneEffect::ClearAll);
-        scene3->push(tvg::SceneEffect::DropShadow, 0, 0, 0, 125, (double)(360.0f * progress), 20.0, 3.0, 100);
+        scene3->push(tvg::SceneEffect::DropShadow, 0, 0, 0, 125, (double)(360.0f * progress), 20.0, 0.0, 100);
 
         canvas->update();
 

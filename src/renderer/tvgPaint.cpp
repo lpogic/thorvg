@@ -180,12 +180,17 @@ bool Paint::Impl::render(RenderMethod* renderer)
 
     RenderCompositor* cmp = nullptr;
 
+    //OPTIMIZE: bounds(renderer) calls could dismiss the parallelization
     if (maskData && !(maskData->target->pImpl->ctxFlag & ContextFlag::FastTrack)) {
         RenderRegion region;
         PAINT_METHOD(region, bounds(renderer));
 
-        if (MASK_REGION_MERGING(maskData->method)) region.add(PAINT(maskData->target)->bounds(renderer));
-        if (region.invalid()) return true;
+        auto mData = maskData;
+        while (mData) {
+            if (MASK_REGION_MERGING(mData->method)) region.add(PAINT(mData->target)->bounds(renderer));
+            if (region.invalid()) return true;
+            mData = PAINT(mData->target)->maskData;
+        }
         cmp = renderer->target(region, MASK_TO_COLORSPACE(renderer, maskData->method), CompositionFlag::Masking);
         if (renderer->beginComposite(cmp, MaskMethod::None, 255)) {
             maskData->target->pImpl->render(renderer);
@@ -317,6 +322,15 @@ Result Paint::Impl::bounds(Point* pt4, Matrix* pm, bool obb, bool stroking)
 }
 
 
+bool Paint::Impl::intersects(const RenderRegion& region)
+{
+    if (!renderer) return false;
+    bool ret;
+    PAINT_METHOD(ret, intersects(region));
+    return ret;
+}
+
+
 /************************************************************************/
 /* External Class Implementation                                        */
 /************************************************************************/
@@ -373,6 +387,13 @@ Result Paint::bounds(Point* pt4) const noexcept
 }
 
 
+bool Paint::intersects(int32_t x, int32_t y, int32_t w, int32_t h) noexcept
+{
+    if (w <= 0 || h <= 0) return false;
+    return pImpl->intersects({{x, y}, {x + w, y + h}});
+}
+
+
 Paint* Paint::duplicate() const noexcept
 {
     return pImpl->duplicate();
@@ -393,6 +414,7 @@ Shape* Paint::clip() const noexcept
 
 Result Paint::mask(Paint* target, MaskMethod method) noexcept
 {
+    if (method > MaskMethod::Darken) return Result::InvalidArguments;
     return pImpl->mask(target, method);
 }
 
@@ -422,10 +444,12 @@ uint8_t Paint::opacity() const noexcept
 
 Result Paint::blend(BlendMethod method) noexcept
 {
-    //TODO: Remove later
-    if (method == BlendMethod::Hue || method == BlendMethod::Saturation || method == BlendMethod::Color || method == BlendMethod::Luminosity || method == BlendMethod::HardMix) return Result::NonSupport;
-    pImpl->blend(method);
-    return Result::Success;
+    //Composition is only allowed to Scene.
+    if (method <= BlendMethod::Add || (method == BlendMethod::Composition && type() == Type::Scene)) {
+        pImpl->blend(method);
+        return Result::Success;
+    }
+    return Result::InvalidArguments;
 }
 
 

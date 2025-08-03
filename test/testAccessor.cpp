@@ -40,13 +40,13 @@ TEST_CASE("Accessor Creation", "[tvgAccessor]")
 
 TEST_CASE("Set", "[tvgAccessor]")
 {
-    REQUIRE(Initializer::init(0) == Result::Success);
+    REQUIRE(Initializer::init() == Result::Success);
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
         REQUIRE(canvas);
 
         uint32_t buffer[100*100];
-        REQUIRE(canvas->target(buffer, 100, 100, 100, ColorSpace::ABGR8888) == Result::Success);
+        REQUIRE(canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888) == Result::Success);
 
         auto picture = unique_ptr<Picture>(Picture::gen());
         REQUIRE(picture);

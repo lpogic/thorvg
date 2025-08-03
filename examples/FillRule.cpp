@@ -30,8 +30,6 @@ struct UserExample : tvgexam::Example
 {
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
-        if (!canvas) return false;
-
         //Star
         auto shape1 = tvg::Shape::gen();
         shape1->moveTo(205, 35);
@@ -41,7 +39,8 @@ struct UserExample : tvgexam::Example
         shape1->lineTo(80, 355);
         shape1->close();
         shape1->fill(255, 255, 255);
-        shape1->fill(tvg::FillRule::NonZero);  //Fill all winding shapes
+        // Use the NonZero fill rule: fills all areas enclosed by paths with non-zero winding numbers
+        shape1->fillRule(tvg::FillRule::NonZero);
 
         canvas->push(shape1);
 
@@ -54,7 +53,8 @@ struct UserExample : tvgexam::Example
         shape2->lineTo(410, 655);
         shape2->close();
         shape2->fill(255, 255, 255);
-        shape2->fill(tvg::FillRule::EvenOdd); //Fill polygons with even odd pattern
+        // Use the EvenOdd fill rule: fills areas where path overlaps an odd number of times
+        shape2->fillRule(tvg::FillRule::EvenOdd);
 
         canvas->push(shape2);
 

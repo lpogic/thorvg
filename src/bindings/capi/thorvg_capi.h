@@ -159,12 +159,12 @@ typedef enum {
     TVG_BLEND_METHOD_SOFTLIGHT,         ///< The same as Overlay but with applying pure black or white does not result in pure black or white. (1 - 2 * S) * (D ^ 2) + (2 * S * D)
     TVG_BLEND_METHOD_DIFFERENCE,        ///< Subtracts the bottom layer from the top layer or the other way around, to always get a non-negative value. (S - D) if (S > D), otherwise (D - S)
     TVG_BLEND_METHOD_EXCLUSION,         ///< The result is twice the product of the top and bottom layers, subtracted from their sum. s + d - (2 * s * d)
-    TVG_BLEND_METHOD_HUE,               ///< Reserved. Not supported.
-    TVG_BLEND_METHOD_SATURATION,        ///< Reserved. Not supported.
-    TVG_BLEND_METHOD_COLOR,             ///< Reserved. Not supported.
-    TVG_BLEND_METHOD_LUMINOSITY,        ///< Reserved. Not supported.
+    TVG_BLEND_METHOD_HUE,               ///< Combine with HSL(Sh + Ds + Dl) then convert it to RGB.
+    TVG_BLEND_METHOD_SATURATION,        ///< Combine with HSL(Dh + Ss + Dl) then convert it to RGB.
+    TVG_BLEND_METHOD_COLOR,             ///< Combine with HSL(Sh + Ss + Dl) then convert it to RGB.
+    TVG_BLEND_METHOD_LUMINOSITY,        ///< Combine with HSL(Dh + Ds + Sl) then convert it to RGB.
     TVG_BLEND_METHOD_ADD,               ///< Simply adds pixel values of one layer with the other. (S + D)
-    TVG_BLEND_METHOD_HARDMIX            ///< Reserved. Not supported.
+    TVG_BLEND_METHOD_COMPOSITION = 255  ///< Used for intermediate composition. @since 1.0
 } Tvg_Blend_Method;
 
 
@@ -855,6 +855,34 @@ TVG_API Tvg_Paint* tvg_paint_duplicate(Tvg_Paint* paint);
 
 
 /**
+ * @brief Checks whether a given region intersects the filled area of the paint.
+ *
+ * This function determines whether the specified rectangular region—defined by (`x`, `y`, `w`, `h`)—
+ * intersects the geometric fill region of the paint object.
+ *
+ * This is useful for hit-testing purposes, such as detecting whether a user interaction (e.g., touch or click)
+ * occurs within a visible painted region.
+ *
+ * The paint must be updated in a Canvas beforehand—typically after the Canvas has been
+ * drawn and synchronized.
+ *
+ * @param[in] paint A Tvg_Paint pointer to the shape object to be tested.
+ * @param[in] x The x-coordinate of the top-left corner of the test region.
+ * @param[in] y The y-coordinate of the top-left corner of the test region.
+ * @param[in] w The width of the region to test. Must be greater than 0; defaults to 1.
+ * @param[in] h The height of the region to test. Must be greater than 0; defaults to 1.
+ *
+ * @return @c true if any part of the region intersects the filled area; otherwise, @c false.
+ *
+ * @note To test a single point, set the region size to w = 1, h = 1.
+ * @note For efficiency, an AABB (axis-aligned bounding box) test is performed internally before precise hit detection.
+ * @note This test does not take into account the results of blending or masking.
+ * @note Experimental API.
+ */
+TVG_API bool tvg_paint_intersects(Tvg_Paint* paint, int32_t x, int32_t y, int32_t w, int32_t h);
+
+
+/**
  * @brief Retrieves the axis-aligned bounding box (AABB) of the paint object in canvas space.
  *
  * This function returns the bounding box of the paint, as an axis-aligned bounding box (AABB) after transformations are applied.
@@ -1468,10 +1496,13 @@ TVG_API Tvg_Result tvg_shape_get_fill_color(const Tvg_Paint* paint, uint8_t* r, 
 
 
 /*!
-* @brief Sets the shape's fill rule.
+* @brief Sets the fill rule for the shape.
+*
+* Specifies how the interior of the shape is determined when its path intersects itself.
+* The default fill rule is @c TVG_FILL_RULE_NON_ZERO.
 *
 * @param[in] paint A Tvg_Paint pointer to the shape object.
-* @param[in] rule The fill rule value. The default value is @c TVG_FILL_RULE_NON_ZERO.
+* @param[in] rule The fill rule to apply to the shape.
 *
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT An invalid Tvg_Paint pointer.
@@ -1480,10 +1511,13 @@ TVG_API Tvg_Result tvg_shape_set_fill_rule(Tvg_Paint* paint, Tvg_Fill_Rule rule)
 
 
 /*!
-* @brief Gets the shape's fill rule.
+* @brief Retrieves the current fill rule used by the shape.
+*
+* This function returns the fill rule, which determines how the interior 
+* regions of the shape are calculated when it overlaps itself.
 *
 * @param[in] paint A Tvg_Paint pointer to the shape object.
-* @param[out] rule shape's fill rule
+* @param[out] rule The current Tvg_Fill_Rule value of the shape.
 *
 * @return Tvg_Result enumeration.
 * @retval TVG_RESULT_INVALID_ARGUMENT An invalid pointer passed as an argument.
@@ -2091,10 +2125,11 @@ TVG_API Tvg_Result tvg_scene_push_effect_tint(Tvg_Paint* scene, int black_r, int
  * @param[in] highlight_r Red component of the highlight color [0 - 255].
  * @param[in] highlight_g Green component of the highlight color [0 - 255].
  * @param[in] highlight_b Blue component of the highlight color [0 - 255].
+ * @param[in] blend A blending factor that determines the mix between the original color and the tritone colors [0 - 255].
  *
  * @since 1.0
  */
-TVG_API Tvg_Result tvg_scene_push_effect_tritone(Tvg_Paint* scene, int shadow_r, int shadow_g, int shadow_b, int midtone_r, int midtone_g, int midtone_b, int highlight_r, int highlight_g, int highlight_b);
+TVG_API Tvg_Result tvg_scene_push_effect_tritone(Tvg_Paint* scene, int shadow_r, int shadow_g, int shadow_b, int midtone_r, int midtone_g, int midtone_b, int highlight_r, int highlight_g, int highlight_b, int blend);
 
 /** \} */   // end defgroup ThorVGCapi_Scene
 
@@ -2129,6 +2164,7 @@ TVG_API Tvg_Paint* tvg_text_new(void);
 *
 * @param[in] paint A Tvg_Paint pointer to the text object.
 * @param[in] name The name of the font. This should correspond to a font available in the canvas.
+*                 If set to @c nullptr, ThorVG will attempt to select a fallback font available on the system.
 * @param[in] size The size of the font in points.
 * @param[in] style The style of the font. If empty, the default style is used. Currently only 'italic' style is supported.
 *
@@ -2138,6 +2174,13 @@ TVG_API Tvg_Paint* tvg_text_new(void);
 *
 * @note If the @p name is not specified, ThorVG will select any available font candidate.
 * @since 1.0
+*
+* @code
+* // Fallback example: Try a specific font, then fallback to any available one.
+* if (tvg_text_set_font(text, "Arial", 24, nullptr) != TVG_RESULT_SUCCESS) {
+*     tvg_text_set_font(text, nullptr, 24, nullptr);
+* }
+* @endcode
 */
 TVG_API Tvg_Result tvg_text_set_font(Tvg_Paint* paint, const char* name, float size, const char* style);
 

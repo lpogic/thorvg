@@ -59,6 +59,12 @@ struct SwTask : Task
         return curBox;
     }
 
+    void invisible()
+    {
+        curBox.reset();
+        if (!nodirty) dirtyRegion->add(prvBox, curBox);
+    }
+
     virtual void dispose() = 0;
     virtual bool clip(SwRle* target) = 0;
     virtual ~SwTask() {}
@@ -103,9 +109,9 @@ struct SwShapeTask : SwTask
 
     void run(unsigned tid) override
     {
-        //Invisible
+        //invisible
         if (opacity == 0 && !clipper) {
-            curBox.reset();
+            if (flags & RenderUpdateFlag::Color) invisible();
             return;
         }
 
@@ -166,11 +172,10 @@ struct SwShapeTask : SwTask
         return;
 
     err:
-        curBox.reset();
         shapeReset(&shape);
         rleReset(shape.strokeRle);
         shapeDelOutline(&shape, mpool, tid);
-        if (!nodirty) dirtyRegion->add(prvBox, curBox);
+        invisible();
     }
 
     void dispose() override
@@ -193,6 +198,12 @@ struct SwImageTask : SwTask
 
     void run(unsigned tid) override
     {
+        //invisible
+        if (opacity == 0) {
+            if (flags & RenderUpdateFlag::Color) invisible();
+            return;
+        }
+
         auto clipBox = curBox;
 
         //Convert colorspace if it's not aligned.
@@ -209,9 +220,7 @@ struct SwImageTask : SwTask
         if ((flags & (RenderUpdateFlag::Image | RenderUpdateFlag::Transform | RenderUpdateFlag::Color)) && (opacity > 0)) {
             imageReset(&image);
             if (!image.data || image.w == 0 || image.h == 0) goto end;
-
             if (!imagePrepare(&image, transform, clipBox, curBox, mpool, tid)) goto end;
-
             if (clips.count > 0) {
                 if (!imageGenRle(&image, curBox, false)) goto end;
                 if (image.rle) {
@@ -415,7 +424,7 @@ bool SwRenderer::renderImage(RenderData data)
                 cmp->compositor->method = MaskMethod::None;
                 cmp->compositor->valid = true;
                 cmp->compositor->image.rle = image.rle;
-                rasterClear(cmp, bbox.x(), bbox.y(), bbox.w(), bbox.h(), 0);
+                rasterClear(cmp, bbox.x(), bbox.y(), bbox.w(), bbox.h());
                 rasterTexmapPolygon(cmp, image, transform, bbox, 255);
                 return rasterDirectRleImage(surface, cmp->compositor->image, bbox, opacity);
             }
@@ -518,9 +527,6 @@ bool SwRenderer::blend(BlendMethod method)
     surface->blendMethod = method;
 
     switch (method) {
-        case BlendMethod::Normal:
-            surface->blender = nullptr;
-            break;
         case BlendMethod::Multiply:
             surface->blender = opBlendMultiply;
             break;
@@ -554,15 +560,26 @@ bool SwRenderer::blend(BlendMethod method)
         case BlendMethod::Exclusion:
             surface->blender = opBlendExclusion;
             break;
+        case BlendMethod::Hue:
+            surface->blender = opBlendHue;
+            break;
+        case BlendMethod::Saturation:
+            surface->blender = opBlendSaturation;
+            break;
+        case BlendMethod::Color:
+            surface->blender = opBlendColor;
+            break;
+        case BlendMethod::Luminosity:
+            surface->blender = opBlendLuminosity;
+            break;
         case BlendMethod::Add:
             surface->blender = opBlendAdd;
             break;
         default:
-            TVGLOG("SW_ENGINE", "Non supported blending option = %d", (int) method);
             surface->blender = nullptr;
             break;
     }
-    return false;
+    return true;
 }
 
 
@@ -657,8 +674,7 @@ RenderCompositor* SwRenderer::target(const RenderRegion& region, ColorSpace cs, 
 
     /* TODO: Currently, only blending might work.
        Blending and composition must be handled together. */
-    auto color = (surface->blender && !surface->compositor) ? 0x00ffffff : 0x00000000;
-    rasterClear(cmp, bbox.x(), bbox.y(), bbox.w(), bbox.h(), color);
+    rasterClear(cmp, bbox.x(), bbox.y(), bbox.w(), bbox.h());
 
     //Switch render target
     surface = cmp;
@@ -700,6 +716,61 @@ void SwRenderer::prepare(RenderEffect* effect, const Matrix& transform)
         case SceneEffect::Tritone: effectTritoneUpdate(static_cast<RenderEffectTritone*>(effect)); break;
         default: break;
     }
+}
+
+
+bool SwRenderer::intersectsShape(RenderData data, const RenderRegion& region)
+{
+    auto task = static_cast<SwShapeTask*>(data);
+    task->done();
+
+    if (!task->bounds().intersected(region)) return false;
+    if (rleIntersect(task->shape.strokeRle, region)) return true;
+    return task->shape.rle ? rleIntersect(task->shape.rle, region): task->shape.fastTrack;
+}
+
+
+bool SwRenderer::intersectsImage(RenderData data, const RenderRegion& region)
+{
+    auto task = static_cast<SwImageTask*>(data);
+    task->done();
+
+    if (!task->bounds().intersected(region)) return false;
+
+    //aabb & obb transformed image intersection
+    auto rad = tvg::radian(task->transform);
+    if (rad > 0.0f && rad < MATH_PI) {
+        Point aabb[4];
+        aabb[0] = {(float)region.min.x, (float)region.min.y};
+        aabb[1] = {(float)region.max.x, (float)region.min.y};
+        aabb[2] = {(float)region.max.x, (float)region.max.y};
+        aabb[3] = {(float)region.min.x, (float)region.max.y};
+
+        Point obb[4];
+        obb[0] = Point{0.0f, 0.0f} * task->transform;
+        obb[1] = Point{(float)task->image.w, 0.0f} * task->transform;
+        obb[2] = Point{(float)task->image.w, (float)task->image.h} * task->transform;
+        obb[3] = Point{0.0f, (float)task->image.h} * task->transform;
+
+        auto project = [](const Point* poly, const Point& axis, float& min, float& max) {
+            min = max = dot(poly[0], axis);
+            for (int i = 1; i < 4; ++i) {
+                float projection = dot(poly[i], axis);
+                if (projection < min) min = projection;
+                if (projection > max) max = projection;
+            }
+        };
+
+        for (int i = 0; i < 4; ++i) {
+            auto edge = (i < 2) ? (aabb[(i+1)%4] - aabb[i]) : (obb[(i-2+1)%4] - obb[i-2]);
+            tvg::normalize(edge);
+            float minA, maxA, minB, maxB;
+            project(aabb, edge, minA, maxA);
+            project(obb, edge, minB, maxB);
+            if (maxA < minB || maxB < minA) return false;
+        }
+    }
+    return task->image.rle ? rleIntersect(task->image.rle, region) : true;
 }
 
 

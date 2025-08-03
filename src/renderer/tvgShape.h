@@ -125,10 +125,15 @@ struct ShapeImpl : Shape
 
         //Stroke feathering
         if (stroking && rs.stroke) {
-            x -= rs.stroke->width * 0.5f;
-            y -= rs.stroke->width * 0.5f;
-            w += rs.stroke->width;
-            h += rs.stroke->width;
+            //Use geometric mean for feathering.
+            //Join, Cap wouldn't be considered. Generate stroke outline and compute bbox for accurate size?
+            auto sx = sqrt(m.e11 * m.e11 + m.e21 * m.e21);
+            auto sy = sqrt(m.e12 * m.e12 + m.e22 * m.e22);
+            auto feather = rs.stroke->width * sqrt(sx * sy);
+            x -= feather * 0.5f;
+            y -= feather * 0.5f;
+            w += feather;
+            h += feather;
         }
 
         pt4[0] = {x, y};
@@ -168,37 +173,6 @@ struct ShapeImpl : Shape
         memcpy(rs.path.pts.end(), pts, sizeof(Point) * ptsCnt);
         rs.path.cmds.count += cmdCnt;
         rs.path.pts.count += ptsCnt;
-    }
-
-    void moveTo(float x, float y)
-    {
-        rs.path.cmds.push(PathCommand::MoveTo);
-        rs.path.pts.push({x, y});
-    }
-
-    void lineTo(float x, float y)
-    {
-        rs.path.cmds.push(PathCommand::LineTo);
-        rs.path.pts.push({x, y});
-        impl.mark(RenderUpdateFlag::Path);
-    }
-
-    void cubicTo(float cx1, float cy1, float cx2, float cy2, float x, float y)
-    {
-        rs.path.cmds.push(PathCommand::CubicTo);
-        rs.path.pts.push({cx1, cy1});
-        rs.path.pts.push({cx2, cy2});
-        rs.path.pts.push({x, y});
-
-        impl.mark(RenderUpdateFlag::Path);
-    }
-
-    void close()
-    {
-        //Don't close multiple times.
-        if (rs.path.cmds.count > 0 && rs.path.cmds.last() == PathCommand::Close) return;
-        rs.path.cmds.push(PathCommand::Close);
-        impl.mark(RenderUpdateFlag::Path);
     }
 
     void strokeWidth(float width)
@@ -258,6 +232,12 @@ struct ShapeImpl : Shape
         impl.mark(RenderUpdateFlag::Stroke);
 
         return Result::Success;
+    }
+
+    bool intersects(const RenderRegion& region)
+    {
+        if (!impl.rd || !impl.renderer) return false;
+        return impl.renderer->intersectsShape(impl.rd, region);
     }
 
     void strokeFill(uint8_t r, uint8_t g, uint8_t b, uint8_t a)

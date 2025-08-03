@@ -87,9 +87,16 @@ bool identity(const Matrix* m);
 Matrix operator*(const Matrix& lhs, const Matrix& rhs);
 bool operator==(const Matrix& lhs, const Matrix& rhs);
 
+
+static inline float radian(const Matrix& m)
+{
+    return fabsf(tvg::atan2(m.e21, m.e11));
+}
+
+
 static inline bool rightAngle(const Matrix& m)
 {
-   auto radian = fabsf(tvg::atan2(m.e21, m.e11));
+   auto radian = tvg::radian(m);
    if (tvg::zero(radian) || tvg::zero(radian - MATH_PI2) || tvg::zero(radian - MATH_PI)) return true;
    return false;
 }
@@ -188,7 +195,6 @@ void operator*=(Point& pt, const Matrix& m);
 Point operator*(const Point& pt, const Matrix& m);
 Point normal(const Point& p1, const Point& p2);
 void normalize(Point& pt);
-
 
 static inline constexpr const Point operator*=(Point& pt, const Matrix* m)
 {
@@ -310,6 +316,13 @@ static inline Point operator*(const Point& lhs, const Point& rhs)
 static inline Point operator*(const Point& lhs, const float rhs)
 {
     return {lhs.x * rhs, lhs.y * rhs};
+}
+
+
+static inline void operator*=(Point& lhs, const float rhs)
+{
+    lhs.x *= rhs;
+    lhs.y *= rhs;
 }
 
 

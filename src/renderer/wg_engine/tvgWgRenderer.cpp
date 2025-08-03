@@ -41,7 +41,6 @@ void WgRenderer::release()
     // clear render data paint pools
     mRenderDataShapePool.release(mContext);
     mRenderDataPicturePool.release(mContext);
-    mRenderDataViewportPool.release(mContext);
     mRenderDataEffectParamsPool.release(mContext);
 
     // clear render  pool
@@ -135,7 +134,7 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
 
     // update geometry
     if (!data || (flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Stroke))) {
-        renderDataShape->updateMeshes(rshape, transform, mBufferPool.pool);
+        renderDataShape->updateMeshes(rshape, flags, transform);
     }
 
     // update paint settings
@@ -253,10 +252,6 @@ bool WgRenderer::postRender()
     mRenderTaskList.clear();
     ARRAY_FOREACH(p, mCompositorList) { delete (*p); };
     mCompositorList.clear();
-    ARRAY_FOREACH(p, mRenderDataViewportList) {
-        mRenderDataViewportPool.free(mContext, *p);
-    }
-    mRenderDataViewportList.clear();
     return true;
 }
 
@@ -283,7 +278,11 @@ RenderRegion WgRenderer::region(RenderData data)
 
 bool WgRenderer::blend(BlendMethod method)
 {
-    mBlendMethod = method;
+    //TODO: support
+    if (method == BlendMethod::Hue || method == BlendMethod::Saturation || method == BlendMethod::Color || method == BlendMethod::Luminosity) return false;
+
+    mBlendMethod = (method == BlendMethod::Composition ? BlendMethod::Normal : method);
+
     return true;
 }
 
@@ -408,10 +407,6 @@ WgRenderer::WgRenderer()
 {
     if (TaskScheduler::onthread()) {
         TVGLOG("WG_RENDERER", "Running on a non-dominant thread!, Renderer(%p)", this);
-        mBufferPool.pool = new WgGeometryBufferPool;
-        mBufferPool.individual = true;
-    } else {
-        mBufferPool.pool = WgGeometryBufferPool::instance();
     }
 
     ++rendererCnt;
@@ -422,8 +417,6 @@ WgRenderer::~WgRenderer()
 {
     release();
 
-    if (mBufferPool.individual) delete(mBufferPool.pool);
-
     --rendererCnt;
 }
 
@@ -433,12 +426,6 @@ RenderCompositor* WgRenderer::target(const RenderRegion& region, TVG_UNUSED Colo
     // create and setup compose data
     WgCompose* compose = new WgCompose();
     compose->aabb = region;
-    if (flags & PostProcessing) {
-        compose->aabb = region;
-        compose->rdViewport = mRenderDataViewportPool.allocate(mContext);
-        compose->rdViewport->update(mContext, region);
-        mRenderDataViewportList.push(compose->rdViewport);
-    }
     mCompositorList.push(compose);
     return compose;
 }
@@ -520,8 +507,6 @@ void WgRenderer::prepare(RenderEffect* effect, const Matrix& transform)
         TVGERR("WG_ENGINE", "Missing effect type? = %d", (int) effect->type);
         return;
     }
-
-    effect->valid = true;
 }
 
 
@@ -542,10 +527,10 @@ bool WgRenderer::region(RenderEffect* effect)
     } else if (effect->type == SceneEffect::DropShadow) {
         auto dropShadow = (RenderEffectDropShadow*)effect;
         auto renderData = (WgRenderDataEffectParams*)dropShadow->rd;
-        dropShadow->extend.min.x = -(renderData->extend + std::abs(renderData->offset.x));
-        dropShadow->extend.max.x = +(renderData->extend + std::abs(renderData->offset.x));
-        dropShadow->extend.min.y = -(renderData->extend + std::abs(renderData->offset.y));
-        dropShadow->extend.max.y = +(renderData->extend + std::abs(renderData->offset.y));
+        dropShadow->extend.min.x = -std::ceil(renderData->extend + std::abs(renderData->offset.x));
+        dropShadow->extend.min.y = -std::ceil(renderData->extend + std::abs(renderData->offset.y));
+        dropShadow->extend.max.x = +std::floor(renderData->extend + std::abs(renderData->offset.x));
+        dropShadow->extend.max.y = +std::floor(renderData->extend + std::abs(renderData->offset.y));
         return true;
     }
     return false;
@@ -590,6 +575,22 @@ void WgRenderer::damage(TVG_UNUSED RenderData rd, TVG_UNUSED const RenderRegion&
 bool WgRenderer::partial(bool disable)
 {
     //TODO
+    return false;
+}
+
+
+bool WgRenderer::intersectsShape(RenderData data, TVG_UNUSED const RenderRegion& region)
+{
+    if (!data) return false;
+    TVGLOG("WG_ENGINE", "Paint::intersect() is not supported!");
+    return false;
+}
+
+
+bool WgRenderer::intersectsImage(RenderData data, TVG_UNUSED const RenderRegion& region)
+{
+    if (!data) return false;
+    TVGLOG("WG_ENGINE", "Paint::intersect() is not supported!");
     return false;
 }
 

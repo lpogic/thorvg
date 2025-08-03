@@ -24,6 +24,7 @@
 #define _TVG_PICTURE_H_
 
 #include "tvgPaint.h"
+#include "tvgScene.h"
 #include "tvgLoader.h"
 
 #define PICTURE(A) static_cast<PictureImpl*>(A)
@@ -98,6 +99,7 @@ struct PictureImpl : Picture
                 resizing = false;
             }
             needComposition(opacity);
+            vector->blend(pImpl->blendMethod); //propagate blend method to nested vector scene
             return vector->pImpl->update(renderer, transform, clips, opacity, flag, false);
         }
         return true;
@@ -116,6 +118,15 @@ struct PictureImpl : Picture
         if (w) *w = this->w;
         if (h) *h = this->h;
         return Result::Success;
+    }
+
+    bool intersects(const RenderRegion& region)
+    {
+        if (!impl.renderer) return false;
+        load();
+        if (impl.rd) return impl.renderer->intersectsImage(impl.rd, region);
+        else if (vector) return SCENE(vector)->intersects(region);
+        return false;
     }
 
     Result bounds(Point* pt4, Matrix& m, TVG_UNUSED bool obb, TVG_UNUSED bool stroking) const
@@ -248,10 +259,11 @@ struct PictureImpl : Picture
     bool render(RenderMethod* renderer)
     {
         auto ret = true;
-        renderer->blend(impl.blendMethod);
 
-        if (bitmap) return renderer->renderImage(impl.rd);
-        else if (vector) {
+        if (bitmap) {
+            renderer->blend(impl.blendMethod);
+            return renderer->renderImage(impl.rd);
+        } else if (vector) {
             RenderCompositor* cmp = nullptr;
             if (impl.cmpFlag) {
                 cmp = renderer->target(bounds(renderer), renderer->colorSpace(), impl.cmpFlag);

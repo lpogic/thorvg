@@ -69,8 +69,6 @@ struct UserExample : tvgexam::Example
 
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
-        if (!canvas) return false;
-
         {
             auto shape = tvg::Shape::gen();
             shape->appendCircle(50, 100, 40, 100);
@@ -102,10 +100,15 @@ struct UserExample : tvgexam::Example
 
         {
             auto shape = tvg::Shape::gen();
-            shape->appendRect(450, -100, 150, 100, 40, 50);
-            shape->appendCircle(450, 50, 100, 50);
+            shape->appendRect(225, -50, 75, 50, 20, 25);
+            shape->appendCircle(225, 25, 50, 25);
+            shape->strokeWidth(10);
+            shape->strokeFill(255, 255, 255);
             shape->fill(50, 50, 155);
-            shape->rotate(20.0f);
+
+            tvg::Matrix m = {1.732f, -1.0f, 30.0f, 1.0f, 1.732f, -70.0f, 0.0f, 0.0f, 1.0f};
+            shape->transform(m);
+
             canvas->push(shape);
             bbox(canvas, shape);
         }
@@ -251,11 +254,17 @@ struct UserExample : tvgexam::Example
 
             auto shape = tvg::Shape::gen();
             shape->moveTo(0, 0);
-            shape->lineTo(300, 200);
-            shape->lineTo(0, 200);
-            shape->fill(255, 0, 255);
+            shape->lineTo(150, 100);
+            shape->lineTo(0, 100);
             shape->close();
-            shape->rotate(20);
+            shape->fill(255, 0, 255);
+            shape->strokeWidth(30);
+            shape->strokeFill(0, 255, 255);
+            shape->strokeJoin(tvg::StrokeJoin::Round);
+
+            tvg::Matrix m = {1.8794f, -0.6840f, 0.0f, 0.6840f,  1.8794f, 0.0f, 0.0f, 0.0f, 1.0f};
+            shape->transform(m);
+
             scene->push(shape);
 
             canvas->push(scene);

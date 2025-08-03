@@ -246,6 +246,13 @@ TVG_API Tvg_Paint* tvg_paint_duplicate(Tvg_Paint* paint)
 }
 
 
+TVG_API bool tvg_paint_intersects(Tvg_Paint* paint, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    if (paint) return reinterpret_cast<Paint*>(paint)->intersects(x, y, w, h);
+    return false;
+}
+
+
 TVG_API Tvg_Result tvg_paint_set_opacity(Tvg_Paint* paint, uint8_t opacity)
 {
     if (paint) return (Tvg_Result) reinterpret_cast<Paint*>(paint)->opacity(opacity);
@@ -535,7 +542,7 @@ TVG_API Tvg_Result tvg_shape_get_fill_color(const Tvg_Paint* paint, uint8_t* r, 
 
 TVG_API Tvg_Result tvg_shape_set_fill_rule(Tvg_Paint* paint, Tvg_Fill_Rule rule)
 {
-    if (paint) return (Tvg_Result) reinterpret_cast<Shape*>(paint)->fill((FillRule)rule);
+    if (paint) return (Tvg_Result) reinterpret_cast<Shape*>(paint)->fillRule((FillRule)rule);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
@@ -572,6 +579,7 @@ TVG_API Tvg_Result tvg_shape_get_gradient(const Tvg_Paint* paint, Tvg_Gradient**
     }
     return TVG_RESULT_INVALID_ARGUMENT;
 }
+
 
 /************************************************************************/
 /* Picture API                                                          */
@@ -813,9 +821,9 @@ TVG_API Tvg_Result tvg_scene_push_effect_tint(Tvg_Paint* scene, int black_r, int
 }
 
 
-TVG_API Tvg_Result tvg_scene_push_effect_tritone(Tvg_Paint* scene, int shadow_r, int shadow_g, int shadow_b, int midtone_r, int midtone_g, int midtone_b, int highlight_r, int highlight_g, int highlight_b)
+TVG_API Tvg_Result tvg_scene_push_effect_tritone(Tvg_Paint* scene, int shadow_r, int shadow_g, int shadow_b, int midtone_r, int midtone_g, int midtone_b, int highlight_r, int highlight_g, int highlight_b, int blend)
 {
-    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::Tritone, shadow_r, shadow_g, shadow_b, midtone_r, midtone_g, midtone_b, highlight_r, highlight_g, highlight_b);
+    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::Tritone, shadow_r, shadow_g, shadow_b, midtone_r, midtone_g, midtone_b, highlight_r, highlight_g, highlight_b, blend);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 

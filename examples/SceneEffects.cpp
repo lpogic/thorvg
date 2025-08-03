@@ -37,8 +37,6 @@ struct UserExample : tvgexam::Example
 
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
-        if (!canvas) return false;
-
         //blur scene
         for (int i = 0; i < 3; ++i) {
             blur[i] = tvg::Scene::gen();
@@ -97,8 +95,6 @@ struct UserExample : tvgexam::Example
 
     bool update(tvg::Canvas* canvas, uint32_t elapsed) override
     {
-        if (!canvas) return false;
-
         auto progress = tvgexam::progress(elapsed, 2.5f, true);   //2.5 seconds
 
         //Apply GaussianBlur post effect (sigma, direction, border option, quality)
@@ -115,9 +111,9 @@ struct UserExample : tvgexam::Example
         tint->push(tvg::SceneEffect::ClearAll);
         tint->push(tvg::SceneEffect::Tint, 0, 0, 0, 0, (int)(progress * 255), 0, (double)(progress * 100.0f));
 
-        //Apply Trintone post effect (shadow:rgb, midtone:rgb, highlight:rgb)
+        //Apply Tritone post effect (shadow:rgb, midtone:rgb, highlight:rgb, blending with original)
         trintone->push(tvg::SceneEffect::ClearAll);
-        trintone->push(tvg::SceneEffect::Tritone, 0, (int)(progress * 255), 0, 199, 110, 36, 255, 255, 255);
+        trintone->push(tvg::SceneEffect::Tritone, 0, (int)(progress * 255), 0, 199, 110, 36, 255, 255, 255, 0);
 
         canvas->update();
 

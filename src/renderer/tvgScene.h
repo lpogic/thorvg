@@ -77,7 +77,7 @@ struct SceneImpl : Scene
     ~SceneImpl()
     {
         clearPaints();
-        resetEffects();
+        resetEffects(false);
     }
 
     void size(const Point& size)
@@ -258,6 +258,19 @@ struct SceneImpl : Scene
         return Result::Success;
     }
 
+    bool intersects(const RenderRegion& region)
+    {
+        if (!impl.renderer) return false;
+
+        if (this->bounds(impl.renderer).intersected(region)) {
+            for (auto paint : paints) {
+                if (PAINT(paint)->intersects(region)) return true;
+            }
+        }
+
+        return false;
+    }
+
     Paint* duplicate(Paint* ret)
     {
         if (ret) TVGERR("RENDERER", "TODO: duplicate()");
@@ -272,7 +285,40 @@ struct SceneImpl : Scene
             dup->paints.push_back(cdup);
         }
 
-        if (effects) TVGERR("RENDERER", "TODO: Duplicate Effects?");
+        if (effects) {
+            dup->effects = new Array<RenderEffect*>;
+            ARRAY_FOREACH(p, *effects) {
+                RenderEffect* ret = nullptr;
+                switch ((*p)->type) {
+                    case SceneEffect::GaussianBlur: {
+                        ret = new RenderEffectGaussianBlur(*(RenderEffectGaussianBlur*)(*p));
+                        break;
+                    }
+                    case SceneEffect::DropShadow: {
+                        ret = new RenderEffectDropShadow(*(RenderEffectDropShadow*)(*p));
+                        break;
+                    }
+                    case SceneEffect::Fill: {
+                        ret = new RenderEffectFill(*(RenderEffectFill*)(*p));
+                        break;
+                    }
+                    case SceneEffect::Tint: {
+                        ret = new RenderEffectTint(*(RenderEffectTint*)(*p));
+                        break;
+                    }
+                    case SceneEffect::Tritone: {
+                        ret = new RenderEffectTritone(*(RenderEffectTritone*)(*p));
+                        break;
+                    }
+                    default: break;
+                }
+                if (ret) {
+                    ret->rd = nullptr;
+                    ret->valid = false;
+                    dup->effects->push(ret);
+                }
+            }
+        }
 
         return scene;
     }
@@ -293,9 +339,8 @@ struct SceneImpl : Scene
             paint->unref();
             paints.erase(itr++);
         }
-
-        if (effects || fixed) impl.damage(vport);  //redraw scene full region
         if (fixed && impl.renderer) impl.renderer->partial(recover);
+        if (effects || fixed) impl.damage(vport);  //redraw scene full region
 
         return Result::Success;
     }
@@ -340,15 +385,16 @@ struct SceneImpl : Scene
         return new SceneIterator(&paints);
     }
 
-    Result resetEffects()
+    Result resetEffects(bool damage = true)
     {
         if (effects) {
             ARRAY_FOREACH(p, *effects) {
-                impl.renderer->dispose(*p);
+                if (impl.renderer) impl.renderer->dispose(*p);
                 delete(*p);
             }
             delete(effects);
             effects = nullptr;
+            if (damage) impl.damage(vport);
         }
         return Result::Success;
     }
