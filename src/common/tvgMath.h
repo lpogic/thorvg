@@ -134,6 +134,14 @@ static inline float scaling(const Matrix& m)
 }
 
 
+static inline Point scaling2D(const Matrix& m)
+{
+    auto sx = sqrtf(m.e11 * m.e11 + m.e21 * m.e21);
+    auto sy = sqrtf(m.e12 * m.e12 + m.e22 * m.e22);
+    return {sx, sy};
+}
+
+
 static inline void scale(Matrix* m, const Point& p)
 {
     m->e11 *= p.x;
@@ -181,6 +189,13 @@ static inline void operator*=(Matrix& lhs, const Matrix& rhs)
 }
 
 
+static inline Matrix operator*(const Matrix* lhs, const Matrix& rhs)
+{
+    if (lhs) return *lhs * rhs;
+    return rhs;
+}
+
+
 static inline void log(const Matrix& m)
 {
     TVGLOG("COMMON", "Matrix: [%f %f %f] [%f %f %f] [%f %f %f]", m.e11, m.e12, m.e13, m.e21, m.e22, m.e23, m.e31, m.e32, m.e33);
@@ -205,8 +220,8 @@ static inline constexpr const Point operator*=(Point& pt, const Matrix* m)
 
 static inline Point operator*(const Point& pt, const Matrix* m)
 {
-    if (!m) return pt;
-    return pt * *m;
+    if (m) return pt * *m;
+    return pt;
 }
 
 
@@ -386,6 +401,22 @@ struct Line
 
 
 /************************************************************************/
+/* Geometry functions                                                   */
+/************************************************************************/
+
+struct BBox
+{
+    Point min, max;
+
+    void init()
+    {
+        min = {FLT_MAX, FLT_MAX};
+        max = {-FLT_MAX, -FLT_MAX};
+    }
+};
+
+
+/************************************************************************/
 /* Bezier functions                                                     */
 /************************************************************************/
 
@@ -412,22 +443,13 @@ struct Bezier
     float atApprox(float at, float length) const;
     Point at(float t) const;
     float angle(float t) const;
-    void bounds(Point& min, Point& max) const;
     bool flatten() const;
     uint32_t segments() const;
 
     Bezier operator*(const Matrix& m);
+
+    static void bounds(BBox& box, const Point& start, const Point& ctrl1, const Point& ctrl2, const Point& end);
 };
-
-/************************************************************************/
-/* Geometry functions                                                   */
-/************************************************************************/
-
-struct BBox
-{
-    Point min, max;
-};
-
 
 
 /************************************************************************/

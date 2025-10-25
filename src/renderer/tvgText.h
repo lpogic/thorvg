@@ -37,10 +37,11 @@ struct TextImpl : Text
     Paint::Impl impl;
     Shape* shape;   //text shape
     FontLoader* loader = nullptr;
-    FontMetrics metrics;
+    FontMetrics fm;
     char* utf8 = nullptr;
-    float fontSize;
-    bool italic = false;
+    float outlineWidth = 0.0f;
+    float italicShear = 0.0f;
+    bool updated = false;
 
     TextImpl() : impl(Paint::Impl(this)), shape(Shape::gen())
     {
@@ -50,8 +51,11 @@ struct TextImpl : Text
     ~TextImpl()
     {
         tvg::free(utf8);
-        LoaderMgr::retrieve(loader);
-        delete(shape);
+        if (loader) {
+            loader->release(fm);
+            LoaderMgr::retrieve(loader);
+        }
+        Paint::rel(shape);
     }
 
     Result text(const char* utf8)
@@ -59,39 +63,45 @@ struct TextImpl : Text
         tvg::free(this->utf8);
         if (utf8) this->utf8 = tvg::duplicate(utf8);
         else this->utf8 = nullptr;
-
-        impl.mark(RenderUpdateFlag::Path);
+        updated = true;
 
         return Result::Success;
     }
 
-    Result font(const char* name, float size, const char* style)
+    Result font(const char* name)
     {
-        auto loader = name ? LoaderMgr::font(name) : LoaderMgr::anyfont();
+        auto loader = static_cast<FontLoader*>(name ? LoaderMgr::font(name) : LoaderMgr::anyfont());
         if (!loader) return Result::InsufficientCondition;
-
-        if (style && strstr(style, "italic")) italic = true;
-        else italic = false;
-
-        fontSize = size;
 
         //Same resource has been loaded.
         if (this->loader == loader) {
             this->loader->sharing--;  //make it sure the reference counting.
             return Result::Success;
         } else if (this->loader) {
+            this->loader->release(fm);
             LoaderMgr::retrieve(this->loader);
         }
-        this->loader = static_cast<FontLoader*>(loader);
-
-        impl.mark(RenderUpdateFlag::Path);
+        this->loader = loader;
+        updated = true;
 
         return Result::Success;
     }
 
-    RenderRegion bounds(RenderMethod* renderer) const
+    Result size(float fontSize)
     {
-        return SHAPE(shape)->bounds(renderer);
+        if (fontSize > 0.0f) {
+            if (fm.fontSize != fontSize) {
+                fm.fontSize = fontSize;
+                updated = true;
+            }
+            return Result::Success;
+        }
+        return Result::InvalidArguments;
+    }
+
+    RenderRegion bounds()
+    {
+        return SHAPE(shape)->bounds();
     }
 
     bool render(RenderMethod* renderer)
@@ -101,14 +111,15 @@ struct TextImpl : Text
         return PAINT(shape)->render(renderer);
     }
 
-    float load()
+    bool load()
     {
-        if (!loader) return 0.0f;
-
-        //reload
-        if (impl.marked(RenderUpdateFlag::Path)) loader->read(shape, utf8, metrics);
-
-        return loader->transform(shape, metrics, fontSize, italic);
+        if (!loader) return false;
+        if (updated) {
+            loader->get(fm, utf8, SHAPE(shape)->rs.path);
+            loader->transform(shape, fm, italicShear);
+            updated = false;
+        }
+        return true;
     }
 
     bool skip(RenderUpdateFlag flag)
@@ -117,43 +128,56 @@ struct TextImpl : Text
         return false;
     }
 
+    void wrapping(TextWrap mode)
+    {
+        if (fm.wrap == mode) return;
+        fm.wrap = mode;
+        impl.mark(RenderUpdateFlag::Path);
+    }
+
+    void layout(float w, float h)
+    {
+        fm.box = {w, h};
+        updated = true;
+    }
+
     bool update(RenderMethod* renderer, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flag, TVG_UNUSED bool clipper)
     {
-        auto scale = 1.0f / load();
+        if (!load()) return true;
+
+        auto scale = fm.scale;
         if (tvg::zero(scale)) return false;
 
         //transform the gradient coordinates based on the final scaled font.
         auto fill = SHAPE(shape)->rs.fill;
-        if (fill && SHAPE(shape)->impl.renderFlag & RenderUpdateFlag::Gradient) {
+        if (fill && SHAPE(shape)->impl.marked(RenderUpdateFlag::Gradient)) {
             if (fill->type() == Type::LinearGradient) {
-                LINEAR(fill)->x1 *= scale;
-                LINEAR(fill)->y1 *= scale;
-                LINEAR(fill)->x2 *= scale;
-                LINEAR(fill)->y2 *= scale;
+                LINEAR(fill)->p1 *= scale;
+                LINEAR(fill)->p2 *= scale;
             } else {
-                RADIAL(fill)->cx *= scale;
-                RADIAL(fill)->cy *= scale;
+                RADIAL(fill)->center *= scale;
                 RADIAL(fill)->r *= scale;
-                RADIAL(fill)->fx *= scale;
-                RADIAL(fill)->fy *= scale;
+                RADIAL(fill)->focal *= scale;
                 RADIAL(fill)->fr *= scale;
             }
         }
+
+        if (outlineWidth > 0.0f && impl.marked(RenderUpdateFlag::Stroke)) shape->strokeWidth(outlineWidth * scale);
+
         PAINT(shape)->update(renderer, transform, clips, opacity, flag, false);
         return true;
     }
 
     bool intersects(const RenderRegion& region)
     {
-        if (load() == 0.0f) return false;
+        if (!load()) return false;
         return SHAPE(shape)->intersects(region);
     }
 
-
-    Result bounds(Point* pt4, Matrix& m, bool obb, TVG_UNUSED bool stroking)
+    bool bounds(Point* pt4, const Matrix& m, bool obb)
     {
-        if (load() == 0.0f) return Result::InsufficientCondition;
-        return PAINT(shape)->bounds(pt4, &m, obb, true);
+        if (!load()) return true;
+        return PAINT(shape)->bounds(pt4, &const_cast<Matrix&>(m), obb);
     }
 
     Paint* duplicate(Paint* ret)
@@ -170,11 +194,13 @@ struct TextImpl : Text
         if (loader) {
             dup->loader = loader;
             ++dup->loader->sharing;
+            loader->copy(fm, dup->fm);
         }
 
         dup->utf8 = tvg::duplicate(utf8);
-        dup->italic = italic;
-        dup->fontSize = fontSize;
+        dup->italicShear = italicShear;
+        dup->outlineWidth = outlineWidth;
+        dup->updated = true;
 
         return text;
     }

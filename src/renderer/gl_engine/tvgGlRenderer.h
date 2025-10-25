@@ -51,17 +51,79 @@ public:
         RT_MaskDarken,
         RT_Stencil,
         RT_Blit,
-        RT_MultiplyBlend,
-        RT_ScreenBlend,
-        RT_OverlayBlend,
-        RT_ColorDodgeBlend,
-        RT_ColorBurnBlend,
-        RT_HardLightBlend,
-        RT_SoftLightBlend,
-        RT_DifferenceBlend,
-        RT_ExclusionBlend,
-
-        RT_None,
+        // blends
+        RT_Blend_Normal,
+        RT_Blend_Multiply,
+        RT_Blend_Screen,
+        RT_Blend_Overlay,
+        RT_Blend_Darken,
+        RT_Blend_Lighten,
+        RT_Blend_ColorDodge,
+        RT_Blend_ColorBurn,
+        RT_Blend_HardLight,
+        RT_Blend_SoftLight,
+        RT_Blend_Difference,
+        RT_Blend_Exclusion,
+        RT_Blend_Hue,
+        RT_Blend_Saturation,
+        RT_Blend_Color,
+        RT_Blend_Luminosity,
+        RT_Blend_Add,
+        // blends (gradients)
+        RT_Blend_Gradient_Normal,
+        RT_Blend_Gradient_Multiply,
+        RT_Blend_Gradient_Screen,
+        RT_Blend_Gradient_Overlay,
+        RT_Blend_Gradient_Darken,
+        RT_Blend_Gradient_Lighten,
+        RT_Blend_Gradient_ColorDodge,
+        RT_Blend_Gradient_ColorBurn,
+        RT_Blend_Gradient_HardLight,
+        RT_Blend_Gradient_SoftLight,
+        RT_Blend_Gradient_Difference,
+        RT_Blend_Gradient_Exclusion,
+        RT_Blend_Gradient_Hue,
+        RT_Blend_Gradient_Saturation,
+        RT_Blend_Gradient_Color,
+        RT_Blend_Gradient_Luminosity,
+        RT_Blend_Gradient_Add,
+        // blends (gradients)
+        RT_Blend_Image_Normal,
+        RT_Blend_Image_Multiply,
+        RT_Blend_Image_Screen,
+        RT_Blend_Image_Overlay,
+        RT_Blend_Image_Darken,
+        RT_Blend_Image_Lighten,
+        RT_Blend_Image_ColorDodge,
+        RT_Blend_Image_ColorBurn,
+        RT_Blend_Image_HardLight,
+        RT_Blend_Image_SoftLight,
+        RT_Blend_Image_Difference,
+        RT_Blend_Image_Exclusion,
+        RT_Blend_Image_Hue,
+        RT_Blend_Image_Saturation,
+        RT_Blend_Image_Color,
+        RT_Blend_Image_Luminosity,
+        RT_Blend_Image_Add,
+        // blends (scene)
+        RT_Blend_Scene_Normal,
+        RT_Blend_Scene_Multiply,
+        RT_Blend_Scene_Screen,
+        RT_Blend_Scene_Overlay,
+        RT_Blend_Scene_Darken,
+        RT_Blend_Scene_Lighten,
+        RT_Blend_Scene_ColorDodge,
+        RT_Blend_Scene_ColorBurn,
+        RT_Blend_Scene_HardLight,
+        RT_Blend_Scene_SoftLight,
+        RT_Blend_Scene_Difference,
+        RT_Blend_Scene_Exclusion,
+        RT_Blend_Scene_Hue,
+        RT_Blend_Scene_Saturation,
+        RT_Blend_Scene_Color,
+        RT_Blend_Scene_Luminosity,
+        RT_Blend_Scene_Add,
+        RT_None
     };
 
     //main features
@@ -75,6 +137,7 @@ public:
     bool postRender() override;
     void dispose(RenderData data) override;;
     RenderRegion region(RenderData data) override;
+    bool bounds(RenderData data, Point* pt4, const Matrix& m) override;
     bool blend(BlendMethod method) override;
     ColorSpace colorSpace() override;
     const RenderSurface* mainSurface() override;
@@ -82,7 +145,7 @@ public:
     bool clear() override;
     bool intersectsShape(RenderData data, const RenderRegion& region) override;
     bool intersectsImage(RenderData data, const RenderRegion& region) override;
-    bool target(void* context, int32_t id, uint32_t w, uint32_t h);
+    bool target(void* context, int32_t id, uint32_t w, uint32_t h, ColorSpace cs);
 
     //composition
     RenderCompositor* target(const RenderRegion& region, ColorSpace cs, CompositionFlag flags) override;
@@ -114,8 +177,8 @@ private:
     GlRenderPass* currentPass();
 
     bool beginComplexBlending(const RenderRegion& vp, RenderRegion bounds);
-    void endBlendingCompose(GlRenderTask* stencilTask, const Matrix& matrix);
-    GlProgram* getBlendProgram();
+    void endBlendingCompose(GlRenderTask* stencilTask, const Matrix& matrix, bool gradient, bool image);
+    GlProgram* getBlendProgram(BlendMethod method, bool gradient, bool image, bool scene);
 
     void prepareBlitTask(GlBlitTask* task);
     void prepareCmpTask(GlRenderTask* task, const RenderRegion& vp, uint32_t cmpWidth, uint32_t cmpHeight);
@@ -132,6 +195,7 @@ private:
     GlRenderTarget mRootTarget;
     GlEffect mEffect;
     Array<GlProgram*> mPrograms;
+
     Array<GlRenderTargetPool*> mComposePool;
     Array<GlRenderTargetPool*> mBlendPool;
     Array<GlRenderPass*> mRenderPassStack;

@@ -245,8 +245,7 @@ void mathSplitCubic(SwPoint* base)
 void mathSplitLine(SwPoint* base)
 {
     base[2] = base[1];
-    base[1].x = (base[0].x + base[1].x) >> 1;
-    base[1].y = (base[0].y + base[1].y) >> 1;
+    base[1] = {(base[0].x >> 1) + (base[1].x >> 1), (base[0].y >> 1) + (base[1].y >> 1)};
 }
 
 
@@ -273,9 +272,7 @@ SwPoint mathTransform(const Point* to, const Matrix& transform)
 
 bool mathUpdateOutlineBBox(const SwOutline* outline, const RenderRegion& clipBox, RenderRegion& renderBox, bool fastTrack)
 {
-    if (!outline) return false;
-
-    if (outline->pts.empty() || outline->cntrs.empty()) {
+    if (!outline || outline->pts.empty() || outline->cntrs.empty()) {
         renderBox.reset();
         return false;
     }

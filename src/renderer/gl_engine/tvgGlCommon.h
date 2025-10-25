@@ -106,8 +106,9 @@ struct GlGeometryBuffer {
 
 struct GlGeometry
 {
-    bool tesselate(const RenderShape& rshape, RenderUpdateFlag flag);
-    bool tesselate(const RenderSurface* image, RenderUpdateFlag flag);
+    bool tesselateShape(const RenderShape& rshape);
+    bool tesselateStroke(const RenderShape& rshape);
+    void tesselateImage(const RenderSurface* image);
     bool draw(GlRenderTask* task, GlStageBuffer* gpuBuffer, RenderUpdateFlag flag);
     GlStencilMode getStencilMode(RenderUpdateFlag flag);
     RenderRegion getBounds() const;
@@ -129,9 +130,21 @@ struct GlShape
   GLuint texId = 0;
   uint32_t texFlipY = 0;
   ColorSpace texColorSpace = ColorSpace::ABGR8888;
-  RenderUpdateFlag updateFlag = None;
   GlGeometry geometry;
   Array<RenderData> clips;
+  bool validFill;
+  bool validStroke;
+};
+
+struct GlIntersector
+{
+    bool isPointInTriangle(const Point& p, const Point& a, const Point& b, const Point& c);
+    bool isPointInImage(const Point& p, const GlGeometryBuffer& mesh, const Matrix& tr);
+    bool isPointInTris(const Point& p, const GlGeometryBuffer& mesh, const Matrix& tr);
+    bool isPointInMesh(const Point& p, const GlGeometryBuffer& mesh, const Matrix& tr);
+    bool intersectClips(const Point& pt, const tvg::Array<tvg::RenderData>& clips);
+    bool intersectShape(const RenderRegion region, const GlShape* shape);
+    bool intersectImage(const RenderRegion region, const GlShape* image);
 };
 
 #define MAX_GRADIENT_STOPS 16
@@ -157,6 +170,7 @@ struct GlRadialGradientBlock
 struct GlCompositor : RenderCompositor
 {
     RenderRegion bbox = {};
+    BlendMethod blendMethod = {};
 
     GlCompositor(const RenderRegion& box) : bbox(box) {}
 };

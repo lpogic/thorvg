@@ -38,11 +38,11 @@ void JpgLoader::clear()
 
 void JpgLoader::run(unsigned tid)
 {
-    surface.buf8 = jpgdDecompress(decoder);
+    surface.cs = ImageLoader::cs;
+    surface.buf8 = jpgdDecompress(decoder, surface.cs);
     surface.stride = static_cast<uint32_t>(w);
     surface.w = static_cast<uint32_t>(w);
     surface.h = static_cast<uint32_t>(h);
-    surface.cs = ColorSpace::ARGB8888;
     surface.channelSize = sizeof(uint32_t);
     surface.premultiplied = true;
 
@@ -72,8 +72,7 @@ bool JpgLoader::open(const char* path)
 {
 #ifdef THORVG_FILE_IO_SUPPORT
     int width, height;
-    decoder = jpgdHeader(path, &width, &height);
-    if (!decoder) return false;
+    if (!(decoder = jpgdHeader(path, &width, &height))) return false;
 
     w = static_cast<float>(width);
     h = static_cast<float>(height);

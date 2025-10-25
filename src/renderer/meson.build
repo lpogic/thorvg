@@ -15,7 +15,6 @@ endif
 source_file = [
    'tvgAnimation.h',
    'tvgCanvas.h',
-   'tvgCommon.h',
    'tvgFill.h',
    'tvgFrameModule.h',
    'tvgLoader.h',
@@ -32,7 +31,6 @@ source_file = [
    'tvgAnimation.cpp',
    'tvgCanvas.cpp',
    'tvgFill.cpp',
-   'tvgGlCanvas.cpp',
    'tvgInitializer.cpp',
    'tvgLoader.cpp',
    'tvgPaint.cpp',
@@ -41,10 +39,8 @@ source_file = [
    'tvgSaver.cpp',
    'tvgScene.cpp',
    'tvgShape.cpp',
-   'tvgSwCanvas.cpp',
    'tvgTaskScheduler.cpp',
-   'tvgText.cpp',
-   'tvgWgCanvas.cpp'
+   'tvgText.cpp'
 ]
 
 common_dep = declare_dependency(

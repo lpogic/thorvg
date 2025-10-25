@@ -138,7 +138,7 @@ namespace tvg
 
         void damage()
         {
-            if (renderer) renderer->damage(rd, bounds(renderer));
+            if (renderer) renderer->damage(rd, bounds());
         }
 
         void mark(CompositionFlag flag)
@@ -180,7 +180,7 @@ namespace tvg
         Matrix ptransform()
         {
             auto p = this;
-            auto tm = identity();
+            auto tm = tvg::identity();
             while (p->parent) {
                 p = PAINT(p->parent);
                 tm = p->transform() * tm;
@@ -307,10 +307,9 @@ namespace tvg
         }
 
         bool intersects(const RenderRegion& region);
-        RenderRegion bounds(RenderMethod* renderer) const;
+        RenderRegion bounds();
+        bool bounds(Point* pt4, const Matrix* pm, bool obb);
         Iterator* iterator();
-        Result bounds(float* x, float* y, float* w, float* h, Matrix* pm, bool stroking);
-        Result bounds(Point* pt4, Matrix* pm, bool obb, bool stroking);
         RenderData update(RenderMethod* renderer, const Matrix& pm, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag pFlag, bool clipper = false);
         bool render(RenderMethod* renderer);
         Paint* duplicate(Paint* ret = nullptr);

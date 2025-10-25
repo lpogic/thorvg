@@ -25,50 +25,160 @@
 #include "tvgGlTessellator.h"
 #include "tvgGlRenderTask.h"
 
-
-bool GlGeometry::tesselate(const RenderShape& rshape, RenderUpdateFlag flag)
+bool GlIntersector::isPointInTriangle(const Point& p, const Point& a, const Point& b, const Point& c)
 {
-    if (flag & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient | RenderUpdateFlag::Transform | RenderUpdateFlag::Path)) {
-        fill.clear();
-        BWTessellator bwTess{&fill};
-        if (rshape.trimpath()) {
-            RenderPath trimmedPath;
-            if (rshape.stroke->trim.trim(rshape.path, trimmedPath)) bwTess.tessellate(trimmedPath, matrix);
-            else return true;
-        } else {
-            bwTess.tessellate(rshape.path, matrix);
-        }
+    auto d1 = tvg::cross(p - a, p - b);
+    auto d2 = tvg::cross(p - b, p - c);
+    auto d3 = tvg::cross(p - c, p - a);
+    auto has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+    auto has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+    return !(has_neg && has_pos);
+}
 
-        fillRule = rshape.rule;
-        bounds = bwTess.bounds();
+bool GlIntersector::isPointInImage(const Point& p, const GlGeometryBuffer& mesh, const Matrix& tr)
+{
+    for (uint32_t i = 0; i < mesh.index.count; i += 3) {
+        auto p0 = Point{mesh.vertex[mesh.index[i+0]*4+0], mesh.vertex[mesh.index[i+0]*4+1]} * tr;
+        auto p1 = Point{mesh.vertex[mesh.index[i+1]*4+0], mesh.vertex[mesh.index[i+1]*4+1]} * tr;
+        auto p2 = Point{mesh.vertex[mesh.index[i+2]*4+0], mesh.vertex[mesh.index[i+2]*4+1]} * tr;
+        if (isPointInTriangle(p, p0, p1, p2)) return true;
     }
+    return false;
+}
 
-    if (flag & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform)) {
-        stroke.clear();
-        auto strokeWidth = 0.0f;
-        if (isinf(matrix.e11)) {
-            strokeWidth = rshape.strokeWidth() * scaling(matrix);
-            if (strokeWidth <= MIN_GL_STROKE_WIDTH) strokeWidth = MIN_GL_STROKE_WIDTH;
-            strokeWidth = strokeWidth / matrix.e11;
-        } else {
-            strokeWidth = rshape.strokeWidth();
+
+// triangle list
+bool GlIntersector::isPointInTris(const Point& p, const GlGeometryBuffer& mesh, const Matrix& tr)
+{
+    for (uint32_t i = 0; i < mesh.index.count; i += 3) {
+        auto p0 = Point{mesh.vertex[mesh.index[i+0]*2+0], mesh.vertex[mesh.index[i+0]*2+1]} * tr;
+        auto p1 = Point{mesh.vertex[mesh.index[i+1]*2+0], mesh.vertex[mesh.index[i+1]*2+1]} * tr;
+        auto p2 = Point{mesh.vertex[mesh.index[i+2]*2+0], mesh.vertex[mesh.index[i+2]*2+1]} * tr;
+        if (isPointInTriangle(p, p0, p1, p2)) return true;
+    }
+    return false;
+}
+
+
+// even-odd triangle list
+bool GlIntersector::isPointInMesh(const Point& p, const GlGeometryBuffer& mesh, const Matrix& tr)
+{
+    uint32_t crossings = 0;
+    for (uint32_t i = 0; i < mesh.index.count; i += 3) {
+        Point triangle[3] = {
+            Point{mesh.vertex[mesh.index[i+0]*2+0], mesh.vertex[mesh.index[i+0]*2+1]} * tr,
+            Point{mesh.vertex[mesh.index[i+1]*2+0], mesh.vertex[mesh.index[i+1]*2+1]} * tr,
+            Point{mesh.vertex[mesh.index[i+2]*2+0], mesh.vertex[mesh.index[i+2]*2+1]} * tr
+        };
+        for (uint32_t j = 0; j < 3; j++) {
+            auto p1 = triangle[j];
+            auto p2 = triangle[(j + 1) % 3];
+            if (p1.y == p2.y) continue;
+            if (p1.y > p2.y) std::swap(p1, p2);
+            if ((p.y > p1.y) && (p.y <= p2.y)) {
+                auto intersectionX = (p2.x - p1.x) * (p.y - p1.y) / (p2.y - p1.y) + p1.x;
+                if (intersectionX > p.x) crossings++;
+            }
         }
-        //run stroking only if it's valid
-        if (!tvg::zero(strokeWidth)) {
-            Stroker stroker(&stroke, strokeWidth);
-            stroker.run(rshape, matrix);
-            bounds = stroker.bounds();
-        }
+    }
+    return (crossings % 2) == 1;
+}
+
+
+bool GlIntersector::intersectClips(const Point& pt, const tvg::Array<tvg::RenderData>& clips)
+{
+    for (uint32_t i = 0; i < clips.count; i++) {
+        auto clip = (GlShape*)clips[i];
+        if (!isPointInMesh(pt, clip->geometry.fill, clip->geometry.matrix)) return false;
     }
     return true;
 }
 
-bool GlGeometry::tesselate(const RenderSurface* image, RenderUpdateFlag flag)
+
+bool GlIntersector::intersectShape(const RenderRegion region, const GlShape* shape)
 {
-    if (!(flag & RenderUpdateFlag::Image)) return true;
+    if (!shape || ((shape->geometry.fill.index.count == 0) && (shape->geometry.stroke.index.count == 0))) return false;
+    auto sizeX = region.sw();
+    auto sizeY = region.sh();
 
+    for (int32_t y = 0; y <= sizeY; y++) {
+        for (int32_t x = 0; x <= sizeX; x++) {
+            Point pt{(float)x + region.min.x, (float)y + region.min.y};
+            if (y % 2 == 1) pt.y = (float)sizeY - y - sizeY % 2 + region.min.y;
+            if (intersectClips(pt, shape->clips)) {
+                if (shape->validFill && isPointInMesh(pt, shape->geometry.fill, shape->geometry.matrix)) return true;
+                if (shape->validStroke && isPointInTris(pt, shape->geometry.stroke, shape->geometry.matrix)) return true;
+            }
+        }
+    }
+    return false;
+}
+
+
+bool GlIntersector::intersectImage(const RenderRegion region, const GlShape* image)
+{
+    if (image) {
+        auto sizeX = region.sw();
+        auto sizeY = region.sh();
+        for (int32_t y = 0; y <= sizeY; y++) {
+            for (int32_t x = 0; x <= sizeX; x++) {
+                Point pt{(float) x + region.min.x, (float) y + region.min.y};
+                if (y % 2 == 1) pt.y = (float) sizeY - y - sizeY % 2 + region.min.y;
+                if (intersectClips(pt, image->clips)) {
+                    if (isPointInImage(pt, image->geometry.fill, image->geometry.matrix)) return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+
+bool GlGeometry::tesselateShape(const RenderShape& rshape)
+{
     fill.clear();
+    BWTessellator bwTess{&fill};
+    if (rshape.trimpath()) {
+        RenderPath trimmedPath;
+        if (rshape.stroke->trim.trim(rshape.path, trimmedPath)) {
+            bwTess.tessellate(trimmedPath, matrix);
+        }
+    } else {
+        bwTess.tessellate(rshape.path, matrix);
+    }
 
+    fillRule = rshape.rule;
+    bounds = bwTess.bounds();
+
+    return true;
+}
+
+
+bool GlGeometry::tesselateStroke(const RenderShape& rshape)
+{
+    stroke.clear();
+    auto strokeWidth = 0.0f;
+    if (isinf(matrix.e11)) {
+        strokeWidth = rshape.strokeWidth() * scaling(matrix);
+        if (strokeWidth <= MIN_GL_STROKE_WIDTH) strokeWidth = MIN_GL_STROKE_WIDTH;
+        strokeWidth = strokeWidth / matrix.e11;
+    } else {
+        strokeWidth = rshape.strokeWidth();
+    }
+    //run stroking only if it's valid
+    if (!tvg::zero(strokeWidth)) {
+        Stroker stroker(&stroke, strokeWidth);
+        stroker.run(rshape, matrix);
+        bounds = stroker.bounds();
+        return true;
+    }
+    return false;
+}
+
+
+void GlGeometry::tesselateImage(const RenderSurface* image)
+{
+    fill.clear();
     fill.vertex.reserve(5 * 4);
     fill.index.reserve(6);
 
@@ -111,8 +221,6 @@ bool GlGeometry::tesselate(const RenderSurface* image, RenderUpdateFlag flag)
     fill.index.push(3);
 
     bounds = {{0, 0}, {int32_t(image->w), int32_t(image->h)}};
-
-    return true;
 }
 
 

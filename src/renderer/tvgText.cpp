@@ -33,9 +33,15 @@ Result Text::text(const char* text) noexcept
 }
 
 
-Result Text::font(const char* name, float size, const char* style) noexcept
+Result Text::font(const char* name) noexcept
 {
-    return TEXT(this)->font(name, size, style);
+    return TEXT(this)->font(name);
+}
+
+
+Result Text::size(float size) noexcept
+{
+    return TEXT(this)->size(size);
 }
 
 
@@ -85,15 +91,56 @@ Result Text::unload(const char* filename) noexcept
 }
 
 
+Result Text::align(float x, float y) noexcept
+{
+    TEXT(this)->fm.align = {x, y};
+    PAINT(this)->mark(RenderUpdateFlag::Transform);
+    return Result::Success;
+}
+
+
+Result Text::layout(float w, float h) noexcept
+{
+    TEXT(this)->layout(w, h);
+    return Result::Success;
+}
+
+
 Result Text::fill(uint8_t r, uint8_t g, uint8_t b) noexcept
 {
     return TEXT(this)->shape->fill(r, g, b);
 }
 
 
+Result Text::outline(float width, uint8_t r, uint8_t g, uint8_t b) noexcept
+{
+    TEXT(this)->outlineWidth = width;
+    TEXT(this)->shape->strokeFill(r, g, b);
+    PAINT(this)->mark(RenderUpdateFlag::Stroke);
+    return Result::Success;
+}
+
+
 Result Text::fill(Fill* f) noexcept
 {
     return TEXT(this)->shape->fill(f);
+}
+
+
+Result Text::italic(float shear) noexcept
+{
+    if (shear < 0.0f) shear = 0.0f;
+    else if (shear > 0.5f) shear = 0.5f;
+    TEXT(this)->italicShear = shear;
+    TEXT(this)->updated = true;
+    return Result::Success;
+}
+
+
+Result Text::wrap(TextWrap mode) noexcept
+{
+    TEXT(this)->wrapping(mode);
+    return Result::Success;
 }
 
 

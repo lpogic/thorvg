@@ -21,12 +21,13 @@
  */
 #include "config.h"
 
-#include <memory>
 #include <cmath>
+#include <memory>
 #include <vector>
 #include <fstream>
 #include <iostream>
 #include <cstring>
+#include <chrono>
 #include <thorvg.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_syswm.h>
@@ -141,6 +142,7 @@ struct Window
     tvg::Canvas* canvas = nullptr;
     uint32_t width;
     uint32_t height;
+    double mfps = 0;   //mean fps
 
     Example* example = nullptr;
 
@@ -199,6 +201,33 @@ struct Window
         if (!verify(canvas->sync())) return false;
 
         return true;
+    }
+
+    void fps(uint32_t tickCnt)
+    {
+        using clock = std::chrono::steady_clock;
+
+        static double ema_dt = 1 / 60;             // Initial value assuming 60fps (seconds)
+        static const double half_life = 0.25;      // Half-life of 0.25 seconds (lightly tuned)
+        static auto prev = clock::now();
+
+        auto now = clock::now();
+        auto dt = std::chrono::duration<double>(now - prev).count();   // Time elapsed in seconds
+        prev = now;
+
+        // Clamp abnormally large dt (e.g., during tab switching or pausing in debugger)
+        if (dt > 0.25) dt = 0.25;  // Cap at 250ms
+
+        // Continuous time-based alpha: maintains responsiveness regardless of framerate
+        auto alpha = 1 - std::exp(-std::log(2) * dt / half_life);
+        ema_dt += alpha * (dt - ema_dt);
+
+        // Skip the unstable first 60 frames, also no need to print every frame.
+        if (tickCnt > 59) {
+            auto result = 1 / ema_dt;
+            mfps += result;
+            if (tickCnt % 10 == 0) printf("[%5d]: %0.2f / %0.2f fps\n", tickCnt, result, mfps / (tickCnt - 59));
+        }
     }
 
     void show()
@@ -268,9 +297,10 @@ struct Window
 
             auto ctime = SDL_GetTicks();
             example->elapsed += (ctime - ptime);
-            tickCnt++;
-            if (print) printf("[%5d]: elapsed time = %dms (%dms)\n", tickCnt, (ctime - ptime), (example->elapsed / tickCnt));
             ptime = ctime;
+            ++tickCnt;
+
+            if (print) fps(tickCnt);
         }
     }
 
@@ -291,7 +321,7 @@ struct SwWindow : Window
 
         window = SDL_CreateWindow("ThorVG Example (Software)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE);
 
-        //Create a Canvas
+        //Create a Canvas. Use Smart Rendering by default.
         canvas = tvg::SwCanvas::gen();
         if (!canvas) {
             cout << "SwCanvas is not supported. Did you enable the SwEngine?" << endl;
@@ -397,33 +427,33 @@ struct WgWindow : Window
         SDL_GetWindowWMInfo(window, &windowWMInfo);
 
         //Init WebGPU
-	    WGPUInstanceDescriptor desc = {.nextInChain = nullptr};
-	    instance = wgpuCreateInstance(&desc);
+        WGPUInstanceDescriptor desc{};
+        instance = wgpuCreateInstance(&desc);
 
         #if defined(SDL_VIDEO_DRIVER_COCOA)
             [windowWMInfo.info.cocoa.window.contentView setWantsLayer:YES];
             auto layer = [CAMetalLayer layer];
             [windowWMInfo.info.cocoa.window.contentView setLayer:layer];
 
-            WGPUSurfaceDescriptorFromMetalLayer surfaceNativeDesc = {
-                .chain = {nullptr, WGPUSType_SurfaceDescriptorFromMetalLayer},
+            WGPUSurfaceSourceMetalLayer surfaceNativeDesc = {
+                .chain = {nullptr, WGPUSType_SurfaceSourceMetalLayer},
                 .layer = layer
             };
         #elif defined(SDL_VIDEO_DRIVER_X11)
-            WGPUSurfaceDescriptorFromXlibWindow surfaceNativeDesc = {
-                .chain = {nullptr, WGPUSType_SurfaceDescriptorFromXlibWindow},
+            WGPUSurfaceSourceXlibWindow surfaceNativeDesc = {
+                .chain = {nullptr, WGPUSType_SurfaceSourceXlibWindow},
                 .display = windowWMInfo.info.x11.display,
                 .window = windowWMInfo.info.x11.window
             };
         #elif defined(SDL_VIDEO_DRIVER_WAYLAND)
-            WGPUSurfaceDescriptorFromWaylandSurface surfaceNativeDesc = {
-                .chain = {nullptr, WGPUSType_SurfaceDescriptorFromWaylandSurface},
+        WGPUSurfaceSourceWaylandSurface surfaceNativeDesc = {
+                .chain = {nullptr, WGPUSType_SurfaceSourceWaylandSurface},
                 .display = windowWMInfo.info.wl.display,
                 .surface = windowWMInfo.info.wl.surface
             };
         #elif defined(SDL_VIDEO_DRIVER_WINDOWS)
-            WGPUSurfaceDescriptorFromWindowsHWND surfaceNativeDesc = {
-                .chain = {nullptr, WGPUSType_SurfaceDescriptorFromWindowsHWND},
+            WGPUSurfaceSourceWindowsHWND surfaceNativeDesc = {
+                .chain = {nullptr, WGPUSType_SurfaceSourceWindowsHWND},
                 .hinstance = GetModuleHandle(nullptr),
                 .hwnd = windowWMInfo.info.win.window
             };
@@ -432,22 +462,22 @@ struct WgWindow : Window
         // create surface
         WGPUSurfaceDescriptor surfaceDesc{};
         surfaceDesc.nextInChain = (const WGPUChainedStruct*)&surfaceNativeDesc;
-        surfaceDesc.label = "The surface";
+        surfaceDesc.label.data = "The surface";
+        surfaceDesc.label.length = WGPU_STRLEN;
         surface = wgpuInstanceCreateSurface(instance, &surfaceDesc);
 
         // request adapter
-        const WGPURequestAdapterOptions requestAdapterOptions { .compatibleSurface = surface, .powerPreference = WGPUPowerPreference_HighPerformance };
-        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) { *((WGPUAdapter*)pUserData) = adapter; };
-        wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &adapter);
-
-        // get adapter and surface properties
-        WGPUFeatureName featureNames[32]{};
-        size_t featuresCount = wgpuAdapterEnumerateFeatures(this->adapter, featureNames);
+        auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) { *((WGPUAdapter*)userdata1) = adapter; };
+        const WGPURequestAdapterOptions requestAdapterOptions { .featureLevel = WGPUFeatureLevel_Compatibility, .powerPreference = WGPUPowerPreference_HighPerformance, .compatibleSurface = surface };
+        const WGPURequestAdapterCallbackInfo requestAdapterCallback{ .mode = WGPUCallbackMode_WaitAnyOnly, .callback = onAdapterRequestEnded, .userdata1 = &adapter };
+        wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, requestAdapterCallback);
 
         // request device
-        const WGPUDeviceDescriptor deviceDesc { .label = "The owned device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
-        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const * message, void * pUserData) { *((WGPUDevice*)pUserData) = device; };
-        wgpuAdapterRequestDevice(this->adapter, &deviceDesc, onDeviceRequestEnded, &device);
+        auto onDeviceError = [](WGPUDevice const * device, WGPUErrorType type, WGPUStringView message, void* userdata1, void* userdata2) { std::cout << message.data << std::endl; };
+        auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, void* userdata1, void* userdata2) { *((WGPUDevice*)userdata1) = device; };
+        const WGPUDeviceDescriptor deviceDesc { .label = { "The device", WGPU_STRLEN }, .uncapturedErrorCallbackInfo = { .callback = onDeviceError } };
+        const WGPURequestDeviceCallbackInfo requestDeviceCallback { .callback = onDeviceRequestEnded, .userdata1 = &device };
+        wgpuAdapterRequestDevice(this->adapter, &deviceDesc, requestDeviceCallback);
 
         //Create a Canvas
         canvas = tvg::WgCanvas::gen();
@@ -500,7 +530,7 @@ float progress(uint32_t elapsed, float durationInSec, bool rewind = false)
     auto duration = uint32_t(durationInSec * 1000.0f); //sec -> millisec.
     if (elapsed == 0 || duration == 0) return 0.0f;
     auto forward = ((elapsed / duration) % 2 == 0) ? true : false;
-    if (elapsed % duration == 0) return 1.0f;
+    if (elapsed % duration == 0) return forward ? 0.0f : 1.0f;
     auto progress = (float(elapsed % duration) / (float)duration);
     if (rewind) return forward ? progress : (1 - progress);
     return progress;

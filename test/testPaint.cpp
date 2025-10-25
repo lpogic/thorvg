@@ -29,7 +29,7 @@ using namespace std;
 
 TEST_CASE("Custom Transformation", "[tvgPaint]")
 {
-    auto shape = unique_ptr<Shape>(Shape::gen());
+    auto shape = Shape::gen();
     REQUIRE(shape);
 
     //Verify default transform
@@ -75,12 +75,14 @@ TEST_CASE("Custom Transformation", "[tvgPaint]")
     REQUIRE(m2.e31 == Approx(m4.e31).margin(0.000001));
     REQUIRE(m2.e32 == Approx(m4.e32).margin(0.000001));
     REQUIRE(m2.e33 == Approx(m4.e33).margin(0.000001));
+
+    Paint::rel(shape);
 }
 
 
 TEST_CASE("Basic Transformation", "[tvgPaint]")
 {
-    auto shape = unique_ptr<Shape>(Shape::gen());
+    auto shape = Shape::gen();
     REQUIRE(shape);
 
     REQUIRE(shape->translate(155.0f, -155.0f) == Result::Success);
@@ -97,11 +99,13 @@ TEST_CASE("Basic Transformation", "[tvgPaint]")
     REQUIRE(m.e31 == Approx(0).margin(0.000001));
     REQUIRE(m.e32 == Approx(0).margin(0.000001));
     REQUIRE(m.e33 == Approx(1).margin(0.000001));
+
+    Paint::rel(shape);
 }
 
 TEST_CASE("Opacity", "[tvgPaint]")
 {
-    auto shape = unique_ptr<Shape>(Shape::gen());
+    auto shape = Shape::gen();
     REQUIRE(shape);
 
     REQUIRE(shape->opacity() == 255);
@@ -114,11 +118,13 @@ TEST_CASE("Opacity", "[tvgPaint]")
 
     REQUIRE(shape->opacity(0) == Result::Success);
     REQUIRE(shape->opacity() == 0);
+
+    Paint::rel(shape);
 }
 
 TEST_CASE("Visibility", "[tvgPaint]")
 {
-    auto shape = unique_ptr<Shape>(Shape::gen());
+    auto shape = Shape::gen();
     REQUIRE(shape);
 
     REQUIRE(shape->visible() == true);
@@ -131,108 +137,254 @@ TEST_CASE("Visibility", "[tvgPaint]")
 
     REQUIRE(shape->visible(true) == Result::Success);
     REQUIRE(shape->visible() == true);
+
+    Paint::rel(shape);
 }
 
 TEST_CASE("Bounding Box", "[tvgPaint]")
 {
-    Initializer::init();
+    REQUIRE(Initializer::init() == Result::Success);
+    {
+        auto buffer = unique_ptr<uint32_t[]>(new uint32_t[500*500]);
+        auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
+        canvas->target(buffer.get(), 500, 500, 500, ColorSpace::ARGB8888);
 
-    auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-    uint32_t buffer[100*100];
-    canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888);
+        auto shape = Shape::gen();
+        canvas->push(shape);
 
-    auto shape = Shape::gen();
-    canvas->push(shape);
-    canvas->sync();
+        //Negative
+        float x = 0, y = 0, w = 0, h = 0;
+        REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::InsufficientCondition);
 
-    //Negative
-    float x = 0, y = 0, w = 0, h = 0;
-    REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::InsufficientCondition);
+        //Case 1
+        REQUIRE(shape->appendRect(0.0f, 10.0f, 20.0f, 100.0f, 50.0f, 50.0f) == Result::Success);
+        REQUIRE(shape->translate(100.0f, 111.0f) == Result::Success);
 
-    //Case 1
-    REQUIRE(shape->appendRect(0.0f, 10.0f, 20.0f, 100.0f, 50.0f, 50.0f) == Result::Success);
-    REQUIRE(shape->translate(100.0f, 111.0f) == Result::Success);
-    REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::Success);
-    REQUIRE(x == 100.0f);
-    REQUIRE(y == 121.0f);
-    REQUIRE(w == 20.0f);
-    REQUIRE(h == 100.0f);
+        canvas->update();
 
-    REQUIRE(canvas->update() == Result::Success);
-    Point pts[4];
-    REQUIRE(shape->bounds(pts) == Result::Success);
-    REQUIRE(pts[0].x == 100.0f);
-    REQUIRE(pts[3].x == 100.0f);
-    REQUIRE(pts[0].y == 121.0f);
-    REQUIRE(pts[1].y == 121.0f);
-    REQUIRE(pts[1].x == 120.0f);
-    REQUIRE(pts[2].x == 120.0f);
-    REQUIRE(pts[2].y == 221.0f);
-    REQUIRE(pts[3].y == 221.0f);
+        //Positive
+        REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::Success);
+        REQUIRE(x == 100.0f);
+        REQUIRE(y == 121.0f);
+        REQUIRE(w == 20.0f);
+        REQUIRE(h == 100.0f);
 
-    //Case 2
-    REQUIRE(shape->reset() == Result::Success);
-    REQUIRE(shape->moveTo(0.0f, 10.0f) == Result::Success);
-    REQUIRE(shape->lineTo(20.0f, 210.0f) == Result::Success);
-    auto identity = Matrix{1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
-    REQUIRE(shape->transform(identity) == Result::Success);
-    REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::Success);
-    REQUIRE(x == 0.0f);
-    REQUIRE(y == 10.0f);
-    REQUIRE(w == 20.0f);
-    REQUIRE(h == 200.0f);
+        Point pts[4];
+        REQUIRE(shape->bounds(pts) == Result::Success);
+        REQUIRE(pts[0].x == 100.0f);
+        REQUIRE(pts[3].x == 100.0f);
+        REQUIRE(pts[0].y == 121.0f);
+        REQUIRE(pts[1].y == 121.0f);
+        REQUIRE(pts[1].x == 120.0f);
+        REQUIRE(pts[2].x == 120.0f);
+        REQUIRE(pts[2].y == 221.0f);
+        REQUIRE(pts[3].y == 221.0f);
 
-    REQUIRE(canvas->update() == Result::Success);
-    REQUIRE(shape->bounds(pts) == Result::Success);
-    REQUIRE(pts[0].x == 0.0f);
-    REQUIRE(pts[3].x == 0.0f);
-    REQUIRE(pts[0].y == 10.0f);
-    REQUIRE(pts[1].y == 10.0f);
-    REQUIRE(pts[1].x == 20.0f);
-    REQUIRE(pts[2].x == 20.0f);
-    REQUIRE(pts[2].y == 210.0f);
-    REQUIRE(pts[3].y == 210.0f);
+        REQUIRE(canvas->sync() == Result::Success);
 
-    Initializer::term();
+        //Case 2
+        REQUIRE(shape->reset() == Result::Success);
+        REQUIRE(shape->moveTo(0.0f, 10.0f) == Result::Success);
+        REQUIRE(shape->lineTo(20.0f, 210.0f) == Result::Success);
+        auto identity = Matrix{1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+        REQUIRE(shape->transform(identity) == Result::Success);
+
+        REQUIRE(canvas->update() == Result::Success);
+
+        REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::Success);
+        REQUIRE(x == 0.0f);
+        REQUIRE(y == 10.0f);
+        REQUIRE(w == 20.0f);
+        REQUIRE(h == 200.0f);
+
+        REQUIRE(shape->bounds(pts) == Result::Success);
+        REQUIRE(pts[0].x == 0.0f);
+        REQUIRE(pts[3].x == 0.0f);
+        REQUIRE(pts[0].y == 10.0f);
+        REQUIRE(pts[1].y == 10.0f);
+        REQUIRE(pts[1].x == 20.0f);
+        REQUIRE(pts[2].x == 20.0f);
+        REQUIRE(pts[2].y == 210.0f);
+        REQUIRE(pts[3].y == 210.0f);
+
+        REQUIRE(canvas->sync() == Result::Success);
+
+        //Case3
+        REQUIRE(shape->reset() == Result::Success);
+        REQUIRE(shape->moveTo(10, 10) == Result::Success);
+        REQUIRE(shape->lineTo(190, 10) == Result::Success);
+        REQUIRE(shape->strokeWidth(12.0f) == Result::Success);
+        REQUIRE(shape->strokeFill(255, 0, 0, 255) == Result::Success);
+
+        REQUIRE(canvas->update() == Result::Success);
+
+        REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::Success);
+        REQUIRE(x == 4.0f);
+        REQUIRE(y == 4.0f);
+        REQUIRE(h == 12.0f);
+        REQUIRE(w == 192.0f);
+
+        REQUIRE(shape->bounds(pts) == Result::Success);
+        REQUIRE(pts[0].x == 4.0f);
+        REQUIRE(pts[3].x == 4.0f);
+        REQUIRE(pts[0].y == 4.0f);
+        REQUIRE(pts[1].y == 4.0f);
+        REQUIRE(pts[1].x == 196.0f);
+        REQUIRE(pts[2].x == 196.0f);
+        REQUIRE(pts[2].y == 16.0f);
+        REQUIRE(pts[3].y == 16.0f);
+
+        //Text
+        REQUIRE(Text::load(TEST_DIR"/Arial.ttf") == Result::Success);
+        auto text = Text::gen();
+        REQUIRE(canvas->push(text) == Result::Success);
+        REQUIRE(canvas->sync() == Result::Success);
+
+        //Empty Size
+        REQUIRE(text->bounds(&x, &y, &w, &h) == Result::Success);
+
+        //Case 1
+        REQUIRE(text->font("Arial") == Result::Success);
+        REQUIRE(text->size(32) == Result::Success);
+        REQUIRE(text->text("TEST") == Result::Success);
+        REQUIRE(text->translate(100.0f, 111.0f) == Result::Success);
+        REQUIRE(text->bounds(&x, &y, &w, &h) == Result::Success);
+
+        REQUIRE(x == Approx(101.0f).margin(0.000001));
+        REQUIRE(y == Approx(118.5625f).margin(0.000001));
+        REQUIRE(w == Approx(107.1875f).margin(0.000001));
+        REQUIRE(h == Approx(31.58334f).margin(0.001f));
+
+        REQUIRE(canvas->update() == Result::Success);
+
+        REQUIRE(text->bounds(pts) == Result::Success);
+        REQUIRE(pts[0].x == Approx(101.0f).margin(0.000001));
+        REQUIRE(pts[3].x == Approx(101.0f).margin(0.000001));
+        REQUIRE(pts[1].x == Approx(208.1875f).margin(0.000001));
+        REQUIRE(pts[2].x == Approx(208.1875f).margin(0.000001));
+        REQUIRE(pts[0].y == Approx(118.5625f).margin(0.000001));
+        REQUIRE(pts[1].y == Approx(118.5625f).margin(0.000001));
+        REQUIRE(pts[2].y == Approx(150.14584f).margin(0.000001));
+        REQUIRE(pts[3].y == Approx(150.14584f).margin(0.000001));
+
+        //Case 2
+        REQUIRE(text->text("BOUNDS") == Result::Success);
+        identity = Matrix{1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+        REQUIRE(text->transform(identity) == Result::Success);
+        REQUIRE(text->bounds(&x, &y, &w, &h) == Result::Success);
+
+        REQUIRE(x == Approx(3.125f).margin(0.000001));
+        REQUIRE(y == Approx(7.54167f).margin(0.000001));
+        REQUIRE(w == Approx(177.1875f).margin(0.000001));
+        REQUIRE(h == Approx(31.60417f).margin(0.000001));
+
+        REQUIRE(canvas->update() == Result::Success);
+        REQUIRE(text->bounds(pts) == Result::Success);
+        REQUIRE(pts[0].x == Approx(3.125f).margin(0.000001));
+        REQUIRE(pts[3].x == Approx(3.125f).margin(0.000001));
+        REQUIRE(pts[1].x == Approx(180.3125f).margin(0.000001));
+        REQUIRE(pts[2].x == Approx(180.3125f).margin(0.000001));
+        REQUIRE(pts[0].y == Approx(7.54167f).margin(0.000001));
+        REQUIRE(pts[1].y == Approx(7.54167f).margin(0.000001));
+        REQUIRE(pts[2].y == Approx(39.14584f).margin(0.000001));
+        REQUIRE(pts[3].y == Approx(39.14584f).margin(0.000001));
+    }
+    REQUIRE(Initializer::term() == Result::Success);
+}
+
+TEST_CASE("Intersection", "[tvgPaint]")
+{
+    REQUIRE(Initializer::init() == Result::Success);
+    {
+        auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
+
+        uint32_t buffer[200 * 200];
+        canvas->target(buffer, 200, 200, 200, ColorSpace::ARGB8888);
+
+        auto shape = Shape::gen();
+        REQUIRE(shape);
+        REQUIRE(shape->appendRect(50, 50, 100, 100) == Result::Success);
+        REQUIRE(shape->fill(255, 0, 0, 255) == Result::Success);
+
+        REQUIRE(canvas->push(shape) == Result::Success);
+        REQUIRE(canvas->draw() == Result::Success);
+
+        // Case1. Fully contained
+        REQUIRE(shape->intersects(0, 0, 200, 200) == true);
+
+        // Case2. Partially overlapping
+        REQUIRE(shape->intersects(25, 25, 50, 50) == true);
+        REQUIRE(shape->intersects(125, 125, 50, 50) == true);
+
+        // Case3. Edge-touching
+        REQUIRE(shape->intersects(49, 49, 2, 2) == true);
+        REQUIRE(shape->intersects(149, 149, 2, 2) == true);
+
+        // Case4. Fully separated
+        REQUIRE(shape->intersects(0, 0, 25, 25) == false);
+        REQUIRE(shape->intersects(175, 175, 25, 25) == false);
+    }
+    REQUIRE(Initializer::term() == Result::Success);
 }
 
 TEST_CASE("Duplication", "[tvgPaint]")
 {
-    auto shape = unique_ptr<Shape>(Shape::gen());
+    vector<Paint*> paints;
+
+    auto shape = Shape::gen();
     REQUIRE(shape);
+    paints.push_back(shape);
 
-    //Setup paint properties
-    REQUIRE(shape->opacity(0) == Result::Success);
-    REQUIRE(shape->translate(200.0f, 100.0f) == Result::Success);
-    REQUIRE(shape->scale(2.2f) == Result::Success);
-    REQUIRE(shape->rotate(90.0f) == Result::Success);
+    REQUIRE(Text::load(TEST_DIR"/Arial.ttf") == Result::Success);
+    auto text = Text::gen();
+    REQUIRE(text);
+    REQUIRE(text->font("Arial") == Result::Success);
+    REQUIRE(text->size(32) == Result::Success);
+    REQUIRE(text->text("Original Text") == Result::Success);
+    REQUIRE(text->fill(255, 0, 0) == Result::Success);
+    paints.push_back(text);
 
-    auto comp = Shape::gen();
-    REQUIRE(comp);
-    REQUIRE(shape->clip(comp) == Result::Success);
+    for (auto& paint : paints) {
+        //Setup paint properties
+        REQUIRE(paint->opacity(0) == Result::Success);
+        REQUIRE(paint->translate(200.0f, 100.0f) == Result::Success);
+        REQUIRE(paint->scale(2.2f) == Result::Success);
+        REQUIRE(paint->rotate(90.0f) == Result::Success);
 
-    //Duplication
-    auto dup = unique_ptr<Paint>(shape->duplicate());
-    REQUIRE(dup);
+        auto comp = Shape::gen();
+        REQUIRE(comp);
+        REQUIRE(paint->clip(comp) == Result::Success);
 
-    //Compare properties
-    REQUIRE(dup->opacity() == 0);
+        //Duplication
+        auto dup = paint->duplicate();
+        REQUIRE(dup);
 
-    auto m = shape->transform();
-    REQUIRE(m.e11 == Approx(0.0f).margin(0.000001));
-    REQUIRE(m.e12 == Approx(-2.2f).margin(0.000001));
-    REQUIRE(m.e13 == Approx(200.0f).margin(0.000001));
-    REQUIRE(m.e21 == Approx(2.2f).margin(0.000001));
-    REQUIRE(m.e22 == Approx(0.0f).margin(0.000001));
-    REQUIRE(m.e23 == Approx(100.0f).margin(0.000001));
-    REQUIRE(m.e31 == Approx(0.0f).margin(0.000001));
-    REQUIRE(m.e32 == Approx(0.0f).margin(0.000001));
-    REQUIRE(m.e33 == Approx(1.0f).margin(0.000001));
+        //Compare properties
+        REQUIRE(dup->opacity() == 0);
+
+        auto m = paint->transform();
+        REQUIRE(m.e11 == Approx(0.0f).margin(0.000001));
+        REQUIRE(m.e12 == Approx(-2.2f).margin(0.000001));
+        REQUIRE(m.e13 == Approx(200.0f).margin(0.000001));
+        REQUIRE(m.e21 == Approx(2.2f).margin(0.000001));
+        REQUIRE(m.e22 == Approx(0.0f).margin(0.000001));
+        REQUIRE(m.e23 == Approx(100.0f).margin(0.000001));
+        REQUIRE(m.e31 == Approx(0.0f).margin(0.000001));
+        REQUIRE(m.e32 == Approx(0.0f).margin(0.000001));
+        REQUIRE(m.e33 == Approx(1.0f).margin(0.000001));
+
+        Paint::rel(dup);
+    }
+
+    //release
+    for (auto p : paints) {
+        Paint::rel(p);
+    }
 }
 
 TEST_CASE("Composition", "[tvgPaint]")
 {
-    auto shape = unique_ptr<Shape>(Shape::gen());
+    auto shape = Shape::gen();
     REQUIRE(shape);
 
     //Negative
@@ -272,11 +424,13 @@ TEST_CASE("Composition", "[tvgPaint]")
 
     REQUIRE(shape->mask(&comp2) == MaskMethod::InvLuma);
     REQUIRE(comp == comp2);
+
+    Paint::rel(shape);
 }
 
 TEST_CASE("Blending", "[tvgPaint]")
 {
-    auto shape = unique_ptr<Shape>(Shape::gen());
+    auto shape = Shape::gen();
     REQUIRE(shape);
 
     //Add
@@ -314,6 +468,8 @@ TEST_CASE("Blending", "[tvgPaint]")
 
     //SoftLight
     REQUIRE(shape->blend(BlendMethod::SoftLight) == Result::Success);
+
+    Paint::rel(shape);
 }
 
 TEST_CASE("Refernce Count", "[tvgPaint]")
@@ -329,30 +485,30 @@ TEST_CASE("Refernce Count", "[tvgPaint]")
     REQUIRE(shape->unref() == 0);
 
     Initializer::init();
+    {
+        auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
 
-    auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
+        shape = Shape::gen();
+        REQUIRE(shape->ref() == 1);
+        canvas->push(shape);
+        REQUIRE(shape->refCnt() == 2);
+        REQUIRE(shape->unref() == 1);
 
-    shape = Shape::gen();
-    REQUIRE(shape->ref() == 1);
-    canvas->push(shape);
-    REQUIRE(shape->refCnt() == 2);
-    REQUIRE(shape->unref() == 1);
+        shape = Shape::gen();
+        REQUIRE(shape->ref() == 1);
+        auto scene = Scene::gen();
+        scene->push(shape);
+        canvas->push(scene);
+        REQUIRE(shape->refCnt() == 2);
+        REQUIRE(shape->unref() == 1);
 
-    shape = Shape::gen();
-    REQUIRE(shape->ref() == 1);
-    auto scene = Scene::gen();
-    scene->push(shape);
-    canvas->push(scene);
-    REQUIRE(shape->refCnt() == 2);
-    REQUIRE(shape->unref() == 1);
-
-    shape = Shape::gen();
-    REQUIRE(shape->ref() == 1);
-    scene = Scene::gen();
-    scene->push(shape);
-    scene->remove();
-    canvas->push(scene);
-    REQUIRE(shape->unref() == 0);
-
+        shape = Shape::gen();
+        REQUIRE(shape->ref() == 1);
+        scene = Scene::gen();
+        scene->push(shape);
+        scene->remove();
+        canvas->push(scene);
+        REQUIRE(shape->unref() == 0);
+    }
     Initializer::term();
 }

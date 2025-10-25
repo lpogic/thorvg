@@ -30,32 +30,36 @@ struct UserExample : tvgexam::Example
 {
     bool content(tvg::Canvas* canvas, uint32_t w, uint32_t h) override
     {
-        //default font for fallback in case
-        tvg::Text::load(EXAMPLE_DIR"/font/Arial.ttf");
+        auto opacity = 36;
 
-        //Background
-        auto bg = tvg::Shape::gen();
-        bg->appendRect(0, 0, w, h);    //x, y, w, h
-        bg->fill(255, 255, 255);       //r, g, b
-        canvas->push(bg);
+        //Load svg file from path
+        for (int i = 0; i < 7; ++i) {
+            auto picture = tvg::Picture::gen();
+            if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/svg/logo.svg"))) return false;
+            picture->translate(i* 150, i * 150);
+            picture->rotate(30 * i);
+            picture->size(200, 200);
+            picture->opacity(opacity + opacity * i);
+            canvas->push(picture);
+        }
+
+        //Open file manually
+        ifstream file(EXAMPLE_DIR"/svg/logo.svg", ios::binary);
+        if (!file.is_open()) return false;
+        auto begin = file.tellg();
+        file.seekg(0, std::ios::end);
+        auto size = file.tellg() - begin;
+        auto data = (char*)malloc(size);
+        file.seekg(0, std::ios::beg);
+        file.read(data, size);
+        file.close();
 
         auto picture = tvg::Picture::gen();
-        if (!tvgexam::verify(picture->load(EXAMPLE_DIR"/svg/logo.svg"))) return false;
+        if (!tvgexam::verify(picture->load(data, size, "svg", "", true))) return false;
 
-        float scale;
-        float shiftX = 0.0f, shiftY = 0.0f;
-        float w2, h2;
-        picture->size(&w2, &h2);
-        if (w2 > h2) {
-            scale = w / w2;
-            shiftY = (h - h2 * scale) * 0.5f;
-        } else {
-            scale = h / h2;
-            shiftX = (w - w2 * scale) * 0.5f;
-        }
-        picture->translate(shiftX, shiftY);
-        picture->scale(scale);
-
+        free(data);
+        picture->translate(400, 0);
+        picture->scale(0.4);
         canvas->push(picture);
 
         return true;

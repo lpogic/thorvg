@@ -176,6 +176,25 @@ private:
     uint32_t mParentHeight = 0;
 };
 
+class GlSceneBlendTask : public GlComposeTask
+{
+public:
+    GlSceneBlendTask(GlProgram*, GLuint target, GlRenderTarget* fbo, Array<GlRenderTask*>&& tasks);
+    ~GlSceneBlendTask() override;
+
+    void setParentSize(uint32_t width, uint32_t height) { mParentWidth = width; mParentHeight = height; }
+    void setSrcTarget(GlRenderTarget* srcFbo) { mSrcFbo = srcFbo; }
+    void setDstCopy(GlRenderTarget* dstCopyFbo) { mDstCopyFbo = dstCopyFbo; }
+
+    void run() override;
+
+private:
+    GlRenderTarget* mSrcFbo = nullptr;
+    GlRenderTarget* mDstCopyFbo = nullptr;
+    uint32_t mParentWidth = 0;
+    uint32_t mParentHeight = 0;
+};
+
 class GlClipTask : public GlRenderTask
 {
 public:

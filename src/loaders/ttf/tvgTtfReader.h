@@ -24,22 +24,23 @@
 #define _TVG_TTF_READER_H
 
 #include <atomic>
-#include "tvgCommon.h"
-#include "tvgArray.h"
+#include "tvgRender.h"
 
 #define INVALID_GLYPH ((uint32_t)-1)
 
-struct TtfGlyphMetrics
+struct TtfGlyph
 {
-    uint32_t outline;    //glyph outline table offset
-
-    float advanceWidth;
-    float leftSideBearing;
-    float yOffset;
-    float minw;
-    float minh;
+    uint32_t idx;        //glyph index
+    float advance;       //advance width/height
+    float lsb;           //left side bearing
+    float y;             //y-offset
+    float w, h;          //bounding box
 };
 
+struct TtfGlyphMetrics : TtfGlyph
+{
+    RenderPath path;     //outline path
+};
 
 struct TtfReader
 {
@@ -51,9 +52,9 @@ public:
     {
         //horizontal header info
         struct {
-            float ascent;
-            float descent;
+            float ascent, descent;
             float lineGap;
+            float advance;
         } hhea;
 
         uint16_t unitsPerEm;
@@ -62,9 +63,9 @@ public:
     } metrics;
 
     bool header();
-    uint32_t glyph(uint32_t codepoint, TtfGlyphMetrics& gmetrics);
-    void kerning(uint32_t lglyph, uint32_t rglyph, Point& out);
-    bool convert(Shape* shape, TtfGlyphMetrics& gmetrics, const Point& offset, const Point& kerning, uint16_t componentDepth);
+    uint32_t glyph(uint32_t codepoint, TtfGlyphMetrics* tgm);
+    bool kerning(uint32_t lglyph, uint32_t rglyph, Point& out);
+    bool convert(RenderPath& path, TtfGlyph& glyph, uint32_t glyphOffset, const Point& offset, uint16_t depth);
 
 private:
     //table offsets
@@ -82,10 +83,9 @@ private:
     uint32_t table(const char* tag);
     uint32_t outlineOffset(uint32_t glyph);
     uint32_t glyph(uint32_t codepoint);
-    bool glyphMetrics(uint32_t glyphIndex, TtfGlyphMetrics& gmetrics);
-    bool convertComposite(Shape* shape, TtfGlyphMetrics& gmetrics, const Point& offset, const Point& kerning, uint16_t componentDepth);
+    uint32_t glyphMetrics(TtfGlyph& glyph);
+    bool convertComposite(RenderPath& path, TtfGlyph& glyph, uint32_t glyphOffset, const Point& offset, uint16_t depth);
     bool genPath(uint8_t* flags, uint16_t basePoint, uint16_t count);
-    bool genSimpleOutline(Shape* shape, uint32_t outline, uint32_t cntrsCnt);
     bool points(uint32_t outline, uint8_t* flags, Point* pts, uint32_t ptsCnt, const Point& offset);
     bool flags(uint32_t *outline, uint8_t* flags, uint32_t flagsCnt);
 };

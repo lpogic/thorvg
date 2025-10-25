@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-#include <thorvg.h>
+#include <thorvg_lottie.h>
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include "tvgPicture.h"
@@ -30,6 +30,9 @@ using namespace emscripten;
 using namespace std;
 using namespace tvg;
 
+EMSCRIPTEN_DECLARE_VAL_TYPE(ArrayBuffer);
+EMSCRIPTEN_DECLARE_VAL_TYPE(Float32Array);
+
 static const char* NoError = "None";
 
 struct TvgEngineMethod
@@ -37,9 +40,9 @@ struct TvgEngineMethod
     virtual ~TvgEngineMethod() {}
     virtual Canvas* init(string&) = 0;
     virtual void resize(Canvas* canvas, int w, int h) = 0;
-    virtual val output(int w, int h)
+    virtual ArrayBuffer output(int w, int h)
     {
-        return val(typed_memory_view<uint8_t>(0, nullptr));
+        return ArrayBuffer(val(typed_memory_view<uint8_t>(0, nullptr)));
     }
 
     void loadFont() {
@@ -64,7 +67,7 @@ struct TvgSwEngine : TvgEngineMethod
     {
         Initializer::init();
         loadFont();
-        return SwCanvas::gen();
+        return SwCanvas::gen(EngineOption::None);
     }
 
     void resize(Canvas* canvas, int w, int h) override
@@ -74,9 +77,9 @@ struct TvgSwEngine : TvgEngineMethod
         static_cast<SwCanvas*>(canvas)->target((uint32_t *)buffer, w, w, h, ColorSpace::ABGR8888S);
     }
 
-    val output(int w, int h) override
+    ArrayBuffer output(int w, int h) override
     {
-        return val(typed_memory_view(w * h * 4, buffer));
+        return ArrayBuffer(val(typed_memory_view(w * h * 4, buffer)));
     }
 };
 
@@ -85,7 +88,7 @@ struct TvgSwEngine : TvgEngineMethod
 
 #ifdef THORVG_WG_RASTER_SUPPORT
 
-#include <emscripten/html5_webgpu.h>
+#include <webgpu/webgpu.h>
 
 static WGPUInstance instance{};
 static WGPUAdapter adapter{};
@@ -107,10 +110,11 @@ struct TvgWgEngine : TvgEngineMethod
 
     Canvas* init(string& selector) override
     {
-        WGPUSurfaceDescriptorFromCanvasHTMLSelector canvasDesc{};
+        WGPUEmscriptenSurfaceSourceCanvasHTMLSelector canvasDesc{};
         canvasDesc.chain.next = nullptr;
-        canvasDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
-        canvasDesc.selector = selector.c_str();
+        canvasDesc.chain.sType = WGPUSType_EmscriptenSurfaceSourceCanvasHTMLSelector;
+        canvasDesc.selector.data = selector.c_str();
+        canvasDesc.selector.length = WGPU_STRLEN;
 
         WGPUSurfaceDescriptor surfaceDesc{};
         surfaceDesc.nextInChain = &canvasDesc.chain;
@@ -132,20 +136,18 @@ struct TvgWgEngine : TvgEngineMethod
 
         //Init WebGPU
         if (!instance) instance = wgpuCreateInstance(nullptr);
-
+        
         // request adapter
         if (!adapter) {
             if (adapterRequested) return 2;
-
-            const WGPURequestAdapterOptions requestAdapterOptions { .nextInChain = nullptr, .powerPreference = WGPUPowerPreference_HighPerformance, .forceFallbackAdapter = false };
-            auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void* pUserData) {
-                if (status != WGPURequestAdapterStatus_Success) {
-                    initializationFailed = true;
-                    return;
-                }
-                *((WGPUAdapter*)pUserData) = adapter;
+            
+            auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, WGPUStringView message, WGPU_NULLABLE void* userdata1, WGPU_NULLABLE void* userdata2) { 
+                if (status != WGPURequestAdapterStatus_Success) { initializationFailed = true; return; }
+                *((WGPUAdapter*)userdata1) = adapter;
             };
-            wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, onAdapterRequestEnded, &adapter);
+            const WGPURequestAdapterOptions requestAdapterOptions{ .powerPreference = WGPUPowerPreference_HighPerformance };
+            const WGPURequestAdapterCallbackInfo requestAdapterCallback{ .mode = WGPUCallbackMode_AllowSpontaneous, .callback = onAdapterRequestEnded, .userdata1 = &adapter };
+            wgpuInstanceRequestAdapter(instance, &requestAdapterOptions, requestAdapterCallback);
 
             adapterRequested = true;
             return 2;
@@ -154,18 +156,15 @@ struct TvgWgEngine : TvgEngineMethod
         // request device
         if (deviceRequested) return device == nullptr ? 2 : 0;
 
-        WGPUFeatureName featureNames[32]{};
-        size_t featuresCount = wgpuAdapterEnumerateFeatures(adapter, featureNames);
         if (!device) {
-            const WGPUDeviceDescriptor deviceDesc { .nextInChain = nullptr, .label = "The device", .requiredFeatureCount = featuresCount, .requiredFeatures = featureNames };
-            auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, char const* message, void* pUserData) {
-                if (status != WGPURequestDeviceStatus_Success) {
-                    initializationFailed = true;
-                    return;
-                }
-                *((WGPUDevice*)pUserData) = device;
+            auto onDeviceError = [](WGPUDevice const * device, WGPUErrorType type, WGPUStringView message, void* userdata1, void* userdata2) {};
+            auto onDeviceRequestEnded = [](WGPURequestDeviceStatus status, WGPUDevice device, WGPUStringView message, void* userdata1, void* userdata2) { 
+                if (status != WGPURequestDeviceStatus_Success) { initializationFailed = true; return; }
+                *((WGPUDevice*)userdata1) = device;
             };
-            wgpuAdapterRequestDevice(adapter, &deviceDesc, onDeviceRequestEnded, &device);
+            const WGPUDeviceDescriptor deviceDesc { .label = { "The device", WGPU_STRLEN }, .uncapturedErrorCallbackInfo = { .callback = onDeviceError } };
+            const WGPURequestDeviceCallbackInfo requestDeviceCallback { .mode = WGPUCallbackMode_AllowSpontaneous, .callback = onDeviceRequestEnded, .userdata1 = &device };
+            wgpuAdapterRequestDevice(adapter, &deviceDesc, requestDeviceCallback);
 
             deviceRequested = true;
             return 2;
@@ -269,7 +268,7 @@ public:
             return;
         }
 
-        animation = Animation::gen();
+        animation = LottieAnimation::gen();
         if (!animation) errorMsg = "Invalid animation";
     }
 
@@ -278,9 +277,9 @@ public:
         return errorMsg;
     }
 
-    val size()
+    Float32Array size()
     {
-        return val(typed_memory_view(2, psize));
+        return Float32Array(val(typed_memory_view(2, psize)));
     }
 
     float duration()
@@ -301,7 +300,7 @@ public:
         return animation->curFrame();
     }
 
-    bool load(string data, string mimetype, int width, int height, string rpath = "")
+    bool load(string data, string mimetype, int width, int height)
     {
         errorMsg = NoError;
 
@@ -315,14 +314,15 @@ public:
         canvas->remove();
 
         delete(animation);
-        animation = Animation::gen();
+        animation = LottieAnimation::gen();
+        animation->picture()->origin(0.5f, 0.5f);  //center-aligned
 
         string filetype = mimetype;
         if (filetype == "json") {
             filetype = "lottie+json";
         }
 
-        if (animation->picture()->load(data.c_str(), data.size(), filetype.c_str(), rpath.c_str(), false) != Result::Success) {
+        if (animation->picture()->load(data.c_str(), data.size(), filetype.c_str()) != Result::Success) {
             errorMsg = "load() fail";
             return false;
         }
@@ -345,17 +345,17 @@ public:
         return true;
     }
 
-    val render()
+    ArrayBuffer render()
     {
         errorMsg = NoError;
 
-        if (!canvas || !animation) return val(typed_memory_view<uint8_t>(0, nullptr));
+        if (!canvas || !animation) return ArrayBuffer(val(typed_memory_view<uint8_t>(0, nullptr)));
 
         if (!updated) return engine->output(width, height);
 
         if (canvas->draw(true) != Result::Success) {
             errorMsg = "draw() fail";
-            return val(typed_memory_view<uint8_t>(0, nullptr));
+            return ArrayBuffer(val(typed_memory_view<uint8_t>(0, nullptr)));
         }
 
         canvas->sync();
@@ -411,17 +411,10 @@ public:
 
         engine->resize(canvas, width, height);
 
-        float scale;
-        float shiftX = 0.0f, shiftY = 0.0f;
-        if (psize[0] > psize[1]) {
-            scale = width / psize[0];
-            shiftY = (height - psize[1] * scale) * 0.5f;
-        } else {
-            scale = height / psize[1];
-            shiftX = (width - psize[0] * scale) * 0.5f;
-        }
+        auto scale = (psize[0] > psize[1]) ? width / psize[0] : height / psize[1];
         animation->picture()->scale(scale);
-        animation->picture()->translate(shiftX, shiftY);
+        animation->picture()->translate(width * 0.5f, height * 0.5f);
+
 
         updated = true;
     }
@@ -435,6 +428,7 @@ public:
 
     bool save2Gif(string data)
     {
+#ifdef THORVG_GIF_SAVER_SUPPORT
         errorMsg = NoError;
 
         if (data.empty()) {
@@ -493,14 +487,32 @@ public:
         saver->sync();
 
         return true;
+#else
+        errorMsg = "GIF saver is not supported";
+        return false;
+#endif
     }
 
     // TODO: Advanced APIs wrt Interactivity & theme methods...
+    bool quality(uint8_t value)
+    {
+        errorMsg = NoError;
+
+        if (!canvas || !animation) return false;
+
+        if (animation->quality(value) != Result::Success) {
+            errorMsg = "quality() fail";
+            return false;
+        }
+
+        updated = true;
+        return true;
+    }
 
 private:
     string                 errorMsg;
     Canvas*                canvas = nullptr;
-    Animation*             animation = nullptr;
+    LottieAnimation*       animation = nullptr;
     TvgEngineMethod*       engine = nullptr;
     uint32_t               width = 0;
     uint32_t               height = 0;
@@ -530,6 +542,8 @@ void term()
 
 EMSCRIPTEN_BINDINGS(thorvg_bindings)
 {
+    register_type<ArrayBuffer>("ArrayBuffer");
+    register_type<Float32Array>("Float32Array");
     emscripten::function("init", &init);
     emscripten::function("term", &term);
 
@@ -546,5 +560,6 @@ EMSCRIPTEN_BINDINGS(thorvg_bindings)
         .function("frame", &TvgLottieAnimation ::frame)
         .function("viewport", &TvgLottieAnimation ::viewport)
         .function("resize", &TvgLottieAnimation ::resize)
-        .function("save", &TvgLottieAnimation ::save);
+        .function("save", &TvgLottieAnimation ::save)
+        .function("quality", &TvgLottieAnimation ::quality);
 }

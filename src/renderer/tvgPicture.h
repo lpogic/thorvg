@@ -63,6 +63,8 @@ struct PictureImpl : Picture
     ImageLoader* loader = nullptr;
     Paint* vector = nullptr;          //vector picture uses
     RenderSurface* bitmap = nullptr;  //bitmap picture uses
+    AssetResolver* resolver = nullptr;
+    Point origin = {};
     float w = 0, h = 0;
     bool resizing = false;
 
@@ -73,7 +75,8 @@ struct PictureImpl : Picture
     ~PictureImpl()
     {
         LoaderMgr::retrieve(loader);
-        delete(vector);
+        tvg::free(resolver);
+        if (vector) vector->unref();
     }
 
     bool skip(RenderUpdateFlag flag)
@@ -86,12 +89,14 @@ struct PictureImpl : Picture
     {
         load();
 
+        auto pivot = Point{-origin.x * float(w), -origin.y * float(h)};
+
         if (bitmap) {
             //Overriding Transformation by the desired image size
             auto sx = w / loader->w;
             auto sy = h / loader->h;
             auto scale = sx < sy ? sx : sy;
-            auto m = transform * Matrix{scale, 0, 0, 0, scale, 0, 0, 0, 1};
+            auto m = transform * Matrix{scale, 0, pivot.x, 0, scale, pivot.y, 0, 0, 1};
             impl.rd = renderer->prepare(bitmap, impl.rd, m, clips, opacity, flag);
         } else if (vector) {
             if (resizing) {
@@ -100,6 +105,7 @@ struct PictureImpl : Picture
             }
             needComposition(opacity);
             vector->blend(pImpl->blendMethod); //propagate blend method to nested vector scene
+            translateR(const_cast<Matrix*>(&transform), pivot);
             return vector->pImpl->update(renderer, transform, clips, opacity, flag, false);
         }
         return true;
@@ -129,13 +135,13 @@ struct PictureImpl : Picture
         return false;
     }
 
-    Result bounds(Point* pt4, Matrix& m, TVG_UNUSED bool obb, TVG_UNUSED bool stroking) const
+    bool bounds(Point* pt4, const Matrix& m, TVG_UNUSED bool obb)
     {
         pt4[0] = Point{0.0f, 0.0f} * m;
         pt4[1] = Point{w, 0.0f} * m;
         pt4[2] = Point{w, h} * m;
         pt4[3] = Point{0.0f, h} * m;
-        return Result::Success;
+        return true;
     }
 
     Result load(const char* filename)
@@ -160,7 +166,7 @@ struct PictureImpl : Picture
         return load(loader);
     }
 
-    Result load(uint32_t* data, uint32_t w, uint32_t h, ColorSpace cs, bool copy)
+    Result load(const uint32_t* data, uint32_t w, uint32_t h, ColorSpace cs, bool copy)
     {
         if (!data || w <= 0 || h <= 0 || cs == ColorSpace::Unknown)  return Result::InvalidArguments;
         if (vector || bitmap) return Result::InsufficientCondition;
@@ -169,6 +175,21 @@ struct PictureImpl : Picture
         if (!loader) return Result::FailedAllocation;
 
         return load(loader);
+    }
+
+    Result set(std::function<bool(Paint* paint, const char* src, void* data)> resolver, void* data)
+    {
+        if (loader) return Result::InsufficientCondition;
+
+        if (!resolver) {
+            tvg::free(this->resolver);
+            this->resolver = nullptr;
+            return Result::Success;
+        }
+
+        if (!this->resolver) this->resolver = tvg::calloc<AssetResolver*>(1, sizeof(AssetResolver));
+        *(this->resolver) = {resolver, data};
+        return Result::Success;
     }
 
     Paint* duplicate(Paint* ret)
@@ -192,6 +213,7 @@ struct PictureImpl : Picture
         }
 
         dup->bitmap = bitmap;
+        dup->origin = origin;
         dup->w = w;
         dup->h = h;
         dup->resizing = resizing;
@@ -227,6 +249,7 @@ struct PictureImpl : Picture
             if (vector) {
                 loader->sync();
             } else if ((vector = loader->paint())) {
+                vector->ref();
                 PAINT(vector)->parent = this;
                 if (w != loader->w || h != loader->h) {
                     if (!resizing) {
@@ -266,7 +289,7 @@ struct PictureImpl : Picture
         } else if (vector) {
             RenderCompositor* cmp = nullptr;
             if (impl.cmpFlag) {
-                cmp = renderer->target(bounds(renderer), renderer->colorSpace(), impl.cmpFlag);
+                cmp = renderer->target(bounds(), renderer->colorSpace(), impl.cmpFlag);
                 renderer->beginComposite(cmp, MaskMethod::None, 255);
             }
             ret = vector->pImpl->render(renderer);
@@ -275,10 +298,10 @@ struct PictureImpl : Picture
         return ret;
     }
 
-    RenderRegion bounds(RenderMethod* renderer)
+    RenderRegion bounds()
     {
-        if (vector) return vector->pImpl->bounds(renderer);
-        return renderer->region(impl.rd);
+        if (vector) return vector->pImpl->bounds();
+        return impl.renderer->region(impl.rd);
     }
 
     Result load(ImageLoader* loader)
@@ -292,7 +315,7 @@ struct PictureImpl : Picture
         }
 
         this->loader = loader;
-
+        loader->set(resolver);
         if (!loader->read()) return Result::Unknown;
 
         this->w = loader->w;

@@ -106,12 +106,10 @@ bool WgRenderer::surfaceConfigure(WGPUSurface surface, WgContext& context, uint3
         .device = context.device,
         .format = context.preferredFormat,
         .usage = WGPUTextureUsage_RenderAttachment,
-    #ifdef __EMSCRIPTEN__
-        .alphaMode = WGPUCompositeAlphaMode_Premultiplied,
-    #endif
         .width = width,
         .height = height,
     #ifdef __EMSCRIPTEN__
+        .alphaMode = WGPUCompositeAlphaMode_Premultiplied,
         .presentMode = WGPUPresentMode_Fifo
     #elif __linux__
     #else
@@ -137,8 +135,14 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
         renderDataShape->updateMeshes(rshape, flags, transform);
     }
 
+    // update transform
+    if ((!data) || (flags & RenderUpdateFlag::Transform)) {
+        renderDataShape->transform = transform;
+        renderDataShape->updateAABB(transform);
+    }
+
     // update paint settings
-    if ((!data) || (flags & (RenderUpdateFlag::Transform | RenderUpdateFlag::Blend))) {
+    if ((!data) || (flags & (RenderUpdateFlag::Transform | RenderUpdateFlag::Blend | RenderUpdateFlag::Color))) {
         renderDataShape->renderSettingsShape.update(mContext, transform, mTargetSurface.cs, opacity);
         renderDataShape->renderSettingsStroke.update(mContext, transform, mTargetSurface.cs, opacity);
         renderDataShape->fillRule = rshape.rule;
@@ -146,9 +150,14 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
 
     // setup fill settings
     renderDataShape->viewport = vport;
-    if (flags & RenderUpdateFlag::Gradient && rshape.fill) renderDataShape->renderSettingsShape.update(mContext, rshape.fill);
-    else if (flags & RenderUpdateFlag::Color) renderDataShape->renderSettingsShape.update(mContext, rshape.color);
-    if (rshape.stroke) {
+    renderDataShape->updateVisibility(rshape, opacity);
+    // update shape render settings
+    if (!renderDataShape->renderSettingsShape.skip) {
+        if (flags & RenderUpdateFlag::Gradient && rshape.fill) renderDataShape->renderSettingsShape.update(mContext, rshape.fill);
+        else if (flags & RenderUpdateFlag::Color) renderDataShape->renderSettingsShape.update(mContext, rshape.color);
+    }
+    // update strokes render settings
+    if ((rshape.stroke) && (!renderDataShape->renderSettingsStroke.skip)) {
         if (flags & RenderUpdateFlag::GradientStroke && rshape.stroke->fill) renderDataShape->renderSettingsStroke.update(mContext, rshape.stroke->fill);
         else if (flags & RenderUpdateFlag::Stroke) renderDataShape->renderSettingsStroke.update(mContext, rshape.stroke->color);
     }
@@ -165,7 +174,8 @@ RenderData WgRenderer::prepare(RenderSurface* surface, RenderData data, const Ma
 
     // update paint settings
     renderDataPicture->viewport = vport;
-    if (flags & (RenderUpdateFlag::Transform | RenderUpdateFlag::Blend)) {
+    renderDataPicture->transform = transform;
+    if (flags & (RenderUpdateFlag::Transform | RenderUpdateFlag::Blend | RenderUpdateFlag::Color)) {
         renderDataPicture->renderSettings.update(mContext, transform, surface->cs, opacity);
     }
 
@@ -263,6 +273,32 @@ void WgRenderer::dispose(RenderData data) {
 }
 
 
+bool WgRenderer::bounds(RenderData data, Point* pt4, const Matrix& m)
+{
+    if (data) {
+        auto renderDataPaint = (WgRenderDataPaint*)data;
+        if (renderDataPaint->type() == Type::Shape) {
+            auto renderData = (WgRenderDataShape*)data;
+            if (!renderData->renderSettingsStroke.skip) {
+                tvg::BBox bbox;
+                bbox.init();
+                auto& vertexes = renderData->meshStrokes.vbuffer;
+                for (uint32_t i = 0; i < vertexes.count; i++) {
+                    Point vert = vertexes[i] * m;
+                    bbox.min = min(bbox.min, vert);
+                    bbox.max = max(bbox.max, vert);
+                }
+                pt4[0] = bbox.min;
+                pt4[1] = {bbox.max.x, bbox.min.y};
+                pt4[2] = bbox.max;
+                pt4[3] = {bbox.min.x, bbox.max.y};
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 RenderRegion WgRenderer::region(RenderData data)
 {
     if (!data) return {};
@@ -278,9 +314,6 @@ RenderRegion WgRenderer::region(RenderData data)
 
 bool WgRenderer::blend(BlendMethod method)
 {
-    //TODO: support
-    if (method == BlendMethod::Hue || method == BlendMethod::Saturation || method == BlendMethod::Color || method == BlendMethod::Luminosity) return false;
-
     mBlendMethod = (method == BlendMethod::Composition ? BlendMethod::Normal : method);
 
     return true;
@@ -289,7 +322,7 @@ bool WgRenderer::blend(BlendMethod method)
 
 ColorSpace WgRenderer::colorSpace()
 {
-    return ColorSpace::Unknown;
+    return mTargetSurface.cs;
 }
 
 
@@ -340,64 +373,45 @@ bool WgRenderer::sync()
 }
 
 
-bool WgRenderer::target(WGPUDevice device, WGPUInstance instance, void* target, uint32_t width, uint32_t height, int type)
+bool WgRenderer::target(WGPUDevice device, WGPUInstance instance, void* target, uint32_t w, uint32_t h, ColorSpace cs, int type)
 {
-    // release all existing handles
     if (!instance || !device || !target) {
         release();
         return true;
     }
 
-    if (!width || !height) return false;
+    if (w == 0 || h == 0) return false;
 
     // device or instance was changed, need to recreate all instances
     if ((mContext.device != device) || (mContext.instance != instance)) {
         release();
-
-        // initialize base rendering handles
         mContext.initialize(instance, device);
-
-        // initialize render tree instances
-        mRenderTargetPool.initialize(mContext, width, height);
-        mRenderTargetRoot.initialize(mContext, width, height);
-        mCompositor.initialize(mContext, width, height);
-
-        // store target properties
-        mTargetSurface.stride = width;
-        mTargetSurface.w = width;
-        mTargetSurface.h = height;
-
-        // configure surface (must be called after context creation)
-        if (type == 0) {
-            surface = (WGPUSurface)target;
-            surfaceConfigure(surface, mContext, width, height);
-        } else targetTexture = (WGPUTexture)target;
-        return true;
-    }
+        mRenderTargetPool.initialize(mContext, w, h);
+        mRenderTargetRoot.initialize(mContext, w, h);
+        mCompositor.initialize(mContext, w, h);
 
     // update render targets dimentions
-    if ((mTargetSurface.w != width) || (mTargetSurface.h != height) || (type == 0 ? (surface != (WGPUSurface)target) : (targetTexture != (WGPUTexture)target))) {
-        // release render tagets
+    } else if ((mTargetSurface.w != w) || (mTargetSurface.h != h) || (type == 0 ? (surface != (WGPUSurface)target) : (targetTexture != (WGPUTexture)target))) {
         mRenderTargetPool.release(mContext);
         mRenderTargetRoot.release(mContext);
         clearTargets();
-
-        mRenderTargetPool.initialize(mContext, width, height);
-        mRenderTargetRoot.initialize(mContext, width, height);
-        mCompositor.resize(mContext, width, height);
-
-        // store target properties
-        mTargetSurface.stride = width;
-        mTargetSurface.w = width;
-        mTargetSurface.h = height;
-
-        // configure surface (must be called after context creation)
-        if (type == 0) {
-            surface = (WGPUSurface)target;
-            surfaceConfigure(surface, mContext, width, height);
-        } else targetTexture = (WGPUTexture)target;
-        return true;
+        mRenderTargetPool.initialize(mContext, w, h);
+        mRenderTargetRoot.initialize(mContext, w, h);
+        mCompositor.resize(mContext, w, h);
     }
+
+    // configure surface (must be called after context creation)
+    if (type == 0) {
+        surface = (WGPUSurface)target;
+        surfaceConfigure(surface, mContext, w, h);
+    } else {
+        targetTexture = (WGPUTexture)target;
+    }
+
+    mTargetSurface.stride = w;
+    mTargetSurface.w = w;
+    mTargetSurface.h = h;
+    mTargetSurface.cs = cs;
 
     return true;
 }
@@ -582,7 +596,16 @@ bool WgRenderer::partial(bool disable)
 bool WgRenderer::intersectsShape(RenderData data, TVG_UNUSED const RenderRegion& region)
 {
     if (!data) return false;
-    TVGLOG("WG_ENGINE", "Paint::intersect() is not supported!");
+    auto shape = (WgRenderDataShape*)data;
+    RenderRegion bbox = {
+        {(int32_t)shape->aabb.min.x, (int32_t)shape->aabb.min.y},
+        {(int32_t)shape->aabb.max.x, (int32_t)shape->aabb.max.y}
+    };
+    if (region.intersected(bbox)) {
+        if (region.contained(bbox)) return true;
+        WgIntersector intersector;
+        return intersector.intersectShape(RenderRegion::intersect(region, bbox), shape);
+    }
     return false;
 }
 
@@ -590,7 +613,9 @@ bool WgRenderer::intersectsShape(RenderData data, TVG_UNUSED const RenderRegion&
 bool WgRenderer::intersectsImage(RenderData data, TVG_UNUSED const RenderRegion& region)
 {
     if (!data) return false;
-    TVGLOG("WG_ENGINE", "Paint::intersect() is not supported!");
+    auto picture = (WgRenderDataPicture*)data;
+    WgIntersector intersector;
+    if (intersector.intersectImage(region, picture)) return true;
     return false;
 }
 

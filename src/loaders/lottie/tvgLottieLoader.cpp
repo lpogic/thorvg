@@ -25,33 +25,46 @@
 #include "tvgLottieModel.h"
 #include "tvgLottieParser.h"
 #include "tvgLottieBuilder.h"
+#include "tvgCompressor.h"
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
 /************************************************************************/
 
+LottieCustomSlot::~LottieCustomSlot()
+{
+    ARRAY_FOREACH(p, props) {
+        delete(p->prop);
+    }
+}
+
+
+bool LottieLoader::prepare()
+{
+    LottieParser parser(content, dirName, builder->expressions());
+    if (!parser.parse()) return false;
+    {
+        ScopedLock lock(key);
+        comp = parser.comp;
+    }
+    if (!comp) return false;
+    if (parser.slots) {
+        auto slotcode = gen(parser.slots, true);
+        apply(slotcode, true);
+        del(slotcode, true);
+        parser.slots = nullptr;
+    }
+    builder->build(comp);
+    release();
+    return true;
+}
+
+
 void LottieLoader::run(unsigned tid)
 {
-    //update frame
-    if (comp) {
-        builder->update(comp, frameNo);
-    //initial loading
-    } else {
-        LottieParser parser(content, dirName, builder->expressions());
-        if (!parser.parse()) return;
-        {
-            ScopedLock lock(key);
-            comp = parser.comp;
-        }
-        if (parser.slots) {
-            override(parser.slots, true);
-            parser.slots = nullptr;
-        }
-        builder->build(comp);
-
-        release();
-    }
-    rebuild = false;
+    if (comp) builder->update(comp, frameNo);      //update frame
+    else if (prepare()) builder->update(comp, 0);  //initial loading
+    build = false;
 }
 
 
@@ -93,16 +106,14 @@ bool LottieLoader::header()
     //A single thread doesn't need to perform intensive tasks.
     if (TaskScheduler::threads() == 0) {
         LoadModule::read();
-        run(0);
-        if (comp) {
+        if (prepare()) {
             w = static_cast<float>(comp->w);
             h = static_cast<float>(comp->h);
             segmentEnd = frameCnt = comp->frameCnt();
             frameRate = comp->frameRate;
             return true;
-        } else {
-            return false;
         }
+        return false;
     }
 
     //Quickly validate the given Lottie file without parsing in order to get the animation info.
@@ -219,32 +230,13 @@ bool LottieLoader::open(const char* data, uint32_t size, const char* rpath, bool
 bool LottieLoader::open(const char* path)
 {
 #ifdef THORVG_FILE_IO_SUPPORT
-    auto f = fopen(path, "r");
-    if (!f) return false;
-
-    fseek(f, 0, SEEK_END);
-
-    size = ftell(f);
-    if (size == 0) {
-        fclose(f);
-        return false;
+    if ((content = LoadModule::open(path, size, true))) {
+        dirName = tvg::dirname(path);
+        copy = true;
+        return header();
     }
-
-    auto content = tvg::malloc<char*>(sizeof(char) * size + 1);
-    fseek(f, 0, SEEK_SET);
-    size = fread(content, sizeof(char), size, f);
-    content[size] = '\0';
-
-    fclose(f);
-
-    this->dirName = tvg::dirname(path);
-    this->content = content;
-    this->copy = true;
-
-    return header();
-#else
-    return false;
 #endif
+    return false;
 }
 
 
@@ -280,7 +272,7 @@ bool LottieLoader::read()
 
 Paint* LottieLoader::paint()
 {
-    done();
+    sync();
 
     if (!comp) return nullptr;
     comp->initiated = true;
@@ -288,42 +280,94 @@ Paint* LottieLoader::paint()
 }
 
 
-bool LottieLoader::override(const char* slots, bool byDefault)
+bool LottieLoader::apply(uint32_t slotcode, bool byDefault)
 {
+    if (curSlot == slotcode) return true;
+
     if (!ready() || comp->slots.count == 0) return false;
 
-    //override slots
-    if (slots) {
-        //Copy the input data because the JSON parser will encode the data immediately.
-        auto temp = byDefault ? slots : duplicate(slots);
+    auto applied = false;
 
-        //parsing slot json
-        LottieParser parser(temp, dirName, builder->expressions());
-        parser.comp = comp;
-
-        auto idx = 0;
-        auto succeed = false;
-        while (auto sid = parser.sid(idx == 0)) {
-            auto applied = false;
-            ARRAY_FOREACH(p, comp->slots) {
-                if (strcmp((*p)->sid, sid)) continue;
-                if (parser.apply(*p, byDefault)) succeed = applied = true;
-                break;
-            }
-            if (!applied) parser.skip();
-            ++idx;
-        }
-        tvg::free((char*)temp);
-        rebuild = succeed;
-        overridden |= succeed;
-        return rebuild;
-    //reset slots
-    } else if (overridden) {
+    // Reset all slots if slotcode is 0
+    if (slotcode == 0) {
         ARRAY_FOREACH(p, comp->slots) (*p)->reset();
-        overridden = false;
-        rebuild = true;
+        applied = true;
+    } else {
+        //Find the custom slot with the slotcode
+        INLIST_FOREACH(this->slots, slot) {
+            if (slot->code != slotcode) continue;
+            //apply the custom slot property to the targets.
+            ARRAY_FOREACH(p, slot->props) {
+                p->target->apply(p->prop, byDefault);
+            }
+            applied = true;
+            break;
+        }
+    }
+    curSlot = slotcode;
+    if (applied) build = true;
+    return applied;
+}
+
+
+bool LottieLoader::del(uint32_t slotcode, bool byDefault)
+{
+    if (comp->slots.empty() || slotcode == 0 || !ready()) return false;
+
+    // Search matching value and remove
+    INLIST_SAFE_FOREACH(this->slots, slot) {
+        if (slot->code != slotcode) continue;
+        if (!byDefault) {
+            ARRAY_FOREACH(p, slot->props) {
+                p->target->reset();
+            }
+            build = true;
+        }
+        this->slots.remove(slot);
+        delete(slot);
+        break;
     }
     return true;
+}
+
+
+uint32_t LottieLoader::gen(const char* slots, bool byDefault)
+{
+    if (!slots || !ready() || comp->slots.empty()) return 0;
+
+    //parsing slot json
+    auto temp = byDefault ? slots : duplicate(slots);
+    LottieParser parser(temp, dirName, builder->expressions());
+    parser.comp = comp;
+    
+    auto idx = 0;
+    auto custom = new LottieCustomSlot(djb2Encode(slots));
+
+    //Generates list of the custom slot overriding
+    while (auto sid = djb2Encode(parser.sid(idx == 0))) {
+        //Associates the overrding target to apply for the current custom slot
+        auto found = false;
+        ARRAY_FOREACH(p, comp->slots) {
+            if ((*p)->sid != sid) continue;  //find target
+            if (auto prop = parser.parse(*p)) custom->props.push({prop, *p});
+            found = true;
+            break;
+        }
+
+        if (!found) parser.skip(); //skip the value if the target slot is not found
+        ++idx;
+    }
+
+    tvg::free((char*)temp);
+
+    //Success, valid custom slot.
+    if (custom->props.count > 0) {
+        this->slots.back(custom);
+        return custom->code;
+    }
+
+    delete(custom);
+    return 0;
 }
 
 
@@ -383,7 +427,7 @@ void LottieLoader::sync()
 {
     done();
 
-    if (rebuild) run(0);
+    if (build) run(0);
 }
 
 
@@ -468,4 +512,21 @@ bool LottieLoader::assign(const char* layer, uint32_t ix, const char* var, float
     comp->root->assign(layer, ix, var, val);
 
     return true;
+}
+
+
+bool LottieLoader::quality(uint8_t value)
+{
+    if (!ready()) return false;
+    if (comp->quality != value) {
+        comp->quality = value;
+        build = true;
+    }
+    return true;
+}
+
+
+void LottieLoader::set(const AssetResolver* resolver)
+{
+    builder->resolver = resolver;
 }

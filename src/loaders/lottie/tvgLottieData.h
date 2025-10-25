@@ -46,6 +46,15 @@ struct ColorStop
 {
     Fill::ColorStop* data = nullptr;
     Array<float>* input = nullptr;
+
+    void copy(const ColorStop& rhs, uint32_t cnt)
+    {
+        if (rhs.data) {
+            data = tvg::malloc<Fill::ColorStop*>(sizeof(Fill::ColorStop) * cnt);
+            memcpy(data, rhs.data, sizeof(Fill::ColorStop) * cnt);
+        }
+        if (rhs.input) TVGERR("LOTTIE", "Must be populated!");
+    }
 };
 
 
@@ -69,6 +78,12 @@ struct TextDocument
     float tracking = 0.0f;
     float justify = 0.0f;    //horizontal alignment
     uint8_t caps = 0;        //0: Regular, 1: AllCaps, 2: SmallCaps
+
+    void copy(const TextDocument& rhs)
+    {
+        text = duplicate(rhs.text);
+        name = duplicate(rhs.name);
+    }
 };
 
 
