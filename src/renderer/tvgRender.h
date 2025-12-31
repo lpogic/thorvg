@@ -227,7 +227,7 @@ struct RenderPath
     Array<PathCommand> cmds;
     Array<Point> pts;
 
-    bool empty()
+    bool empty() const
     {
         return pts.empty();
     }
@@ -265,6 +265,56 @@ struct RenderPath
         cmds.push(PathCommand::CubicTo);
     }
 
+    Point point(float progress)
+    {
+        if (progress <= 0.0f) return pts.first();
+        else if (progress >= 1.0f) return pts.last();
+
+        auto pleng = tvg::length(cmds.data, cmds.count, pts.data, pts.count) * progress;
+        auto cleng = 0.0f;
+        auto p = pts.data;
+        auto c = cmds.data;
+        Point curr{}, start{}, next{};
+
+        while (c < cmds.data + cmds.count) {
+            switch (*c) {
+                case PathCommand::MoveTo: {
+                    curr = start = *p++;
+                    break;
+                }
+                case PathCommand::LineTo: {
+                    next = *p;
+                    auto segLen = tvg::length(curr, next);
+                    if (cleng + segLen >= pleng) return lerp(curr, next, (pleng - cleng) / segLen);
+                    cleng += segLen;
+                    curr = *p++;
+                    break;
+                }
+                case PathCommand::CubicTo: {
+                    Bezier bz = {curr, *p, *(p + 1), *(p + 2)};
+                    auto segLen = bz.length();
+                    if (cleng + segLen >= pleng) return bz.at((pleng - cleng) / segLen);
+                    cleng += segLen;
+                    curr = *(p + 2);
+                    p += 3;
+                    break;
+                }
+                case PathCommand::Close: {
+                    auto segLen = tvg::length(curr, start);
+                    if (cleng + segLen >= pleng) return lerp(curr, start, (pleng - cleng) / segLen);
+                    cleng += segLen;
+                    curr = start;
+                    break;
+                }
+            }
+            ++c;
+        }
+        return curr;
+    }
+
+    /* Optimize path in screen space with merging collinear lines,
+       collapsing zero length lines, and removing unnecessary cubic beziers. */
+    void optimize(RenderPath& out, const Matrix& matrix) const;
     bool bounds(const Matrix* m, BBox& box);
 };
 
@@ -312,7 +362,7 @@ struct RenderStroke
         tvg::free(dash.pattern);
         dash = rhs.dash;
         if (rhs.dash.count > 0) {
-            dash.pattern = tvg::malloc<float*>(sizeof(float) * rhs.dash.count);
+            dash.pattern = tvg::malloc<float>(sizeof(float) * rhs.dash.count);
             memcpy(dash.pattern, rhs.dash.pattern, sizeof(float) * rhs.dash.count);
         }
 
@@ -354,8 +404,7 @@ struct RenderShape
 
     bool trimpath() const
     {
-        if (!stroke) return false;
-        return stroke->trim.valid();
+        return stroke ? stroke->trim.valid() : false;
     }
 
     bool strokeFirst() const
@@ -365,8 +414,7 @@ struct RenderShape
 
     float strokeWidth() const
     {
-        if (!stroke) return 0;
-        return stroke->width;
+        return stroke ? stroke->width : 0.0f;
     }
 
     bool strokeFill(uint8_t* r, uint8_t* g, uint8_t* b, uint8_t* a) const
@@ -383,8 +431,7 @@ struct RenderShape
 
     const Fill* strokeFill() const
     {
-        if (!stroke) return nullptr;
-        return stroke->fill;
+        return stroke ? stroke->fill : nullptr;
     }
 
     uint32_t strokeDash(const float** dashPattern, float* offset) const
@@ -397,20 +444,17 @@ struct RenderShape
 
     StrokeCap strokeCap() const
     {
-        if (!stroke) return StrokeCap::Square;
-        return stroke->cap;
+        return stroke ? stroke->cap : StrokeCap::Square;
     }
 
     StrokeJoin strokeJoin() const
     {
-        if (!stroke) return StrokeJoin::Bevel;
-        return stroke->join;
+        return stroke ? stroke->join : StrokeJoin::Bevel;
     }
 
     float strokeMiterlimit() const
     {
-        if (!stroke) return 4.0f;
-        return stroke->miterlimit;;
+        return stroke ? stroke->miterlimit : 4.0f;
     }
 
     bool strokeDash(RenderPath& out) const;
@@ -437,7 +481,7 @@ struct RenderEffectGaussianBlur : RenderEffect
     {
         auto inst = new RenderEffectGaussianBlur;
         inst->sigma = std::max((float) va_arg(args, double), 0.0f);
-        inst->direction = std::min(va_arg(args, int), 2);
+        inst->direction = tvg::clamp(va_arg(args, int), 0, 2);
         inst->border = std::min(va_arg(args, int), 1);
         inst->quality = std::min(va_arg(args, int), 100);
         inst->type = SceneEffect::GaussianBlur;
@@ -531,7 +575,7 @@ struct RenderEffectTritone : RenderEffect
     }
 };
 
-class RenderMethod
+struct RenderMethod
 {
 private:
     uint32_t refCnt = 0;

@@ -507,7 +507,7 @@ struct LottiePathSet : LottieProperty
     LottieScalarFrame<PathSet>& newFrame()
     {
         if (!frames) {
-            frames = tvg::calloc<Array<LottieScalarFrame<PathSet>>*>(1, sizeof(Array<LottieScalarFrame<PathSet>>));
+            frames = tvg::calloc<Array<LottieScalarFrame<PathSet>>>(1, sizeof(Array<LottieScalarFrame<PathSet>>));
         }
         if (frames->count + 1 >= frames->reserved) {
             auto old = frames->reserved;
@@ -561,7 +561,7 @@ struct LottiePathSet : LottieProperty
         //interpolate 2 frames
         auto s = frame->value.pts;
         auto e = (frame + 1)->value.pts;
-        auto interpPts = tvg::malloc<Point*>(frame->value.ptsCnt * sizeof(Point));
+        auto interpPts = tvg::malloc<Point>(frame->value.ptsCnt * sizeof(Point));
         auto p = interpPts;
 
         for (auto i = 0; i < frame->value.ptsCnt; ++i, ++s, ++e, ++p) {
@@ -705,7 +705,7 @@ struct LottieColorStop : LottieProperty
     LottieScalarFrame<ColorStop>& newFrame()
     {
         if (!frames) {
-            frames = tvg::calloc<Array<LottieScalarFrame<ColorStop>>*>(1, sizeof(Array<LottieScalarFrame<ColorStop>>));
+            frames = tvg::calloc<Array<LottieScalarFrame<ColorStop>>>(1, sizeof(Array<LottieScalarFrame<ColorStop>>));
         }
         if (frames->count + 1 >= frames->reserved) {
             auto old = frames->reserved;
@@ -813,7 +813,7 @@ struct LottieColorStop : LottieProperty
                 frames = rhs.frames;
                 rhs.frames = nullptr;
             } else {
-                frames = tvg::calloc<Array<LottieScalarFrame<ColorStop>>*>(1, sizeof(Array<LottieScalarFrame<ColorStop>>));
+                frames = tvg::calloc<Array<LottieScalarFrame<ColorStop>>>(1, sizeof(Array<LottieScalarFrame<ColorStop>>));
                 *frames = *rhs.frames;
                 for (uint32_t i = 0; i < (*rhs.frames).count; ++i) {
                     (*frames)[i].value.copy((*rhs.frames)[i].value, rhs.count);
@@ -970,9 +970,10 @@ struct LottieTextDoc : LottieProperty
 struct LottieBitmap : LottieProperty
 {
     union {
-        char* b64Data = nullptr;
+        char* data = nullptr;
         char* path;
     };
+    Picture *picture = nullptr;
     char* mimeType = nullptr;
     uint32_t size = 0;
     float width = 0.0f;
@@ -992,10 +993,15 @@ struct LottieBitmap : LottieProperty
 
     void release()
     {
-        tvg::free(b64Data);
+        if (picture) {
+            picture->unref();
+            picture = nullptr;
+        }
+
+        tvg::free(data);
         tvg::free(mimeType);
 
-        b64Data = nullptr;
+        data = nullptr;
         mimeType = nullptr;
     }
 
@@ -1008,18 +1014,13 @@ struct LottieBitmap : LottieProperty
     {
         if (LottieProperty::copy(&rhs, shallow)) return;
 
-        if (shallow) {
-            b64Data = rhs.b64Data;
-            mimeType = rhs.mimeType;
-            rhs.b64Data = nullptr;
-            rhs.mimeType = nullptr;
-        } else {
-            //TODO: optimize here by avoiding data copy
-            TVGLOG("LOTTIE", "Shallow copy of the image data!");
-            b64Data = duplicate(rhs.b64Data);
-            if (rhs.mimeType) mimeType = duplicate(rhs.mimeType);
+        release();
+
+        if (rhs.picture) {
+            picture = rhs.picture;
+            picture->ref();
         }
-        size = rhs.size;
+
         width = rhs.width;
         height = rhs.height;
     }

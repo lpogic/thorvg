@@ -38,12 +38,12 @@ class Stroker
         Point prevPtDir;
     };
 public:
-    Stroker(GlGeometryBuffer* buffer, float strokeWidth);
-    void run(const RenderShape& rshape, const Matrix& m);
+    Stroker(GlGeometryBuffer* buffer, float strokeWidth, StrokeCap cap, StrokeJoin join);
+    void run(const RenderShape& rshape, const RenderPath& path, const Matrix& m);
+    void run(const RenderPath& path, const Matrix& m);
     RenderRegion bounds() const;
 
 private:
-    void run(const RenderPath& path, const Matrix& m);
 
     float radius() const
     {
@@ -71,7 +71,7 @@ private:
     State mState = {};
     Point mLeftTop = {0.0f, 0.0f};
     Point mRightBottom = {0.0f, 0.0f};
-    Point mScale;
+    float mScale;
 };
 
 class BWTessellator
@@ -80,6 +80,7 @@ public:
     BWTessellator(GlGeometryBuffer* buffer);
     void tessellate(const RenderPath& path, const Matrix& matrix);
     RenderRegion bounds() const;
+    bool convex = true;
 
 private:
     uint32_t pushVertex(float x, float y);
@@ -87,6 +88,10 @@ private:
 
     GlGeometryBuffer* mBuffer;
     BBox bbox = {};
+    Point firstPt = {};
+    Point prevPt = {};
+    Point prevEdge = {};
+    int8_t winding = -1;   //0: unknown, 1: CW, -1: CCW
 };
 
 }  // namespace tvg

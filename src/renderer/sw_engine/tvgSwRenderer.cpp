@@ -20,14 +20,15 @@
  * SOFTWARE.
  */
 
-#ifdef THORVG_SW_OPENMP_SUPPORT
-    #include <omp.h>
-#endif
 #include <algorithm>
 #include <atomic>
 #include "tvgSwCommon.h"
 #include "tvgTaskScheduler.h"
 #include "tvgSwRenderer.h"
+
+#ifdef THORVG_OPENMP_SUPPORT
+    #include <omp.h>
+#endif
 
 /************************************************************************/
 /* Internal Class Implementation                                        */
@@ -168,7 +169,7 @@ struct SwShapeTask : SwTask
             auto clipper = static_cast<SwTask*>(*p);
             auto clipShapeRle = shape.rle ? clipper->clip(shape.rle) : true;
             auto clipStrokeRle = shape.strokeRle ? clipper->clip(shape.strokeRle) : true;
-            if (!clipShapeRle && !clipStrokeRle) goto err;
+            if (!clipShapeRle || !clipStrokeRle) goto err;
         }
 
         valid = true;
@@ -235,12 +236,12 @@ struct SwImageTask : SwTask
                     if (!nodirty) dirtyRegion->add(prvBox, curBox);
                     return;
                 }
-            }
+            } else imageFree(image);
         }
         goto end;
     err:
         curBox.reset();
-        rleReset(image.rle);
+        imageReset(image);
     end:
         imageDelOutline(image, mpool, tid);
         if (!nodirty) dirtyRegion->add(prvBox, curBox);
@@ -627,7 +628,7 @@ SwSurface* SwRenderer::request(int channelSize, bool square)
         //Inherits attributes from main surface
         cmp = new SwSurface(surface);
         cmp->compositor = new SwCompositor;
-        cmp->compositor->image.data = tvg::malloc<pixel_t*>(channelSize * w * h);
+        cmp->compositor->image.data = tvg::malloc<pixel_t>(channelSize * w * h);
         cmp->w = cmp->compositor->image.w = w;
         cmp->h = cmp->compositor->image.h = h;
         cmp->stride = cmp->compositor->image.stride = w;
@@ -845,6 +846,8 @@ void SwRenderer::dispose(RenderData data)
 
 void* SwRenderer::prepareCommon(SwTask* task, const Matrix& transform, const Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags)
 {
+    if (task->disposed) return task;
+
     task->surface = surface;
     task->mpool = mpool;
     task->clipBox = RenderRegion::intersect(vport, {{0, 0}, {int32_t(surface->w), int32_t(surface->h)}});
@@ -918,7 +921,7 @@ SwRenderer::SwRenderer(uint32_t threads, EngineOption op)
 {
     //initialize engine
     if (rendererCnt == -1) {
-#ifdef THORVG_SW_OPENMP_SUPPORT
+#ifdef THORVG_OPENMP_SUPPORT
         omp_set_num_threads(threads);
 #endif
         //Share the memory pool among the renderer

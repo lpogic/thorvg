@@ -1,10 +1,11 @@
-[![Discord](https://img.shields.io/badge/Community-5865f2?style=flat&logo=discord&logoColor=white)](https://discord.gg/n25xj6J6HM)
+[![LFX Health Score](https://insights.linuxfoundation.org/api/badge/health-score?project=thorvg)](https://insights.linuxfoundation.org/project/thorvg)
+[![CodeFactor](https://www.codefactor.io/repository/github/hermet/thorvg/badge)](https://www.codefactor.io/repository/github/hermet/thorvg)
+![BinarySize](https://img.shields.io/badge/Size->150kb-black)
+[![License](https://img.shields.io/badge/licence-MIT-green.svg?style=flat)](LICENSE)
 [![ThorVGPT](https://img.shields.io/badge/ThorVGPT-76A99C?style=flat&logo=openai&logoColor=white)](https://chat.openai.com/g/g-Ht3dYIwLO-thorvgpt)
 [![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/thorvg/thorvg)
+[![Discord](https://img.shields.io/badge/Community-5865f2?style=flat&logo=discord&logoColor=white)](https://discord.gg/n25xj6J6HM)
 [![OpenCollective](https://img.shields.io/badge/OpenCollective-84B5FC?style=flat&logo=opencollective&logoColor=white)](https://opencollective.com/thorvg)
-[![License](https://img.shields.io/badge/licence-MIT-green.svg?style=flat)](LICENSE)
-![BinarySize](https://img.shields.io/badge/Size->150kb-black)
-[![CodeFactor](https://www.codefactor.io/repository/github/hermet/thorvg/badge)](https://www.codefactor.io/repository/github/hermet/thorvg)
 <br>
 [![Build Ubuntu](https://github.com/thorvg/thorvg/actions/workflows/build_ubuntu.yml/badge.svg?branch=main&event=push)](https://github.com/thorvg/thorvg/actions/workflows/build_ubuntu.yml)
 [![Build Windows](https://github.com/thorvg/thorvg/actions/workflows/build_windows.yml/badge.svg?branch=main&event=push)](https://github.com/thorvg/thorvg/actions/workflows/build_windows.yml)
@@ -20,22 +21,26 @@
 [![MSYS2](https://img.shields.io/badge/msys2-Latest-orange)](https://packages.msys2.org/packages/mingw-w64-x86_64-thorvg?repo=mingw64)
 [![npm](https://img.shields.io/npm/v/@thorvg/lottie-player)](https://www.npmjs.com/package/@thorvg/lottie-player)
 [![pub](https://img.shields.io/pub/v/thorvg.svg)](https://pub.dev/packages/thorvg)
+[![Nimble](https://img.shields.io/badge/nimble-Latest-FFE953?color=orange)](https://nimble.directory/pkg/thorvg)
+[![DUB](https://img.shields.io/badge/dub-latest-orange)](https://code.dlang.org/packages/bindbc-thorvg)
+[![Homebrew](https://img.shields.io/badge/homebrew-latest-orange)](https://formulae.brew.sh/formula/thorvg)
+<br>
 
 # ThorVG
 <p align="center">
   <img width="800" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/logo/512/thorvg-banner.png">
 </p>
-ThorVG is an open-source graphics library designed for creating vector-based scenes and animations. It combines immense power with remarkable lightweight efficiency, as <i>Thor</i> embodies a dual meaning—symbolizing both thunderous strength and lightning-fast agility. Embracing the philosophy of <i>simpler is better</i>, the ThorVG project provides intuitive, user-friendly interfaces while maintaining a compact footprint and minimal overhead. <br />
+
+**Thor Vector Graphics** is an **open-source** graphics library designed for creating **vector-based scenes and animations**. It combines **high performance** with **lightweight efficiency**, as Thor embodies a dual meaning—_symbolizing both immense strength and lightning-fast agility_. Embracing the philosophy of _simplicity leads to reliability_, the ThorVG project provides **intuitive, user-friendly interfaces** while maintaining a **compact footprint** and **minimal overhead**. <br />
 <br />
-The following list shows primitives that are supported by ThorVG: <br />
-<br />
+The following primitives are supported by ThorVG: <br />
  
 - **Lines & Shapes**: rectangles, circles, and paths with coordinate control
 - **Filling**: solid colors, linear & radial gradients, and path clipping
 - **Stroking**: stroke width, joins, caps, dash patterns, and trimming
 - **Scene Management**: retainable scene graph and object transformations
 - **Composition**: various blending and masking
-- **Text**: unicode characters with horizontal text layout using scalable fonts (TTF)
+- **Text**: unicode characters with horizontal multi-line text layout using scalable fonts (TTF)
 - **Images**: SVG, JPG, PNG, WebP, and raw bitmaps
 - **Effects**: blur, drop shadow, fill, tint, tritone and color replacement
 - **Animations**: Lottie
@@ -44,23 +49,37 @@ The following list shows primitives that are supported by ThorVG: <br />
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_primitives.png">
 </p>
 
-### Structural Design
+### Lightweight Design
 ​ThorVG is designed for a wide range of programs, offering adaptability for integration and use in various applications and systems. It achieves this through a single binary with selectively buildable, modular components in a building block style. This ensures both optimal size and easy maintenance. <br />
-<br/>
+
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_structure.png">
 </p>
-If your program includes the main renderer, you can seamlessly utilize ThorVG APIs by transitioning drawing contexts between the main renderer and ThorVG. Throughout these API calls, ThorVG effectively serializes drawing commands among volatile paint nodes. Subsequently, it undertakes synchronous or asynchronous rendering via its backend raster engines. Additionally, ThorVG is adept at handling vector images, including formats like SVG, and it remains adaptable for accommodating additional popular formats as needed. In the rendering process, the library may generate intermediate frame buffers for scene compositing, though only when essential. The accompanying diagram provides a concise overview of how to effectively incorporate ThorVG within your system.<br />
-<br />
+
+The core library of ThorVG maintains a binary size of approximately **150KB**. This is significantly smaller compared to graphics engines designed primarily for desktop environments and offers the following advantages.<br />
+
+- **Memory Efficiency**: Thanks to its low runtime memory usage, ThorVG operates stably even on low-spec systems.
+- **Fast Boot**: The library loads and initializes quickly, improving the overall startup speed of applications.
+- **Low Size Deployment:** With its small code and resource footprint, ThorVG is well-suited for embedded systems, IoT devices, and network-constrained environments.
+
+### Broad Portability
+ThorVG is based on the **C++** standard and provides consistent functionality across various platforms through an abstraction layer that minimizes dependence on specific operating systems or hardware. <br />
+
+- **Extensive Platform Support**: ThorVG is compatible with desktop operating systems such as **Windows**, **macOS**, and **Linux**, as well as mobile platforms like **Android** and **iOS**, and embedded systems including **Tizen** and **RTOS**-based platforms.
+- **Ultra-Light Microcontroller Support**: ThorVG has been shown to run on microcontrollers like the **ESP32**, demonstrating its efficiency even within environments with highly limited memory and storage.
+- **Headless Rendering Support**: ThorVG can perform rendering without a display server, enabling use cases such as server-side graphics processing or offline rendering tools.
+
+If your program includes the main renderer, you can seamlessly utilize ThorVG APIs by transitioning drawing contexts between the main renderer and ThorVG. Throughout these API calls, ThorVG effectively serializes drawing commands among volatile paint nodes. Subsequently, it undertakes synchronous or asynchronous rendering via its render-backend engines. Additionally, ThorVG is adept at handling vector images, including formats like SVG and Lottie, and it remains adaptable for accommodating additional popular formats as needed. In the rendering process, the library may generate intermediate frame buffers for scene compositing, though only when essential. The accompanying diagram provides a concise overview of how to effectively incorporate ThorVG within your system.<br />
+
 <p align="center">
   <img width="900" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_flow.png">
 </p>
 
 ### Threading
-ThorVG incorporates a threading mechanism that aims to seamlessly acquire subsequent scenes without unnecessary delays. It operates using a finely-tuned task scheduler based on thread pools, encompassing various tasks such as encoding, decoding, updating, and rendering. This design ensures that all tasks can effectively leverage multi-processing capabilities.<br />
+ThorVG incorporates a threading mechanism designed to seamlessly retrieve upcoming scenes without unnecessary delays. It utilizes a finely-tuned task scheduler based on thread pools to handle a variety of tasks, including encoding, decoding, updating, and rendering. This architecture ensures efficient use of multi-core processing.<br />
 <br />
-The task scheduler has been meticulously crafted to conceal complexity, streamline integration, and enhance user convenience. Therefore, the policy it employs is optional, allowing users to select it based on their specific requirements.<br />
-<br />
+The task scheduler is carefully designed to abstract complexity, simplify integration, and enhance user convenience. Its use is optional, allowing users to adopt it based on their specific needs.<br />
+
 <p align="center">
   <img width="900" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_thread.png">
 </p>
@@ -69,35 +88,32 @@ The task scheduler has been meticulously crafted to conceal complexity, streamli
 ThorVG supports smart partial rendering, which enables more efficient rendering workflows by updating only the portions of a vector scene that have changed. By internally tracking modified regions, it minimizes unnecessary redraws and optimizes overall performance. This feature provides significant benefits in scenarios such as UI rendering, design tools, or applications where large parts of the scene remain static and only small elements update between frames. In such cases, avoiding full-scene rendering can greatly reduce computational workload and improve energy efficiency—making it particularly valuable on mobile and embedded systems.<br/>
 <br/>
 The following figure illustrates the geometry changes and highlights the minimal redraw region (outlined in red) that needs to be updated. Only the modified area between the previous and current frames is selectively redrawn, significantly improving performance.</br>
-<br />
+
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_partial.png">
 </p>
 
 Please note that in highly dynamic content—such as fast-paced games or full-screen animations where nearly all objects change every frame—partial rendering provides little to no benefit and may even introduce minor overhead. In these scenarios, full-scene rendering is typically the better choice. For a practical showcase, visit [this page](https://hermet.github.io/partial-test/) demonstrating a performance comparison of partial rendering using ThorVG's software renderer.<br />
-<br />
 
 ### Render Backends
-Today, ThorVG provides its own implementation of multiple raster engines, allowing you to choose the one that best suits your app and system preferences.
+Today, ThorVG provides its own implementation of multiple render-backend engines, allowing you to choose the one that best suits your app and system preferences.
 <br/>
 
 - CPU/SIMD (Software)
 - OpenGL/ES
 - WebGL
 - WebGPU
-<br/>
 
 ThorVG is ahead of the curve, particularly in the web ecosystem. WebGPU introduces next-generation APIs similar to Vulkan, leveraging compute shaders and providing low-overhead, modern GPU access for more aggressive optimization strategies and broader applications. Building on this, ThorVG fully supports vector rendering features within its specification on top of WebGPU. Additionally, by abstracting underlying hardware graphics accelerations such as Metal, Vulkan, and DirectX, ThorVG ensures seamless adoption across various systems, regardless of the installed hardware accelerations.
-<br/>
+
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_webgpu.png">
-</p>
 
 ### Supported Platforms
-ThorVG is designed to be portable across a wide range of devices, including small IoT devices, embedded systems, mobile platforms, desktop environments, and the web. It is actively under development, with ongoing efforts to expand support for essential platforms as needed. Currently, major supported platforms include: <br />
-<br />
+ThorVG is designed to be portable across a wide range of devices, including small IoT devices, embedded systems, mobile platforms, game consoles, desktop environments, and the web. It is actively under development, with continuous efforts to expand support for essential platforms as needed. Currently, the major supported platforms include:<br />
+
 <p align="center">
-  <img width="600" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_platforms.png">
+  <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_platforms.png">
 </p>
 
 ## Contents
@@ -106,9 +122,6 @@ ThorVG is designed to be portable across a wide range of devices, including smal
     - [Build and Install](#build-and-install)
     - [Build with Visual Studio](#build-with-visual-studio)
     - [Build with Xcode](#build-with-xcode)
-    - [Install with vcpkg](#install-with-vcpkg)
-    - [Install with Conan](#install-with-conan)
-    - [Install with MSYS2](#install-with-msys2)
   - [Quick Start](#quick-start)
   - [SVG](#svg)
   - [Lottie](#lottie)
@@ -120,18 +133,22 @@ ThorVG is designed to be portable across a wide range of devices, including smal
     - [Godot](#godot)
     - [Lottie Creator](#lottie-creator)
     - [LVGL](#lvgl)
+    - [Segger](#segger)
+    - [TinyPiXOS](#tinypixos)
     - [Tizen](#tizen)
   - [Interactive App](#interactive-app)
-  - [References](#references)
-  - [Documentation](#documentation)
   - [Examples](#examples)    
   - [Tools](#tools)
     - [ThorVG Viewer](#thorvg-viewer)
     - [Lottie to GIF](#lottie-to-gif)
     - [SVG to PNG](#svg-to-png)
+  - [Related Projects](#related-projects)
   - [API Bindings](#api-bindings)
+  - [Documentation](#documentation)
+  - [References](#references) 
   - [Dependencies](#dependencies)
   - [Contributors](#contributors)
+  - [Partners](#partners)
   - [Sponsors](#sponsors)
   - [Communication](#communication)
 
@@ -166,48 +183,6 @@ meson setup builddir --backend=vs
 If you want to create Xcode project files, use the command `--backend=xcode`. The resulting solution file `thorvg.xcodeproj` will be located in the build folder.
 ```
 meson setup builddir --backend=xcode
-```
-
-### Install with vcpkg
-You can download and install pre-packaged ThorVG using the [vcpkg](https://vcpkg.io/en/index.html) package manager.
-
-Clone the vcpkg repo. Make sure you are in the directory you want the tool installed to before doing this.
-```
-git clone https://github.com/Microsoft/vcpkg.git
-```
-Run the bootstrap script to build the vcpkg.
-```
-./bootstrap-vcpkg.sh
-```
-Install the ThorVG package.
-```
-./vcpkg install thorvg
-```
-
-### Install with Conan
-You can download and install pre-packaged ThorVG using the [Conan](https://conan.io/) package manager.
-
-Follow the instructions on [this page on how to set up Conan](https://conan.io/downloads).
-
-Install the ThorVG package:
-
-```
-conan install --requires="thorvg/[*]" --build=missing
-```
-
-### Install with MSYS2
-You can download and install pre-packaged ThorVG using the [MSYS2](https://www.msys2.org/) package manager.
-
-Download and execute the MSYS2 installer on the web page above and follow the steps. When done, just launch one of the terminals in the start menu, according to the architecture and compiler you want (either 32 or 64 bits, with MSVCRT or UCRT library). Then you can install the ThorVG package :
-
-```
-pacman -S thorvg
-```
-
-To update to a newer release (and update all the packages, which is preferable), run :
-
-```
-pacman -Syu
 ```
 
 [Back to contents](#contents)
@@ -347,7 +322,7 @@ The result is:
 <br />
 ## Lottie
 
-ThorVG supports the most powerful Lottie Animation features ([see dotLottie Player](https://lottiefiles.com/supported-features)). Lottie is an industry standard, JSON-based vector animation file format that enables seamless distribution of animations on any platform, akin to shipping static assets. These files are compact and compatible with various devices, scaling up or down without pixelation. With Lottie, you can easily create, edit, test, collaborate, and distribute animations in a user-friendly manner. For more information, please visit [Lottie Animation Community](https://lottie.github.io/)' website. <br />
+ThorVG supports the most powerful [Lottie Animation features](https://github.com/thorvg/thorvg/wiki/Lottie-Support). Lottie is an industry standard, JSON-based vector animation file format that enables seamless distribution of animations on any platform, akin to shipping static assets. These files are compact and compatible with various devices, scaling up or down without pixelation. With Lottie, you can easily create, edit, test, collaborate, and distribute animations in a user-friendly manner. For more information, please visit [Lottie Animation Community](https://lottie.github.io/)' website. <br />
 <br />
 ThorVG offers great flexibility in building its binary. Besides serving as a general graphics engine, it can be configured as a compact Lottie animation playback library with specific build options:
 
@@ -387,39 +362,42 @@ Let's suppose the progress variable determines the position of the animation, ra
   <img width="600" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_lottie.gif">
 </p>
 
-Please check out the [ThorVG Test App](https://thorvg-perf-test.vercel.app/) to see the performance of various Lottie animations powered by ThorVG. If you're working on the frontend, you can also download the ThorVG npm package [here](https://www.npmjs.com/package/@thorvg/lottie-player). 
+Please check out the [ThorVG Test App](https://thorvg-perf-test.vercel.app/) to see the performance of various Lottie animations powered by ThorVG. If you're working on the frontend, you can also download the ThorVG npm package [here](https://www.npmjs.com/package/@thorvg/lottie-player).</br>
 
 [Back to contents](#contents)
 <br />
 <br />
 ## In Practice
 ### Canva iOS
-[Canva](https://www.canva.com), a leading visual communication platform, is a household name among creators, marketers, designers, students, and more, with millions of users worldwide. It empowers users to create stunning visual content with a user-friendly interface and a vast library of templates and design elements. The Canva iOS app transitioned from the existing Lottie animation engine to ThorVG for Lottie animations, resulting in approximately an 80% improvement in rendering speed and a 70% reduction in peak memory usage.
+[Canva](https://www.canva.com), is a popular visual communication platform used by millions worldwide. Known for its intuitive interface and rich design resources, Canva empowers users to create high-quality visual content easily. The iOS app switched from its previous Lottie engine to ThorVG, achieving around 80% faster rendering and 70% lower peak memory usage.
+
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_canvaios.png">
 </p>
 
 ### dotLottie
-[dotLottie](https://dotlottie.io/) is an open-source file format that aggregates one or more Lottie files and their associated resources, such as images and fonts, into a single file. This enables an efficient and easy distribution of animations. dotLottie files are ZIP archives compressed with the Deflate compression method and carry the file extension of “.lottie”. Think of it as a superset of Lottie. [LottieFiles](https://lottiefiles.com/) aims to achieve just that. [dotLottie player](https://github.com/LottieFiles/dotlottie-rs) by LottieFiles is now powered by ThorVG.
+[dotLottie](https://dotlottie.io/) is an open-source format that combines multiple Lottie animations, assets like images and fonts, and supports features such as state machines and interactivity. It uses ZIP compression (.lottie extension) for easy and efficient distribution. As a superset of Lottie, the [dotLottie player](https://github.com/LottieFiles/dotlottie-rs) now runs on ThorVG for rendering.
+
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_dotlottie.png">
 </p>
 
 ### Espressif
 [Espressif Systems](https://www.espressif.com/en) provides [ThorVG as an official component](https://docs.espressif.com/projects/esp-iot-solution/en/latest/display/lcd/gui_solution.html#thorvg-component) within its ESP-IDF (IoT Development Framework), simplifying integration into ESP-IDF projects. This allows developers to easily incorporate ThorVG's rendering capabilities into their applications, particularly on IoT devices powered by Espressif’s ESP32 and ESP32-P4 microcontrollers.
+
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_espressif.png">
 </p>
 
 ### Flux Audio
-[Flux Audio](https://www.flux.audio/) is a cutting-edge audio technology company specializing in high-fidelity sound systems and immersive audio experiences. With a focus on delivering precision and quality, Flux Audio leverages advanced software solutions to enhance audio processing across a wide range of devices. ThorVG is integrated into the user interface of Flux products, providing efficient and scalable vector rendering for their visual elements, ensuring a sleek and responsive user experience. This collaboration highlights ThorVG’s versatility in high-performance audio platforms.
+[Flux Audio](https://www.flux.audio/) is a high-performance audio company focused on premium sound and immersive experiences. They use advanced software for consistent audio processing across devices. ThorVG powers their UI with fast, scalable vector rendering, highlighting its flexibility in modern audio platforms.
 
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_flux.jpg">
 </p>
 
 ### Godot
-ThorVG has been integrated into the [Godot](https://www.godotengine.org) project to enable the creation of sleek and visually appealing user interfaces (UIs) and vector resources in the Godot game engine. Godot is a modern game engine that is both free and open-source, offering a comprehensive range of tools. With Godot, you can concentrate on developing your game without the need to recreate existing functionalities.
+ThorVG is integrated into the Godot game engine to support sleek, high-quality vector-based user interfaces and assets. [Godot](https://www.godotengine.org) is a modern, open-source game engine with a full suite of tools, allowing developers to focus on creating games without reinventing core functionality.
 
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_godot.png">
@@ -440,12 +418,29 @@ ThorVG has been integrated into the [Godot](https://www.godotengine.org) project
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_lvgl.png">
 </p>
 
+### Segger
+[SEGGER](https://www.segger.com/) Microcontroller provides products for developing and manufacturing embedded systems, including real-time operating systems (RTOS), middleware libraries, debugging and trace probes, and programming tools. [It has adopted ThorVG](https://doc.segger.com/UM03001_emWin.html#GUI_GPU_ThorVG_ThorVG_driver) as a GPU driver to enable high-performance vector rendering for its GUI apps.
+
+<p align="center">
+  <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_segger.png">
+</p>
+
+### TinyPiXOS
+[TinyPiXOS](https://www.tinypixos.com/en/) is a lightweight, open-source Linux OS that replaces X11/Wayland with a custom C/C++ graphics stack. It includes minimal window management and GUI tools, all optimized for low resource use. ThorVG handles core GUI rendering, delivering efficient performance and high visual quality in constrained environments.
+
+<p align="center">
+  <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_tinypixos.png">
+</p>
+
 ### Tizen
 ThorVG has been integrated into the [Tizen](https://www.tizen.org) platform as the vector graphics engine. [NUI](https://docs.tizen.org/application/dotnet/guides/user-interface/nui/overview/) is the name of Tizen UI framework which is written in C#. ThorVG is the backend engine of the [NUI Vector Graphics](https://docs.tizen.org/application/dotnet/guides/user-interface/nui/vectorgraphics/Overview/) which is used for vector primitive drawings and scalable image contents such as SVG and Lottie Animation among the Tizen applications.
 
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_tizen.png">
 </p>
+</br>
+
+Would you like us to showcase your project with ThorVG? Feel free to [open an issue](https://github.com/thorvg/thorvg/issues) or submit a pull request!
 
 [Back to contents](#contents)
 <br />
@@ -464,40 +459,15 @@ Check out [Thor Janitor](https://github.com/thorvg/thorvg.janitor), an interacti
 [Back to contents](#contents)
 <br />
 <br />
-## References
-- [Universal Motion Graphics across All Platforms: Unleashing Creativity with ThorVG](https://youtu.be/qhHMycRPQ9M?si=RXAag3Fxm8R7W_I0)
-- [Canva Enhances iOS Lottie Rendering: 80% Faster and 70% More Efficient with ThorVG](https://lottiefiles.com/blog/working-with-lottie-animations/canva-enhances-ios-rendering-faster-and-efficient-with-thorvg)
-
-[Back to contents](#contents)
-<br />
-<br />
-## Documentation
-The ThorVG API documentation is available at [thorvg.org/apis](https://www.thorvg.org/apis), and can also be found directly in this repository via the [C++ API](https://github.com/thorvg/thorvg/blob/main/inc/thorvg.h) and [C API](https://github.com/thorvg/thorvg/blob/main/src/bindings/capi/thorvg_capi.h). 
-
-For comprehensive and well-structured technical information, please visit the [DeepWiki](https://deepwiki.com/thorvg/thorvg), which offers in-depth guidance on ThorVG's architecture, features, and usage.
-
-[Back to contents](#contents)
-<br />
-<br />
 ## Examples
-There are plenty of sample code in `thorvg/examples` to help you in understanding the ThorVG APIs.
-
-To execute these examples, you can build them with the following meson build option:
-```
-meson setup builddir -Dexamples=true
-```
-Note that these examples require the SDL dev package for launching. If you're using Linux-based OS, you can easily install this package from your OS distribution server. For Ubuntu, you can install it with this command.
-```
-apt-get install libsdl2-dev
-```
-Alternatively, you can read the official guidance [here](https://wiki.libsdl.org/SDL2/Installation) for other platforms. Fore more information, please visit the official [SDL](https://www.libsdl.org/) site.
+There are plenty of sample code in [thorvg.example](https://github.com/thorvg/thorvg.example) to help you in understanding the ThorVG APIs.
 
 [Back to contents](#contents)
 <br />
 <br />
 ## Tools
 ### ThorVG Viewer
-ThorVG provides the resource verification tool for the ThorVG Engine. [ThorVG viewer](https://thorvg.github.io/thorvg.viewer/) does immediate rendering via web browser running on the ThorVG web-assembly binary, allowing real-time editing of the vector elements on it. It doesn't upload your resources to any external server while allowing to export to supported formats such as GIF, so the designer resource copyright is protected.</br>
+ThorVG provides a resource verification tool for the ThorVG engine. The [ThorVG viewer](https://thorvg.github.io/thorvg.viewer/) enables instant rendering directly in the web browser using the ThorVG WebAssembly binary, allowing real-time editing of vector elements. It does not upload your resources to any external server and supports exporting to formats such as GIF, ensuring that designer copyrights remain protected.</br>
 </br>
 
 <p align="center">
@@ -571,6 +541,22 @@ Examples:
 [Back to contents](#contents)
 <br />
 <br />
+## Related Projects
+ThorVG is designed to be portable and extensible across various platforms. The following projects integrate ThorVG into specific environments or tools: </br >
+
+* [ThorVG Android](https://github.com/thorvg/thorvg.android) – Kotlin-based ThorVG support for Android.
+* [ThorVG Example](https://github.com/thorvg/thorvg.example) – An example set demonstrates how to use ThorVG's APIs.
+* [ThorVG Flutter](https://github.com/thorvg/thorvg.flutter) - A Flutter plugin for using ThorVG on Android and iOS.
+* [ThorVG Janitor](https://github.com/thorvg/thorvg.janitor) - A demo game showcasing ThorVG’s real-time rendering features.
+* [ThorVG Swift](https://github.com/thorvg/thorvg.swift) - Swift bindings for rendering vector graphics with ThorVG.
+* [ThorVG Unity](https://github.com/thorvg/thorvg.unity) – ThorVG integration for Unity using C#.
+* [ThorVG Viewer](https://github.com/thorvg/thorvg.viewer) - A browser-based viewer for ThorVG using WebAssembly.
+* [ThorVG Web](https://github.com/thorvg/thorvg.web) - WebAssembly-based integration of ThorVG for web apps.
+
+[Back to contents](#contents)
+<br />
+<br />
+
 ## API Bindings
 Our main development APIs are written in C++, but ThorVG also provides API bindings for C.
 
@@ -581,17 +567,31 @@ meson setup builddir -Dbindings="capi"
 [Back to contents](#contents)
 <br />
 <br />
+## Documentation
+The ThorVG API documentation is available at [thorvg.org/apis](https://www.thorvg.org/apis), and can also be found directly in this repository via the [C++ API](https://github.com/thorvg/thorvg/blob/main/inc/thorvg.h) and [C API](https://github.com/thorvg/thorvg/blob/main/src/bindings/capi/thorvg_capi.h). 
+
+For comprehensive and well-structured technical information, please visit the [DeepWiki](https://deepwiki.com/thorvg/thorvg), which offers in-depth guidance on ThorVG's architecture, features, and usage.
+
+[Back to contents](#contents)
+<br />
+<br />
+## References
+- [Universal Motion Graphics across All Platforms: Unleashing Creativity with ThorVG](https://youtu.be/qhHMycRPQ9M?si=RXAag3Fxm8R7W_I0)
+- [Canva Enhances iOS Lottie Rendering: 80% Faster and 70% More Efficient with ThorVG](https://lottiefiles.com/blog/working-with-lottie-animations/canva-enhances-ios-rendering-faster-and-efficient-with-thorvg)
+
+[Back to contents](#contents)
+<br />
+<br />
 ## Dependencies
 ThorVG provides flexible image loading capabilities, supporting both static and external loaders. This design ensures that even in environments lacking external libraries, users can rely on built-in static loaders for core functionality. At its core, the ThorVG library is fully self-contained and operates without mandatory external dependencies. However, several optional feature extensions are available, each with its own set of dependencies.
 
 The following outlines the dependencies for these optional features:
 
 * **GL Engine**: [OpenGL 3.3](https://www.khronos.org/opengl/), [OpenGL ES 3.0](https://www.khronos.org/opengles/), or a browser with [WebGL2](https://www.khronos.org/webgl/) support.
-* **WG Engine**: [webgpu-native v0.22](https://github.com/gfx-rs/wgpu-native) or a browser with [WebGPU](https://www.w3.org/TR/webgpu/) support.
+* **WG Engine**: [webgpu-native v0.25](https://github.com/gfx-rs/wgpu-native) or a browser with [WebGPU](https://www.w3.org/TR/webgpu/) support.
 * **PNG Loader** (external): [libpng](https://github.com/pnggroup/libpng)
 * **JPEG Loader** (external): [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo)
 * **WebP Loader** (external): [libwebp](https://developers.google.com/speed/webp/download)
-* **Examples**: [SDL2](https://www.libsdl.org/)
 
 [Back to contents](#contents)
 <br />
@@ -599,21 +599,43 @@ The following outlines the dependencies for these optional features:
 ## Contributors
 ThorVG stands as a purely open-source initiative. We are grateful to the individuals, organizations, and companies that have contributed to the development of the ThorVG project. The dedicated efforts of the individuals and entities listed below have enabled ThorVG to reach its current state.
 
-* [Individuals](https://github.com/thorvg/thorvg/blob/main/CONTRIBUTORS)
+* [Individuals](https://github.com/thorvg/thorvg/blob/main/CONTRIBUTORS.md)
+* [Godot](https://godotengine.org/)
+* [LVGL](https://lvgl.io/)
 * [Canva Pty Ltd](https://www.canva.com/)
-* [LottieFiles](https://lottiefiles.com/) by Design Barn Inc.
-* Samsung Electronics Co., Ltd
+
+[Back to contents](#contents)
+<br />
+<br />
+## Partners
+Partners engage in strategic collaboration with ThorVG, working together to shape the future of scalable, high-performance vector graphics. We acknowledge organizations that have supported ThorVG’s journey through development, integration, collaboration, and community involvement.
+
+<p align="center", href="https://www.lottiefiles.com">
+  <a href="https://www.lottiefiles.com">
+  <img width="250" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/partner_lottiefiles.jpg"  alt="LottieFiles">
+  </a>
+</p>
+
+<p align="center", href="https://wwww.samsung.com">
+  <a href="https://www.samsung.com">
+  <img width="250" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/partner_samsung.jpg"  alt="Samsung">
+  </a>
+</p>
+
+<br />
+
+If you’re interested in partnering with ThorVG, we’d love to hear from you. Please reach out at thorvg@thorvg.org
 
 [Back to contents](#contents)
 <br />
 <br />
 ## Sponsors
-We extend our gratitude to our financial sponsors, whose generous support empowers the ThorVG project. Their funding enables us to continually enhance and expand this open-source project, making it more powerful, efficient, and accessible for the entire community.
+We sincerely thank our financial sponsors for their generous support, which drives the growth and innovation of the ThorVG project. Your contributions help us make ThorVG more powerful, efficient, and accessible for everyone.
 <br/>
 <br/>
-<p align="center", href="https://lottiefiles.com">
-  <a href="https://lottiefiles.com">
-  <img width="250" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_lottiefiles.jpg"  alt="LottieFiles">
+<p align="center", href="https://www.lottiefiles.com">
+  <a href="https://www.lottiefiles.com">
+  <img width="250" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/partner_lottiefiles.jpg"  alt="LottieFiles">
   </a>
 </p>
 <br/>

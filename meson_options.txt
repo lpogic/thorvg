@@ -33,7 +33,7 @@ option('simd',
 
 option('bindings',
    type: 'array',
-   choices: ['', 'capi', 'wasm_beta'],
+   choices: ['', 'capi'],
    value: [''],
    description: 'Enable API bindings')
 
@@ -42,11 +42,6 @@ option('tools',
    choices: ['', 'svg2png', 'lottie2gif', 'all'],
    value: [''],
    description: 'Enable building thorvg tools')
-
-option('examples',
-   type: 'boolean',
-   value: false,
-   description: 'Enable building examples')
 
 option('tests',
    type: 'boolean',
@@ -70,6 +65,6 @@ option('file',
 
 option('extra',
    type: 'array',
-   choices: ['', 'opengl_es', 'lottie_expressions'],
-   value: ['lottie_expressions'],
+   choices: ['', 'opengl_es', 'lottie_exp', 'openmp'],
+   value: ['lottie_exp', 'openmp'],
    description: 'Enable support for extra options')

@@ -168,9 +168,9 @@ Point LottieTextFollowPath::position(float lenSearched, float& angle)
     auto length = [&]() -> float {
         switch (*cmds) {
             case PathCommand::MoveTo: return 0.0f;
-            case PathCommand::LineTo: return tvg::length(pts - 1, pts);
+            case PathCommand::LineTo: return tvg::length(*(pts - 1), *pts);
             case PathCommand::CubicTo: return Bezier{*(pts - 1), *pts, *(pts + 1), *(pts + 2)}.length();
-            case PathCommand::Close: return tvg::length(pts - 1, start);
+            case PathCommand::Close: return tvg::length(*(pts - 1), *start);
             default: return 0.0f;
         }
     };
@@ -248,7 +248,7 @@ void LottieSlot::apply(LottieProperty* prop, bool byDefault)
                 break;
             }
             case LottieProperty::Type::Image: {
-                if (copy) pair->prop = new LottieBitmap(static_cast<LottieImage*>(pair->obj)->data);
+                if (copy) pair->prop = new LottieBitmap(static_cast<LottieImage*>(pair->obj)->bitmap);
                 pair->obj->override(prop, !copy);
                 break;
             }
@@ -344,9 +344,9 @@ float LottieTextRange::factor(float frameNo, float totalLen, float idx)
 
 void LottieFont::prepare()
 {
-    if (!data.b64src || !name) return;
+    if (!b64src) return;
 
-    Text::load(name, data.b64src, data.size, "ttf", false);
+    Text::load(name, b64src, size, "ttf", false);
 }
 
 
@@ -354,20 +354,13 @@ void LottieImage::prepare()
 {
     LottieObject::type = LottieObject::Image;
 
+    //Prepare the Picture image
     auto picture = Picture::gen();
+    auto result = (bitmap.size > 0) ? picture->load((const char*)bitmap.data, bitmap.size, bitmap.mimeType) : picture->load(bitmap.path);
+    if (result == Result::Success) resolved = true;
+    picture->size(bitmap.width, bitmap.height);
+    bitmap.picture = picture;
     picture->ref();
-    pooler.push(picture);
-}
-
-
-void LottieImage::update()
-{
-    //Update the picture data
-    ARRAY_FOREACH(p, pooler) {
-        if (data.size > 0) (*p)->load((const char*)data.b64Data, data.size, data.mimeType);
-        else (*p)->load(data.path);
-        (*p)->size(data.width, data.height);
-    }
 }
 
 

@@ -1,7 +1,7 @@
 #ifndef _THORVG_LOTTIE_H_
 #define _THORVG_LOTTIE_H_
 
-#include <thorvg.h>
+#include "thorvg.h"
 
 namespace tvg
 {
@@ -54,7 +54,7 @@ public:
      *
      * @retval Result::InsufficientCondition In case the animation is not loaded.
      *
-     * @note Experimental API
+     * @since 1.0
      */
     Result tween(float from, float to, float progress) noexcept;
 

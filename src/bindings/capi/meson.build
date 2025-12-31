@@ -7,5 +7,5 @@ thorvg_lib_dep += [declare_dependency(
     sources : source_file
 )]
 
-install_headers('thorvg_capi.h')
+install_headers('thorvg_capi.h', subdir: 'thorvg-' + vmaj)
 headers += include_directories('.')

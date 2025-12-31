@@ -1,4 +1,4 @@
-if lottie_expressions
+if lottie_exp
     subdir('jerryscript')
 endif
 
@@ -30,5 +30,5 @@ subloader_dep += [declare_dependency(
     sources : source_file
 )]
 
-install_headers('thorvg_lottie.h')
+install_headers('thorvg_lottie.h', subdir: 'thorvg-' + vmaj)
 headers += include_directories('.')

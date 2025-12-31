@@ -47,6 +47,7 @@ struct WgRenderSettings
     WgImageData gradientData;
     WgRenderSettingsType fillType{};
     WgRenderRasterType rasterType{};
+    float opacityMultiplier = 1.0f;
     bool skip{};
 
     void update(WgContext& context, const tvg::Matrix& transform, tvg::ColorSpace cs, uint8_t opacity);
@@ -80,6 +81,7 @@ struct WgRenderDataShape: public WgRenderDataPaint
     WgMeshData meshStrokesBBox{};
     bool strokeFirst{};
     FillRule fillRule{};
+    bool convex{};
     BBox bbox;
 
     void updateBBox(BBox bb);

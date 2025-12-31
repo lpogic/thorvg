@@ -338,8 +338,8 @@ struct LottieTextRange
         LottieColor strokeColor = RGB32{255, 255, 255};
         LottieVector position = Point{0, 0};
         LottieScalar scale = Point{100, 100};
-        LottieFloat letterSpacing = 0.0f;
-        LottieFloat lineSpacing = 0.0f;
+        LottieFloat letterSpace = 0.0f;
+        LottieFloat lineSpace = 0.0f;
         LottieFloat strokeWidth = 0.0f;
         LottieFloat rotation = 0.0f;
         LottieOpacity fillOpacity = 255;
@@ -396,19 +396,19 @@ struct LottieFont
         tvg::free(style);
         tvg::free(family);
         tvg::free(name);
-        tvg::free(data.b64src);
+        tvg::free(b64src);
     }
 
-    struct {
+    union {
         char* b64src = nullptr;
-        uint32_t size = 0;
-    } data;
+        char* path;
+    };
 
     Array<LottieGlyph*> chars;
     char* name = nullptr;
     char* family = nullptr;
     char* style = nullptr;
-    size_t dataSize = 0;
+    uint32_t size = 0;
     float ascent = 0.0f;
     Origin origin = Local;
 
@@ -455,9 +455,9 @@ struct LottieText : LottieObject, LottieRenderPooler<tvg::Shape>
     struct AlignOption
     {
         enum Group : uint8_t { Chars = 1, Word = 2, Line = 3, All = 4 };
-        Group grouping = Chars;
+        Group group = Chars;
         LottieScalar anchor{};
-    } alignOption;
+    } alignOp;
 
     LottieText()
     {
@@ -478,13 +478,13 @@ struct LottieText : LottieObject, LottieRenderPooler<tvg::Shape>
 
     LottieTextDoc doc;
     LottieFont* font = nullptr;
-    LottieTextFollowPath* followPath = nullptr;
+    LottieTextFollowPath* follow = nullptr;
     Array<LottieTextRange*> ranges;
 
     ~LottieText()
     {
         ARRAY_FOREACH(p, ranges) delete(*p);
-        delete(followPath);
+        delete(follow);
     }
 };
 
@@ -867,20 +867,18 @@ struct LottieGradientStroke : LottieGradient, LottieStroke
 };
 
 
-struct LottieImage : LottieObject, LottieRenderPooler<tvg::Picture>
+struct LottieImage : LottieObject
 {
-    LottieBitmap data;
-    bool updated = false;
+    LottieBitmap bitmap;
+    bool resolved = false;
 
     void override(LottieProperty* prop, bool release = false) override
     {
-        if (release) data.release();
-        data.copy(*static_cast<LottieBitmap*>(prop), false);
-        update();
+        if (release) bitmap.release();
+        bitmap.copy(*static_cast<LottieBitmap*>(prop), false);
     }
 
     void prepare();
-    void update();
 };
 
 

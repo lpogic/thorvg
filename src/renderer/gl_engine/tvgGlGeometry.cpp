@@ -22,8 +22,8 @@
 
 #include "tvgGlCommon.h"
 #include "tvgGlGpuBuffer.h"
-#include "tvgGlTessellator.h"
 #include "tvgGlRenderTask.h"
+#include "tvgGlTessellator.h"
 
 bool GlIntersector::isPointInTriangle(const Point& p, const Point& a, const Point& b, const Point& c)
 {
@@ -134,22 +134,58 @@ bool GlIntersector::intersectImage(const RenderRegion region, const GlShape* ima
 }
 
 
-bool GlGeometry::tesselateShape(const RenderShape& rshape)
+void GlGeometry::prepare(const RenderShape& rshape)
 {
-    fill.clear();
-    BWTessellator bwTess{&fill};
     if (rshape.trimpath()) {
         RenderPath trimmedPath;
         if (rshape.stroke->trim.trim(rshape.path, trimmedPath)) {
-            bwTess.tessellate(trimmedPath, matrix);
+            trimmedPath.optimize(optPath, matrix);
+        } else {
+            optPath.clear();
         }
-    } else {
-        bwTess.tessellate(rshape.path, matrix);
+    } else rshape.path.optimize(optPath, matrix);
+}
+
+
+bool GlGeometry::tesselateShape(const RenderShape& rshape, float* opacityMultiplier)
+{
+    fill.clear();
+    convex = false;
+
+    // When the CTM scales a filled path so small that its device-space
+    // World:  [========]     // normal-sized filled path
+    // After CTM:  [.]        // thinner than 1 px in device space
+    // Handling: two points   // collapse to a 2-point handle for stability
+    if (optPath.pts.count == 2 && tvg::zero(rshape.strokeWidth())) {
+        if (tesselateLine(optPath)) {
+            // The time spent is similar to subtituting buffers in tessellation, so we just move the buffers to keep the code simple.
+            stroke.index.move(fill.index);
+            stroke.vertex.move(fill.vertex);
+            if (opacityMultiplier) *opacityMultiplier = MIN_GL_STROKE_ALPHA;
+            fillRule = rshape.rule;
+            return true;
+        }
+        return false;
     }
 
+    // Handle normal shapes with more than 2 points
+    BWTessellator bwTess{&fill};
+    bwTess.tessellate(optPath, matrix);
     fillRule = rshape.rule;
     bounds = bwTess.bounds();
+    convex = bwTess.convex;
+    if (opacityMultiplier) *opacityMultiplier = 1.0f;
+    return true;
+}
 
+
+bool GlGeometry::tesselateLine(const RenderPath& path)
+{
+    stroke.clear();
+    if (path.pts.count != 2) return false;
+    Stroker stroker(&stroke, MIN_GL_STROKE_WIDTH / scaling(matrix), StrokeCap::Butt, StrokeJoin::Bevel);
+    stroker.run(path, matrix);
+    bounds = stroker.bounds();
     return true;
 }
 
@@ -167,8 +203,8 @@ bool GlGeometry::tesselateStroke(const RenderShape& rshape)
     }
     //run stroking only if it's valid
     if (!tvg::zero(strokeWidth)) {
-        Stroker stroker(&stroke, strokeWidth);
-        stroker.run(rshape, matrix);
+        Stroker stroker(&stroke, strokeWidth, rshape.strokeCap(), rshape.strokeJoin());
+        stroker.run(rshape, optPath, matrix);
         bounds = stroker.bounds();
         return true;
     }
@@ -253,6 +289,7 @@ GlStencilMode GlGeometry::getStencilMode(RenderUpdateFlag flag)
     if (flag & RenderUpdateFlag::GradientStroke) return GlStencilMode::Stroke;
     if (flag & RenderUpdateFlag::Image) return GlStencilMode::None;
 
+    if (convex) return GlStencilMode::None;
     if (fillRule == FillRule::NonZero) return GlStencilMode::FillNonZero;
     if (fillRule == FillRule::EvenOdd) return GlStencilMode::FillEvenOdd;
 

@@ -134,14 +134,6 @@ static inline float scaling(const Matrix& m)
 }
 
 
-static inline Point scaling2D(const Matrix& m)
-{
-    auto sx = sqrtf(m.e11 * m.e11 + m.e21 * m.e21);
-    auto sy = sqrtf(m.e12 * m.e12 + m.e22 * m.e22);
-    return {sx, sy};
-}
-
-
 static inline void scale(Matrix* m, const Point& p)
 {
     m->e11 *= p.x;
@@ -255,10 +247,10 @@ static inline bool zero(const Point& p)
 }
 
 
-static inline float length(const Point* a, const Point* b)
+static inline float length(const Point& a, const Point& b)
 {
-    auto x = b->x - a->x;
-    auto y = b->y - a->y;
+    auto x = b.x - a.x;
+    auto y = b.y - a.y;
 
     if (x < 0) x = -x;
     if (y < 0) y = -y;
@@ -328,6 +320,13 @@ static inline Point operator*(const Point& lhs, const Point& rhs)
 }
 
 
+static inline void operator*=(Point& lhs, const Point& rhs)
+{
+    lhs.x *= rhs.x;
+    lhs.y *= rhs.y;
+}
+
+
 static inline Point operator*(const Point& lhs, const float rhs)
 {
     return {lhs.x * rhs, lhs.y * rhs};
@@ -386,6 +385,14 @@ static inline void log(const Point& pt)
 }
 
 
+static inline bool closed(const Point& lhs, const Point& rhs, float tolerance)
+{
+    float dx = lhs.x - rhs.x;
+    float dy = lhs.y - rhs.y;
+    return (dx * dx + dy * dy) < (tolerance * tolerance);
+}
+
+
 /************************************************************************/
 /* Line functions                                                       */
 /************************************************************************/
@@ -414,6 +421,16 @@ struct BBox
         max = {-FLT_MAX, -FLT_MAX};
     }
 };
+
+
+static inline uint32_t arcSegmentsCnt(float arcAngle, float pixelRadius) 
+{
+    if (pixelRadius < FLOAT_EPSILON) return 2;
+    static constexpr auto PX_TOLERANCE = 0.25f;
+    // Sagitta-based formula Approximation: 1 - cos(θ/2) ≈ (θ/2)²/2, so θ ≈ 2 * sqrt(2 * s/r)
+    auto segmentAngle = 2.0f * sqrtf(2.0f * PX_TOLERANCE / pixelRadius);
+    return static_cast<uint32_t>(ceilf(fabsf(arcAngle) / segmentAngle)) + 1;
+}
 
 
 /************************************************************************/

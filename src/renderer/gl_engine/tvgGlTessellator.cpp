@@ -33,25 +33,18 @@ static uint32_t _pushVertex(Array<float>& array, float x, float y)
 }
 
 
-Stroker::Stroker(GlGeometryBuffer* buffer, float width) : mBuffer(buffer), mWidth(width)
+Stroker::Stroker(GlGeometryBuffer* buffer, float width, StrokeCap cap, StrokeJoin join) : mBuffer(buffer), mWidth(width), mCap(cap), mJoin(join)
 {
 }
 
 
-void Stroker::run(const RenderShape& rshape, const Matrix& m)
+void Stroker::run(const RenderShape& rshape, const RenderPath& path, const Matrix& m)
 {
     mMiterLimit = rshape.strokeMiterlimit();
-    mCap = rshape.strokeCap();
-    mJoin = rshape.strokeJoin();
 
     RenderPath dashed;
     if (rshape.strokeDash(dashed)) run(dashed, m);
-    else if (rshape.trimpath()) {
-        RenderPath trimmedPath;
-        if (rshape.stroke->trim.trim(rshape.path, trimmedPath)) {
-            run(trimmedPath, m);
-        }
-    } else run(rshape.path, m);
+    else run(path, m);
 }
 
 
@@ -65,7 +58,7 @@ void Stroker::run(const RenderPath& path, const Matrix& m)
 {
     mBuffer->vertex.reserve(path.pts.count * 4 + 16);
     mBuffer->index.reserve(path.pts.count * 3);
-    mScale = tvg::scaling2D(m);
+    mScale = tvg::scaling(m);
 
     auto validStrokeCap = false;
     auto pts = path.pts.data;
@@ -244,27 +237,33 @@ void Stroker::join(const Point& dir)
 
 void Stroker::round(const Point &prev, const Point& curr, const Point& center)
 {
-    if (orientation(prev, center, curr) == Orientation::Linear) return;
+    auto orient = orientation(prev, center, curr);
+    if (orient == Orientation::Linear) return;
 
     mLeftTop.x = std::min(mLeftTop.x, std::min(center.x, std::min(prev.x, curr.x)));
     mLeftTop.y = std::min(mLeftTop.y, std::min(center.y, std::min(prev.y, curr.y)));
     mRightBottom.x = std::max(mRightBottom.x, std::max(center.x, std::max(prev.x, curr.x)));
     mRightBottom.y = std::max(mRightBottom.y, std::max(center.y, std::max(prev.y, curr.y)));
 
-    // Fixme: just use bezier curve to calculate step count
-    auto count = Bezier(prev * mScale, curr * mScale, radius() * length(mScale)).segments();
+    auto startAngle = tvg::atan2(prev.y - center.y, prev.x - center.x);
+    auto endAngle = tvg::atan2(curr.y - center.y, curr.x - center.x);
+
+    if (orient == Orientation::Clockwise) {
+        if (endAngle > startAngle) endAngle -= 2 * MATH_PI;
+    } else {
+        if (endAngle < startAngle) endAngle += 2 * MATH_PI;
+    }
+
+    auto arcAngle = endAngle - startAngle;
+    auto count = arcSegmentsCnt(arcAngle, radius() * mScale);
+
     auto c = _pushVertex(mBuffer->vertex, center.x, center.y);
     auto pi = _pushVertex(mBuffer->vertex, prev.x, prev.y);
-    auto step = 1.f / (count - 1);
-    auto dir = curr - prev;
+    auto step = (endAngle - startAngle) / (count - 1);
 
     for (uint32_t i = 1; i < static_cast<uint32_t>(count); i++) {
-        auto t = i * step;
-        auto p = prev + dir * t;
-        auto o_dir = p - center;
-        normalize(o_dir);
-
-        auto out = center + o_dir * radius();
+        auto angle = startAngle + step * i;
+        Point out = {center.x + cos(angle) * radius(), center.y + sin(angle) * radius()};
         auto oi = _pushVertex(mBuffer->vertex, out.x, out.y);
 
         mBuffer->index.push(c);
@@ -283,10 +282,9 @@ void Stroker::round(const Point &prev, const Point& curr, const Point& center)
 
 void Stroker::roundPoint(const Point &p)
 {
-    // Fixme: just use bezier curve to calculate step count
-    auto count = Bezier(p, p, radius()).segments() * 2;
+    auto count = arcSegmentsCnt(2.0f * MATH_PI, radius() * mScale);
     auto c = _pushVertex(mBuffer->vertex, p.x, p.y);
-    auto step = 2 * MATH_PI / (count - 1);
+    auto step = 2.0f * MATH_PI / (count - 1);
 
     for (uint32_t i = 1; i <= static_cast<uint32_t>(count); i++) {
         float angle = i * step;
@@ -446,48 +444,75 @@ void BWTessellator::tessellate(const RenderPath& path, const Matrix& matrix)
     mBuffer->vertex.reserve(ptsCnt * 2);
     mBuffer->index.reserve((ptsCnt - 2) * 3);
 
+    auto updateConvexity = [&](const Point& edge) {
+        if (!convex) return;
+        if (prevEdge.x == 0.0f && prevEdge.y == 0.0f) { prevEdge = edge; return; }
+        auto c = cross(prevEdge, edge);
+        if (zero(c)) { prevEdge = edge; return; }
+        auto sign = (c > 0) ? 1 : -1;
+        if (winding == 0) winding = sign; // The default winding is CCW, but it might be otherwise once we support unordered points.
+        else if (sign != winding) convex = false;
+        prevEdge = edge;
+    };
+
     for (uint32_t i = 0; i < cmdCnt; i++) {
         switch(cmds[i]) {
             case PathCommand::MoveTo: {
                 firstIndex = pushVertex(pts->x, pts->y);
+                firstPt = prevPt = *pts;
+                prevEdge = {};
                 prevIndex = 0;
                 pts++;
             } break;
             case PathCommand::LineTo: {
                 if (prevIndex == 0) {
                     prevIndex = pushVertex(pts->x, pts->y);
-                    pts++;
+                    prevEdge = *pts - prevPt;
+                    prevPt = *pts++;
                 } else {
+                    updateConvexity(*pts - prevPt);
                     auto currIndex = pushVertex(pts->x, pts->y);
                     pushTriangle(firstIndex, prevIndex, currIndex);
                     prevIndex = currIndex;
-                    pts++;
+                    prevPt = *pts++;
                 }
             } break;
             case PathCommand::CubicTo: {
                 Bezier curve{pts[-1], pts[0], pts[1], pts[2]};
+                if (convex) {
+                    auto e1 = curve.ctrl1 - curve.start;
+                    auto e2 = curve.ctrl2 - curve.ctrl1;
+                    auto e3 = curve.end - curve.ctrl2;
+                    if (prevIndex != 0) updateConvexity(e1);
+                    else prevEdge = e1;
+                    updateConvexity(e2);
+                    updateConvexity(e3);
+                }
 
                 auto stepCount = (curve * matrix).segments();
                 if (stepCount <= 1) stepCount = 2;
-
                 float step = 1.f / stepCount;
 
                 for (uint32_t s = 1; s <= static_cast<uint32_t>(stepCount); s++) {
                     auto pt = curve.at(step * s);
                     auto currIndex = pushVertex(pt.x, pt.y);
-
-                    if (prevIndex == 0) {
-                        prevIndex = currIndex;
-                        continue;
-                    }
-
+                    if (prevIndex == 0) { prevIndex = currIndex; continue; }
                     pushTriangle(firstIndex, prevIndex, currIndex);
                     prevIndex = currIndex;
                 }
-
+                prevPt = curve.end;
                 pts += 3;
             } break;
-            case PathCommand::Close:
+            case PathCommand::Close: {
+                if (convex && prevIndex != 0) {
+                    updateConvexity(firstPt - prevPt);
+                    if (convex && winding != 0) {
+                        auto& v = mBuffer->vertex;
+                        auto secondPt = Point{v[firstIndex * 2 + 2], v[firstIndex * 2 + 3]};
+                        updateConvexity(secondPt - firstPt);
+                    }
+                }
+            } break;
             default:
                 break;
         }

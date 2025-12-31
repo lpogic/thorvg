@@ -72,35 +72,6 @@ TEST_CASE("Load RAW Data", "[tvgPicture]")
     free(data);
 }
 
-TEST_CASE("Load RAW file and render", "[tvgPicture]")
-{
-    REQUIRE(Initializer::init() == Result::Success);
-    {
-        auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        REQUIRE(canvas);
-
-        uint32_t buffer[100*100];
-        REQUIRE(canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888) == Result::Success);
-
-        ifstream file(TEST_DIR"/rawimage_200x300.raw");
-        if (!file.is_open()) return;
-        auto data = (uint32_t*)malloc(sizeof(uint32_t) * (200*300));
-        file.read(reinterpret_cast<char *>(data), sizeof (uint32_t) * 200 * 300);
-        file.close();
-
-        auto picture = Picture::gen();
-        REQUIRE(picture);
-
-        REQUIRE(picture->load(data, 200, 300, ColorSpace::ARGB8888, false) == Result::Success);
-        REQUIRE(picture->size(100, 150) == Result::Success);
-
-        REQUIRE(canvas->push(picture) == Result::Success);
-
-        free(data);
-    }
-    REQUIRE(Initializer::term() == Result::Success);
-}
-
 TEST_CASE("Picture Size", "[tvgPicture]")
 {
     auto picture = Picture::gen();
@@ -137,6 +108,61 @@ TEST_CASE("Picture Size", "[tvgPicture]")
 
     REQUIRE(picture->size(&w, &h) == Result::Success);
     REQUIRE(picture->size(w, h) == Result::Success);
+
+    free(data);
+
+    Paint::rel(picture);
+}
+
+TEST_CASE("Picture Origin", "[tvgPicture]")
+{
+    auto picture = Picture::gen();
+    REQUIRE(picture);
+
+    float w, h;
+    REQUIRE(picture->size(&w, &h) == Result::InsufficientCondition);
+
+    //Primary
+    ifstream file(TEST_DIR"/rawimage_200x300.raw");
+    if (!file.is_open()) return;
+    auto data = (uint32_t*)malloc(sizeof(uint32_t) * (200*300));
+    file.read(reinterpret_cast<char *>(data), sizeof (uint32_t) * 200 * 300);
+    file.close();
+
+    REQUIRE(picture->load(data, 200, 300, ColorSpace::ARGB8888, false) == Result::Success);
+    REQUIRE(picture->origin(0.0f, 0.0f) == Result::Success);
+    REQUIRE(picture->origin(0.5f, 0.5f) == Result::Success);
+    REQUIRE(picture->origin(1.0f, 1.0f) == Result::Success);
+    REQUIRE(picture->origin(-1.0f, -1.0f) == Result::Success);
+
+    free(data);
+
+    Paint::rel(picture);
+}
+
+TEST_CASE("Picture Resolver", "[tvgPicture]")
+{
+    auto picture = Picture::gen();
+    REQUIRE(picture);
+
+    float w, h;
+    REQUIRE(picture->size(&w, &h) == Result::InsufficientCondition);
+
+    //Primary
+    ifstream file(TEST_DIR"/rawimage_200x300.raw");
+    if (!file.is_open()) return;
+    auto data = (uint32_t*)malloc(sizeof(uint32_t) * (200*300));
+    file.read(reinterpret_cast<char *>(data), sizeof (uint32_t) * 200 * 300);
+    file.close();
+
+    auto resolver = [](Paint* paint, const char* src, void *data) -> bool
+    {
+        return false;
+    };
+
+    REQUIRE(picture->resolver(resolver, nullptr) == Result::Success);
+
+    REQUIRE(picture->load(data, 200, 300, ColorSpace::ARGB8888, false) == Result::Success);
 
     free(data);
 
@@ -183,7 +209,9 @@ TEST_CASE("Load SVG file", "[tvgPicture]")
     REQUIRE(picture->load("invalid.svg") == Result::InvalidArguments);
 
     //Load Svg file
-    REQUIRE(picture->load(TEST_DIR"/logo.svg") == Result::Success);
+    REQUIRE(picture->load(TEST_DIR"/test1.svg") == Result::Success);
+    REQUIRE(picture->load(TEST_DIR"/test2.svg") == Result::Success);
+    REQUIRE(picture->load(TEST_DIR"/test3.svg") == Result::Success);
 
     float w, h;
     REQUIRE(picture->size(&w, &h) == Result::Success);
@@ -211,33 +239,6 @@ TEST_CASE("Load SVG Data", "[tvgPicture]")
     REQUIRE(h == 1000);
 
     Paint::rel(picture);
-}
-
-TEST_CASE("Load SVG file and render", "[tvgPicture]")
-{
-    REQUIRE(Initializer::init() == Result::Success);
-    {
-        auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        REQUIRE(canvas);
-
-        auto buffer = new uint32_t[1000*1000];
-        if (!buffer) return;
-
-        REQUIRE(canvas->target(buffer, 1000, 1000, 1000, ColorSpace::ARGB8888) == Result::Success);
-
-        auto picture = Picture::gen();
-        REQUIRE(picture);
-
-        REQUIRE(picture->load(TEST_DIR"/tag.svg") == Result::Success);
-        REQUIRE(picture->size(100, 100) == Result::Success);
-
-        REQUIRE(canvas->push(picture) == Result::Success);
-        REQUIRE(canvas->draw() == Result::Success);
-        REQUIRE(canvas->sync() == Result::Success);
-
-        delete[] buffer;
-    }
-    REQUIRE(Initializer::term() == Result::Success);
 }
 
 #endif

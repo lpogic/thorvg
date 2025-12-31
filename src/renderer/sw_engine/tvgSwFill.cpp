@@ -70,7 +70,7 @@ static uint32_t _estimateAAMargin(const Fill* fdata)
         return tvg::zero(radius) ? 0 : static_cast<uint32_t>(marginScalingFactor / radius);
     } else {
         auto grad = CONST_LINEAR(fdata);
-        auto len = length(&grad->p1, &grad->p2);
+        auto len = length(grad->p1, grad->p2);
         return tvg::zero(len) ? 0 : static_cast<uint32_t>(marginScalingFactor / len);
     }
 }
@@ -163,7 +163,8 @@ static bool _updateColorTable(SwFill* fill, const Fill* fdata, const SwSurface* 
 
         auto curr = colors + j;
         auto next = curr + 1;
-        auto delta = 1.0f / (next->offset - curr->offset);
+        auto div = next->offset - curr->offset;
+        auto delta = div != 0.0f ? (1.0f / div) : 0.0f;
         auto a2 = MULTIPLY(next->a, opacity);
 
         if (!fill->translucent && a2 < 255) fill->translucent = true;

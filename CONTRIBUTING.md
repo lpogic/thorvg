@@ -1,5 +1,9 @@
 We always appreciate your contribution. ThorVG doesn't expect patches to be perfect; instead, we value contributions that make ThorVG better than before. This page outlines the ThorVG contribution format.<br />
 <br />
+
+## Coding Convention
+Please read the [ThorVG Coding Convetion Guidance](https://github.com/thorvg/thorvg/wiki/Coding-Convention) before writing your code.
+
 ## Reviewers
 ThorVG uses GitHub infrastructure to automatically assign code reviewers for your changes. To see the full list of reviewers, please refer to the [CODEOWNERS](https://github.com/thorvg/thorvg/blob/main/CODEOWNERS) file.
 <br />
@@ -33,7 +37,7 @@ Timeout:            0<br/>
 This also suggests who might need to review your patch.
 If your change doesn't belong to any sub-modules, you can either replace this with a suitable name or skip it.
 The name should be written entirely in lowercase letters.
-  - e.g., build, doc, infra, common, sw_engine, gl_engine, svg_loader, examples, wasm, svg2png...
+  - e.g., build, doc, infra, common, sw_engine, gl_engine, svg_loader, wasm, svg2png...
 
 - [Feature] indicates the primary function or feature you modified. Typically, this represents a class or file name.
 This is an optional.
@@ -90,4 +94,4 @@ Once you've submitted a pull request (PR), please ensure the following checklist
 - Assignees: You should be assigned.
 - Labels: Mark the appropriate Patch Purpose.
 - Automated Integration Test: All must pass.
-<p align="center"><img width="1000" height="auto" src="https://github.com/thorvg/thorvg/blob/main/res/contribution.png"></p>
+<p align="center"><img width="1000" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/contribution.png"></p>

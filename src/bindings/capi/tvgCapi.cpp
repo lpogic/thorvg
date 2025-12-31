@@ -164,9 +164,9 @@ TVG_API Tvg_Result tvg_canvas_set_viewport(Tvg_Canvas canvas, int32_t x, int32_t
 /* Paint API                                                            */
 /************************************************************************/
 
-TVG_API const Tvg_Paint tvg_paint_get_parent(const Tvg_Paint paint)
+TVG_API Tvg_Paint tvg_paint_get_parent(const Tvg_Paint paint)
 {
-    return (const Tvg_Paint) reinterpret_cast<const Paint*>(paint)->parent();
+    return (Tvg_Paint) reinterpret_cast<const Paint*>(paint)->parent();
 }
 
 
@@ -944,6 +944,13 @@ TVG_API Tvg_Result tvg_text_wrap_mode(Tvg_Paint text, Tvg_Text_Wrap mode)
 }
 
 
+TVG_API Tvg_Result tvg_text_spacing(Tvg_Paint text, float letter, float line)
+{
+    if (text) return (Tvg_Result) reinterpret_cast<Text*>(text)->spacing(letter, line);
+    return TVG_RESULT_INVALID_ARGUMENT;
+}
+
+
 TVG_API Tvg_Result tvg_font_load(const char* path)
 {
     return (Tvg_Result) Text::load(path);
@@ -972,9 +979,16 @@ TVG_API Tvg_Saver tvg_saver_new()
 }
 
 
-TVG_API Tvg_Result tvg_saver_save(Tvg_Saver saver, Tvg_Paint paint, const char* path, uint32_t quality)
+TVG_API Tvg_Result tvg_saver_save_paint(Tvg_Saver saver, Tvg_Paint paint, const char* path, uint32_t quality)
 {
-    if (saver && paint && path) return (Tvg_Result) reinterpret_cast<Saver*>(saver)->save((Paint*)paint, path, quality);
+    if (saver) return (Tvg_Result) reinterpret_cast<Saver*>(saver)->save((Paint*)paint, path, quality);
+    return TVG_RESULT_INVALID_ARGUMENT;
+}
+
+
+TVG_API Tvg_Result tvg_saver_save_animation(Tvg_Saver saver, Tvg_Animation animation, const char* path, uint32_t quality, uint32_t fps)
+{
+    if (saver) return (Tvg_Result) reinterpret_cast<Saver*>(saver)->save((Animation*)animation, path, quality, fps);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
