@@ -164,6 +164,7 @@ struct FontLoader : LoadModule
     virtual void transform(Paint* paint, FontMetrics& fm, float italicShear) = 0;
     virtual void release(FontMetrics& fm) = 0;
     virtual void copy(const FontMetrics& in, FontMetrics& out) = 0;
+    virtual bool metrics(const char* text, float fontSize,  int roundMethod, float widthLimit, int indexLimit, float* width, int* index) = 0;
 };
 
 #endif //_TVG_LOAD_MODULE_H_

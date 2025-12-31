@@ -60,6 +60,7 @@ struct TtfLoader : public FontLoader
     bool get(FontMetrics& fm, char* text, RenderPath& out) override;
     void copy(const FontMetrics& in, FontMetrics& out) override;
     void release(FontMetrics& fm) override;
+    bool TtfLoader::metrics(const char* text, float fontSize,  int roundMethod, float widthLimit, int indexLimit, float* width, int* index) override;
 
 private:
     float height(uint32_t loc)
@@ -68,10 +69,10 @@ private:
     }
 
     uint32_t feedLine(float align, float box, float x, uint32_t begin, uint32_t end, Point& cursor, uint32_t& loc, RenderPath& out);
-    void wrapNone(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out);
-    void wrapChar(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out);
-    void wrapWord(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out, bool smart);
-    void wrapEllipsis(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out);
+    void wrapNone(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out);
+    void wrapChar(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out);
+    void wrapWord(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out, bool smart);
+    void wrapEllipsis(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out);
     TtfGlyphMetrics* request(uint32_t code);
     void clear();
 };

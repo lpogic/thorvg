@@ -166,7 +166,7 @@ static void _unmap(TtfLoader* loader)
 #endif //THORVG_FILE_IO_SUPPORT
 
 
-static size_t _codepoints(char** utf8)
+static size_t _codepoints(const char** utf8)
 {
     auto p = *utf8;
 
@@ -280,7 +280,7 @@ TtfGlyphMetrics* TtfLoader::request(uint32_t code)
 }
 
 
-void TtfLoader::wrapNone(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out)
+void TtfLoader::wrapNone(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out)
 {
     TtfGlyphMetrics* ltgm = nullptr;  //left side glyph between the two adjacent glyphs
     Point cursor = {};
@@ -315,7 +315,7 @@ void TtfLoader::wrapNone(FontMetrics& fm, const Point& box, char* utf8, RenderPa
 }
 
 
-void TtfLoader::wrapChar(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out)
+void TtfLoader::wrapChar(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out)
 {
     TtfGlyphMetrics* ltgm = nullptr;  //left side glyph between the two adjacent glyphs
     uint32_t line = 0;  //the begin pos of the last line among path
@@ -361,7 +361,7 @@ void TtfLoader::wrapChar(FontMetrics& fm, const Point& box, char* utf8, RenderPa
 }
 
 
-void TtfLoader::wrapWord(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out, bool smart)
+void TtfLoader::wrapWord(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out, bool smart)
 {
     TtfGlyphMetrics* ltgm = nullptr;  //left side glyph between the two adjacent glyphs
     auto line = 0;  //the begin pos of the last line among path
@@ -425,7 +425,7 @@ void TtfLoader::wrapWord(FontMetrics& fm, const Point& box, char* utf8, RenderPa
 }
 
 
-void TtfLoader::wrapEllipsis(FontMetrics& fm, const Point& box, char* utf8, RenderPath& out)
+void TtfLoader::wrapEllipsis(FontMetrics& fm, const Point& box, const char* utf8, RenderPath& out)
 {
     TtfGlyphMetrics* ltgm = nullptr;  //left side glyph between the two adjacent glyphs
     auto line = 0;  //the begin pos of the last line among path
@@ -501,7 +501,8 @@ void TtfLoader::wrapEllipsis(FontMetrics& fm, const Point& box, char* utf8, Rend
 
 void TtfLoader::transform(Paint* paint, FontMetrics& fm, float italicShear)
 {
-    auto scale = 1.0f / fm.scale;
+    auto scale = fm.fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
+    // auto scale = 1.0f / fm.scale;
     Matrix m = {scale, -italicShear * scale, italicShear * static_cast<TtfMetrics*>(fm.engine)->baseWidth * scale, 0, scale, reader.metrics.hhea.ascent * scale, 0, 0, 1};
     paint->transform(m);
 }
@@ -587,4 +588,73 @@ void TtfLoader::copy(const FontMetrics& in, FontMetrics& out)
     out = in;
     if (in.engine) out.engine = tvg::calloc<TtfMetrics*>(1, sizeof(TtfMetrics));
     *static_cast<TtfMetrics*>(out.engine) = *static_cast<TtfMetrics*>(in.engine);
+}
+
+bool TtfLoader::metrics(const char* utf8, float fontSize,  int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
+{
+    if (!*utf8) {
+        if(width) *width = 0.0f;
+        if(index) *index = 0;
+        return true;
+    }
+    
+    auto scale = fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
+
+    widthLimit = widthLimit / scale;
+    
+    TtfGlyphMetrics gmetrics;
+    Point offset = {0.0f, reader.metrics.hhea.ascent};
+    float nextOffset;
+    float lastKerning = 0.0f;
+    bool limitReached = false;
+    Point kerning = {0.0f, 0.0f};
+    auto lglyph = INVALID_GLYPH;
+
+    size_t idx = 0;
+    while (*utf8) {
+        auto code = _codepoints(&utf8);
+        auto rglyph = reader.glyph(code, &gmetrics);
+        nextOffset = offset.x + gmetrics.advance;
+        lastKerning = kerning.x;
+        if (rglyph != INVALID_GLYPH) {
+            if (lglyph != INVALID_GLYPH) {
+                reader.kerning(lglyph, rglyph, kerning);
+            }
+            nextOffset += kerning.x;
+        }
+        if (widthLimit > 0 && widthLimit < nextOffset || indexLimit >= 0 && indexLimit <= idx) {
+            limitReached = true;
+            break;
+        }
+        offset.x = nextOffset;
+        lglyph = rglyph;
+        ++idx;
+    }
+
+    switch(roundMethod) {
+        case 3: // CEIL
+            if(limitReached) {
+                if(width) *width = nextOffset * scale;
+                if(index) *index = idx + 1;
+                break;
+            }
+        case 2: // NEAREST
+            if(limitReached) {
+                if(widthLimit - offset.x > nextOffset - widthLimit) {
+                    if(width) *width = nextOffset * scale;
+                    if(index) *index = idx + 1;
+                    break;
+                }
+            }
+        case 1: // FLOOR
+            if(limitReached) {
+                if(width) *width = (offset.x + kerning.x / 2) * scale;
+                if(index) *index = idx;
+            } else {
+                if(width) *width = offset.x * scale;
+                if(index) *index = idx;
+            }
+    }
+
+    return true;
 }
