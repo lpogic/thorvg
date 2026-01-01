@@ -2108,7 +2108,7 @@ struct TVG_API Text : Paint
      * @param[out] index Maximum character index of the substring which matches given limits.
      *
      */
-    Result textMetrics(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) noexcept;
+    Result measure(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) noexcept;
 
     // END_THORVG_GUI_PATH
 

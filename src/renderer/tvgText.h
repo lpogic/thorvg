@@ -224,10 +224,10 @@ struct TextImpl : Text
         return nullptr;
     }
 
-    Result textMetrics(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
+    Result measure(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
     {
         if(!loader) return Result::InsufficientCondition;
-        return loader->metrics(text, fm.fontSize, roundMethod, widthLimit, indexLimit, width, index) ? 
+        return loader->measure(fm, text, roundMethod, widthLimit, indexLimit, width, index) ? 
             Result::Success : Result::Unknown;
     }
 };

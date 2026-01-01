@@ -161,7 +161,7 @@ Type Text::type() const noexcept
     return Type::Text;
 }
 
-Result Text::textMetrics(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) noexcept
+Result Text::measure(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) noexcept
 {
-    return TEXT(this)->textMetrics(text, roundMethod, widthLimit, indexLimit, width, index);
+    return to<TextImpl>(this)->measure(text, roundMethod, widthLimit, indexLimit, width, index);
 }
