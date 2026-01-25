@@ -68,6 +68,7 @@ thorvg_lib = library(
     'thorvg-' + vmaj,
     include_directories    : headers,
     version                : meson.project_version(),
+    soversion              : host_machine.system() != 'windows' ? vmaj : '',
     dependencies           : thorvg_lib_dep,
     install                : true,
     cpp_args               : compiler_flags,

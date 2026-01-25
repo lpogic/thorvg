@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -68,15 +68,15 @@ TVG_API Tvg_Canvas tvg_swcanvas_create(Tvg_Engine_Option op)
 }
 
 
-TVG_API Tvg_Canvas tvg_glcanvas_create()
+TVG_API Tvg_Canvas tvg_glcanvas_create(Tvg_Engine_Option op)
 {
-    return (Tvg_Canvas) GlCanvas::gen();
+    return (Tvg_Canvas) GlCanvas::gen(static_cast<EngineOption>(op));
 }
 
 
-TVG_API Tvg_Canvas tvg_wgcanvas_create()
+TVG_API Tvg_Canvas tvg_wgcanvas_create(Tvg_Engine_Option op)
 {
-    return (Tvg_Canvas) WgCanvas::gen();
+    return (Tvg_Canvas) WgCanvas::gen(static_cast<EngineOption>(op));
 }
 
 
@@ -97,9 +97,9 @@ TVG_API Tvg_Result tvg_swcanvas_set_target(Tvg_Canvas canvas, uint32_t* buffer, 
 }
 
 
-TVG_API Tvg_Result tvg_glcanvas_set_target(Tvg_Canvas canvas, void* context, int32_t id, uint32_t w, uint32_t h, Tvg_Colorspace cs)
+TVG_API Tvg_Result tvg_glcanvas_set_target(Tvg_Canvas canvas, void* display, void* surface, void* context, int32_t id, uint32_t w, uint32_t h, Tvg_Colorspace cs)
 {
-    if (canvas) return (Tvg_Result) reinterpret_cast<GlCanvas*>(canvas)->target(context, id, w, h, static_cast<ColorSpace>(cs));
+    if (canvas) return (Tvg_Result) reinterpret_cast<GlCanvas*>(canvas)->target(display, surface, context, id, w, h, static_cast<ColorSpace>(cs));
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
@@ -111,16 +111,16 @@ TVG_API Tvg_Result tvg_wgcanvas_set_target(Tvg_Canvas canvas, void* device, void
 }
 
 
-TVG_API Tvg_Result tvg_canvas_push(Tvg_Canvas canvas, Tvg_Paint paint)
+TVG_API Tvg_Result tvg_canvas_add(Tvg_Canvas canvas, Tvg_Paint paint)
 {
-    if (canvas && paint) return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->push((Paint*)paint);
+    if (canvas && paint) return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->add((Paint*)paint);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
 
-TVG_API Tvg_Result tvg_canvas_push_at(Tvg_Canvas canvas, Tvg_Paint target, Tvg_Paint at)
+TVG_API Tvg_Result tvg_canvas_insert(Tvg_Canvas canvas, Tvg_Paint target, Tvg_Paint at)
 {
-    if (canvas && target && at) return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->push((Paint*)target, (Paint*) at);
+    if (canvas && target && at) return (Tvg_Result) reinterpret_cast<Canvas*>(canvas)->add((Paint*)target, (Paint*) at);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
@@ -801,16 +801,16 @@ TVG_API Tvg_Paint tvg_scene_new()
 }
 
 
-TVG_API Tvg_Result tvg_scene_push(Tvg_Paint scene, Tvg_Paint paint)
+TVG_API Tvg_Result tvg_scene_add(Tvg_Paint scene, Tvg_Paint paint)
 {
-    if (scene && paint) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push((Paint*)paint);
+    if (scene && paint) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add((Paint*)paint);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
 
-TVG_API Tvg_Result tvg_scene_push_at(Tvg_Paint scene, Tvg_Paint paint, Tvg_Paint at)
+TVG_API Tvg_Result tvg_scene_insert(Tvg_Paint scene, Tvg_Paint paint, Tvg_Paint at)
 {
-    if (scene && paint && at) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push((Paint*)paint, (Paint*)at);
+    if (scene && paint && at) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add((Paint*)paint, (Paint*)at);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
@@ -822,44 +822,44 @@ TVG_API Tvg_Result tvg_scene_remove(Tvg_Paint scene, Tvg_Paint paint)
 }
 
 
-TVG_API Tvg_Result tvg_scene_reset_effects(Tvg_Paint scene)
+TVG_API Tvg_Result tvg_scene_clear_effects(Tvg_Paint scene)
 {
-    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::ClearAll);
+    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add(SceneEffect::Clear);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
 
-TVG_API Tvg_Result tvg_scene_push_effect_drop_shadow(Tvg_Paint scene, int r, int g, int b, int a, double angle, double distance, double sigma, int quality)
+TVG_API Tvg_Result tvg_scene_add_effect_drop_shadow(Tvg_Paint scene, int r, int g, int b, int a, double angle, double distance, double sigma, int quality)
 {
-    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::DropShadow, r, g, b, a, angle, distance, sigma, quality);
+    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add(SceneEffect::DropShadow, r, g, b, a, angle, distance, sigma, quality);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
 
-TVG_API Tvg_Result tvg_scene_push_effect_gaussian_blur(Tvg_Paint scene, double sigma, int direction, int border, int quality)
+TVG_API Tvg_Result tvg_scene_add_effect_gaussian_blur(Tvg_Paint scene, double sigma, int direction, int border, int quality)
 {
-    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::GaussianBlur, sigma, direction, border, quality);
+    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add(SceneEffect::GaussianBlur, sigma, direction, border, quality);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
 
-TVG_API Tvg_Result tvg_scene_push_effect_fill(Tvg_Paint scene, int r, int g, int b, int a)
+TVG_API Tvg_Result tvg_scene_add_effect_fill(Tvg_Paint scene, int r, int g, int b, int a)
 {
-    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::Fill, r, g, b, a);
+    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add(SceneEffect::Fill, r, g, b, a);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
 
-TVG_API Tvg_Result tvg_scene_push_effect_tint(Tvg_Paint scene, int black_r, int black_g, int black_b, int white_r, int white_g, int white_b, double intensity)
+TVG_API Tvg_Result tvg_scene_add_effect_tint(Tvg_Paint scene, int black_r, int black_g, int black_b, int white_r, int white_g, int white_b, double intensity)
 {
-    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::Tint, black_r, black_g, black_b, white_r, white_g, white_b, intensity);
+    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add(SceneEffect::Tint, black_r, black_g, black_b, white_r, white_g, white_b, intensity);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 
 
-TVG_API Tvg_Result tvg_scene_push_effect_tritone(Tvg_Paint scene, int shadow_r, int shadow_g, int shadow_b, int midtone_r, int midtone_g, int midtone_b, int highlight_r, int highlight_g, int highlight_b, int blend)
+TVG_API Tvg_Result tvg_scene_add_effect_tritone(Tvg_Paint scene, int shadow_r, int shadow_g, int shadow_b, int midtone_r, int midtone_g, int midtone_b, int highlight_r, int highlight_g, int highlight_b, int blend)
 {
-    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->push(SceneEffect::Tritone, shadow_r, shadow_g, shadow_b, midtone_r, midtone_g, midtone_b, highlight_r, highlight_g, highlight_b, blend);
+    if (scene) return (Tvg_Result) reinterpret_cast<Scene*>(scene)->add(SceneEffect::Tritone, shadow_r, shadow_g, shadow_b, midtone_r, midtone_g, midtone_b, highlight_r, highlight_g, highlight_b, blend);
     return TVG_RESULT_INVALID_ARGUMENT;
 }
 

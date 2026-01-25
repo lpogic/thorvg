@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -120,7 +120,7 @@ struct ShapeImpl : Shape
 
     bool bounds(Point* pt4, const Matrix& m, bool obb)
     {
-        auto fallback = true;  //TODO: remove this when all backend engines suppport bounds()
+        auto fallback = true;  //TODO: remove this when all backend engines support bounds()
 
         if (impl.renderer && rs.strokeWidth() > 0.0f) {
             if (impl.renderer->bounds(impl.rd, pt4, obb ? tvg::identity() : m)) {

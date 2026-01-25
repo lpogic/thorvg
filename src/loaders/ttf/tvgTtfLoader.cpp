@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -398,7 +398,7 @@ void TtfLoader::wrapWord(FontMetrics& fm, const Point& box, const char* utf8, Re
                 line = word;
                 wadv = 0;
                 ++loc;
-            //not enougth space, line wrap by character
+            //not enough space, line wrap by character
             } else if (smart) {
                 line = feedLine(fm, box.x, cursor.x, line, out.pts.count, cursor, loc, out);
             }

@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -86,7 +86,7 @@ void WgImageData::release(WgContext& context)
 
 void WgRenderSettings::update(WgContext& context, const tvg::Matrix& transform, tvg::ColorSpace cs, uint8_t opacity)
 {
-    //TODO: Update separtely according to the RenderUpdateFlag
+    //TODO: Update separately according to the RenderUpdateFlag
     settings.transform.update(transform);
     settings.options.update(cs, opacity * opacityMultiplier);
 }

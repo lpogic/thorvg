@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -141,11 +141,11 @@ public:
             shape->appendRect(0, 0, static_cast<float>(w), static_cast<float>(h), 0, 0);
             shape->fill(r, g, b);
 
-            if (canvas->push(shape) != tvg::Result::Success) return 1;
+            if (canvas->add(shape) != tvg::Result::Success) return 1;
         }
 
         //Drawing
-        canvas->push(picture);
+        canvas->add(picture);
         canvas->draw(true);
         canvas->sync();
 

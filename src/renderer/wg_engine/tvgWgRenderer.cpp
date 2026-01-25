@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -390,7 +390,7 @@ bool WgRenderer::target(WGPUDevice device, WGPUInstance instance, void* target, 
         mRenderTargetRoot.initialize(mContext, w, h);
         mCompositor.initialize(mContext, w, h);
 
-    // update render targets dimentions
+    // update render targets dimensions
     } else if ((mTargetSurface.w != w) || (mTargetSurface.h != h) || (type == 0 ? (surface != (WGPUSurface)target) : (targetTexture != (WGPUTexture)target))) {
         mRenderTargetPool.release(mContext);
         mRenderTargetRoot.release(mContext);

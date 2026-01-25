@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -205,7 +205,7 @@ private:
     void updateRoundedCorner(LottieGroup* parent, LottieObject** child, float frameNo, Inlist<RenderContext>& contexts, RenderContext* ctx);
     void updateOffsetPath(LottieGroup* parent, LottieObject** child, float frameNo, Inlist<RenderContext>& contexts, RenderContext* ctx);
 
-    RenderPath buffer;   //resusable path
+    RenderPath buffer;   //reusable path
     LottieExpressions* exps;
     Tween tween;
 };

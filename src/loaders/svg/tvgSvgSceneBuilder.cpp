@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -291,7 +291,7 @@ static Paint* _applyComposition(SvgLoaderData& loaderData, Paint* paint, const S
     }
 
     auto scene = Scene::gen();
-    scene->push(paint);
+    scene->add(paint);
 
     if (clipNode) {
         if (!_applyClip(loaderData, scene, node, clipNode, vBox, svgPath)) {
@@ -366,11 +366,11 @@ static Paint* _applyFilter(SvgLoaderData& loaderData, Paint* paint, const SvgNod
                 stdDevX *= bbox.w;
                 stdDevY *= bbox.h;
             }
-            scene->push(SceneEffect::GaussianBlur, (double)(1.25f * (direction == 2 ? stdDevY * sy : stdDevX * sx)), direction, gauss.edgeModeWrap, 55);
+            scene->add(SceneEffect::GaussianBlur, (double)(1.25f * (direction == 2 ? stdDevY * sy : stdDevX * sx)), direction, gauss.edgeModeWrap, 55);
         }
     }
 
-    scene->push(paint);
+    scene->add(paint);
 
     auto clip = Shape::gen();
     clip->appendRect(clipBox.x, clipBox.y, clipBox.w, clipBox.h);
@@ -384,7 +384,6 @@ static Paint* _applyProperty(SvgLoaderData& loaderData, SvgNode* node, Shape* vg
     SvgStyleProperty* style = node->style;
 
     //Clip transformation is applied directly to the path in the _appendClipShape function
-    if (node->transform && !clip) vg->transform(*node->transform);
     if (node->type == SvgNodeType::Doc || !node->style->display) return vg;
 
     //If fill property is nullptr then do nothing
@@ -440,6 +439,9 @@ static Paint* _applyProperty(SvgLoaderData& loaderData, SvgNode* node, Shape* vg
         //Apply the stroke color
         vg->strokeFill(style->stroke.paint.color.r, style->stroke.paint.color.g, style->stroke.paint.color.b, style->stroke.opacity);
     }
+
+    //apply transform after the local space shape bbox for gradient acquisition
+    if (node->transform && !clip) vg->transform(*node->transform);
 
     auto p = _applyFilter(loaderData, vg, node, vBox, svgPath);
     return _applyComposition(loaderData, p, node, vBox, svgPath);
@@ -806,7 +808,7 @@ static Scene* _useBuildHelper(SvgLoaderData& loaderData, const SvgNode* node, co
 
             auto clippingLayer = Scene::gen();
             clippingLayer->clip(viewBoxClip);
-            clippingLayer->push(scene);
+            clippingLayer->add(scene);
             return clippingLayer;
         }
         return scene;
@@ -953,9 +955,9 @@ static Scene* _sceneBuildHelper(SvgLoaderData& loaderData, const SvgNode* node, 
         auto child = *p;
         if (_isGroupType(child->type)) {
             if (child->type == SvgNodeType::Use)
-                scene->push(_useBuildHelper(loaderData, child, vBox, svgPath, depth + 1));
+                scene->add(_useBuildHelper(loaderData, child, vBox, svgPath, depth + 1));
             else if (!(child->type == SvgNodeType::Symbol && node->type != SvgNodeType::Use))
-                scene->push(_sceneBuildHelper(loaderData, child, vBox, svgPath, false, depth + 1));
+                scene->add(_sceneBuildHelper(loaderData, child, vBox, svgPath, false, depth + 1));
             if (child->id) scene->id = djb2Encode(child->id);
         } else {
             Paint* paint = nullptr;
@@ -964,7 +966,7 @@ static Scene* _sceneBuildHelper(SvgLoaderData& loaderData, const SvgNode* node, 
             else if (child->type != SvgNodeType::Mask) paint = _shapeBuildHelper(loaderData, child, vBox, svgPath);
             if (paint) {
                 if (child->id) paint->id = djb2Encode(child->id);
-                scene->push(paint);
+                scene->add(paint);
             }
         }
     }
@@ -1056,14 +1058,14 @@ Scene* svgSceneBuild(SvgLoaderData& loaderData, Box vBox, float w, float h, Aspe
 
     auto clippingLayer = Scene::gen();
     clippingLayer->clip(viewBoxClip);
-    clippingLayer->push(docNode);
+    clippingLayer->add(docNode);
 
     loaderData.doc->node.doc.vbox = vBox;
     loaderData.doc->node.doc.w = w;
     loaderData.doc->node.doc.h = h;
 
     auto root = Scene::gen();
-    root->push(clippingLayer);
+    root->add(clippingLayer);
 
     return root;
 }

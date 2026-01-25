@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -192,7 +192,7 @@ static bool _updateColorTable(SwFill* fill, const Fill* fdata, const SwSurface* 
     }
 
     //For repeat fill spread apply anti-aliasing between the last and first colors,
-    //othewise make sure the last color stop is represented at the end of the table.
+    //otherwise make sure the last color stop is represented at the end of the table.
     if (repeat) _applyAA(fill, iAABegin, iAAEnd);
     else fill->ctable[SW_COLOR_TABLE - 1] = rgba;
 

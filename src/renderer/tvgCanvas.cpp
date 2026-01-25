@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -58,9 +58,9 @@ const list<Paint*>& Canvas::paints() const noexcept
 }
 
 
-Result Canvas::push(Paint* target, Paint* at) noexcept
+Result Canvas::add(Paint* target, Paint* at) noexcept
 {
-    if (target) return pImpl->push(target, at);
+    if (target) return pImpl->add(target, at);
     return Result::InvalidArguments;
 }
 
@@ -176,7 +176,7 @@ GlCanvas::~GlCanvas()
 }
 
 
-Result GlCanvas::target(void* context, int32_t id, uint32_t w, uint32_t h, ColorSpace cs) noexcept
+Result GlCanvas::target(void* display, void* surface, void* context, int32_t id, uint32_t w, uint32_t h, ColorSpace cs) noexcept
 {
 #ifdef THORVG_GL_RASTER_SUPPORT
     if (cs != ColorSpace::ABGR8888S) return Result::NonSupport;
@@ -189,7 +189,7 @@ Result GlCanvas::target(void* context, int32_t id, uint32_t w, uint32_t h, Color
     auto renderer = static_cast<GlRenderer*>(pImpl->renderer);
     if (!renderer) return Result::MemoryCorruption;
 
-    if (!renderer->target(context, id, w, h, cs)) return Result::Unknown;
+    if (!renderer->target(display, surface, context, id, w, h, cs)) return Result::Unknown;
     pImpl->vport = {{0, 0}, {(int32_t)w, (int32_t)h}};
     renderer->viewport(pImpl->vport);
 
@@ -202,10 +202,11 @@ Result GlCanvas::target(void* context, int32_t id, uint32_t w, uint32_t h, Color
 }
 
 
-GlCanvas* GlCanvas::gen() noexcept
+GlCanvas* GlCanvas::gen(EngineOption op) noexcept
 {
 #ifdef THORVG_GL_RASTER_SUPPORT
     if (engineInit > 0) {
+        if (op == EngineOption::SmartRender) TVGLOG("RENDERER", "GlCanvas doesn't support Smart Rendering");
         auto renderer = GlRenderer::gen(TaskScheduler::threads());
         if (!renderer) return nullptr;
         renderer->ref();
@@ -261,10 +262,11 @@ Result WgCanvas::target(void* device, void* instance, void* target, uint32_t w, 
 }
 
 
-WgCanvas* WgCanvas::gen() noexcept
+WgCanvas* WgCanvas::gen(EngineOption op) noexcept
 {
 #ifdef THORVG_WG_RASTER_SUPPORT
     if (engineInit > 0) {
+        if (op == EngineOption::SmartRender) TVGLOG("RENDERER", "WgCanvas doesn't support Smart Rendering");
         auto renderer = WgRenderer::gen(TaskScheduler::threads());
         renderer->ref();
         auto ret = new WgCanvas;

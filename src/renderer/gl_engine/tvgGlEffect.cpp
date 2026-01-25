@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -72,7 +72,7 @@ GlRenderTask* GlEffect::render(RenderEffectGaussianBlur* effect, GlRenderTarget*
     if (!pBlurV) pBlurV = new GlProgram(EFFECT_VERTEX, GAUSSIAN_VERTICAL);
     if (!pBlurH) pBlurH = new GlProgram(EFFECT_VERTEX, GAUSSIAN_HORIZONTAL);
 
-    // get current and intermidiate framebuffers
+    // get current and intermediate framebuffers
     auto dstCopyFbo0 = blendPool[0]->getRenderTarget(vp);
     auto dstCopyFbo1 = blendPool[1]->getRenderTarget(vp);
 
@@ -152,7 +152,7 @@ GlRenderTask* GlEffect::render(RenderEffectDropShadow* effect, GlRenderTarget* d
     if (!pBlurH) pBlurH = new GlProgram(EFFECT_VERTEX, GAUSSIAN_HORIZONTAL);
     if (!pDropShadow) pDropShadow = new GlProgram(EFFECT_VERTEX, EFFECT_DROPSHADOW);
 
-    // get current and intermidiate framebuffers
+    // get current and intermediate framebuffers
     auto dstCopyFbo0 = blendPool[0]->getRenderTarget(vp);
     auto dstCopyFbo1 = blendPool[1]->getRenderTarget(vp);
 
@@ -271,7 +271,7 @@ GlRenderTask* GlEffect::render(RenderEffect* effect, GlRenderTarget* dstFbo, Arr
         program = pTritone;
     } else return nullptr;
 
-    // get current and intermidiate framebuffers
+    // get current and intermediate framebuffers
     auto dstCopyFbo = blendPool[0]->getRenderTarget(vp);
 
     // add uniform data

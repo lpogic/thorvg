@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -158,7 +158,7 @@ bool GlGeometry::tesselateShape(const RenderShape& rshape, float* opacityMultipl
     // Handling: two points   // collapse to a 2-point handle for stability
     if (optPath.pts.count == 2 && tvg::zero(rshape.strokeWidth())) {
         if (tesselateLine(optPath)) {
-            // The time spent is similar to subtituting buffers in tessellation, so we just move the buffers to keep the code simple.
+            // The time spent is similar to substituting buffers in tessellation, so we just move the buffers to keep the code simple.
             stroke.index.move(fill.index);
             stroke.vertex.move(fill.vertex);
             if (opacityMultiplier) *opacityMultiplier = MIN_GL_STROKE_ALPHA;

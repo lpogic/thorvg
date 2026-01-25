@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2025 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,8 @@
         #define TVG_REQUIRE_GL_MAJOR_VER 3
         #define TVG_REQUIRE_GL_MINOR_VER 3
     #endif
+
+    #include "tvgCommon.h"
 
     #ifdef _DEBUG
         #define GL_CHECK(stmt) stmt; assert(glGetError() == GL_NO_ERROR);
@@ -1163,6 +1165,19 @@
         //typedef void (*PFNGLGETACTIVEUNIFORMBLOCKNAMEPROC)(GLuint program, GLuint uniformBlockIndex, GLsizei bufSize, GLsizei *length, GLchar *uniformBlockName);
     #endif /* GL_VERSION_3_1 */
 
+    #if defined(_WIN32) && !defined(__CYGWIN__) && defined(THORVG_GL_TARGET_GL)
+        typedef HGLRC (WINAPI *PFNWGLGETCURRENTCONTEXTPROC)(void);
+        typedef BOOL (WINAPI *PFNWGLMAKECURRENTPROC)(HDC, HGLRC);
+    #endif
+
+    #if defined(THORVG_GL_TARGET_GLES)
+        typedef void* EGLDisplay;
+        typedef void* EGLSurface;
+        typedef void* EGLContext;
+        typedef EGLContext (*PFNEGLGETCURRENTCONTEXTPROC)(void);
+        typedef unsigned int (*PFNEGLMAKECURRENTPROC)(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLContext ctx);
+    #endif
+
     //GL_VERSION_1_0
     extern PFNGLCULLFACEPROC               glCullFace;
     extern PFNGLFRONTFACEPROC              glFrontFace;
@@ -1483,6 +1498,17 @@
     //extern PFNGLGETACTIVEUNIFORMNAMEPROC      glGetActiveUniformName;
     //extern PFNGLGETACTIVEUNIFORMBLOCKIVPROC   glGetActiveUniformBlockiv;
     //extern PFNGLGETACTIVEUNIFORMBLOCKNAMEPROC glGetActiveUniformBlockName;
+
+    #if defined(_WIN32) && !defined(__CYGWIN__) && defined(THORVG_GL_TARGET_GL)
+        extern PFNWGLGETCURRENTCONTEXTPROC  tvgWglGetCurrentContext;
+        extern PFNWGLMAKECURRENTPROC        tvgWglMakeCurrent;
+    #endif
+
+    #if defined(THORVG_GL_TARGET_GLES)
+        extern PFNEGLGETCURRENTCONTEXTPROC  tvgEglGetCurrentContext;
+        extern PFNEGLMAKECURRENTPROC        tvgEglMakeCurrent;
+    #endif
+
 #endif // __EMSCRIPTEN__
 
 bool glInit();

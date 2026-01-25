@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -47,20 +47,20 @@ struct Canvas::Impl
         if (renderer->unref() == 0) delete(renderer);
     }
 
-    Result push(Paint* target, Paint* at)
+    Result add(Paint* target, Paint* at)
     {
         if (PAINT(target)->renderer && PAINT(target)->renderer != renderer) {
             TVGERR("RENDERER", "Target paint(%p) is already owned by a different renderer.", target);
             return Result::InsufficientCondition;
         }
 
-        //You cannot push paints during rendering.
+        //You cannot add paints during rendering.
         if (status == Status::Drawing) {
-            TVGLOG("RENDERER", "push() was called during drawing.");
+            TVGLOG("RENDERER", "add() was called during drawing.");
             return Result::InsufficientCondition;
         }
         status = Status::Painting;
-        return scene->push(target, at);
+        return scene->add(target, at);
     }
 
     Result remove(Paint* paint)

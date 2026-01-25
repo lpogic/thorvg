@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -177,7 +177,7 @@ struct SceneImpl : Scene
         if (cmp) {
             //Apply post effects if any.
             if (effects) {
-                //Notify the possiblity of the direct composition of the effect result to the origin surface.
+                //Notify the possibility of the direct composition of the effect result to the origin surface.
                 auto direct = (effects->count == 1) & (impl.marked(CompositionFlag::PostProcessing));
                 ARRAY_FOREACH(p, *effects) {
                     if ((*p)->valid) renderer->render(cmp, *p, direct);
@@ -406,9 +406,9 @@ struct SceneImpl : Scene
         return Result::Success;
     }
 
-    Result push(SceneEffect effect, va_list& args)
+    Result add(SceneEffect effect, va_list& args)
     {
-        if (effect == SceneEffect::ClearAll) return resetEffects();
+        if (effect == SceneEffect::Clear) return resetEffects();
 
         if (!this->effects) this->effects = new Array<RenderEffect*>;
 

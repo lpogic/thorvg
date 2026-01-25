@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -798,7 +798,7 @@ bool strokeParseOutline(SwStroke* stroke, const SwOutline& outline, SwMpool* mpo
 SwOutline* strokeExportOutline(SwStroke* stroke, SwMpool* mpool, unsigned tid)
 {
     auto reserve = stroke->borders[0]->pts.count + stroke->borders[1]->pts.count;
-    auto outline = mpoolReqStrokeOutline(mpool, tid);
+    auto outline = mpoolReqOutline(mpool, tid);
     outline->pts.reserve(reserve);
     outline->types.reserve(reserve);
     outline->fillRule = FillRule::NonZero;

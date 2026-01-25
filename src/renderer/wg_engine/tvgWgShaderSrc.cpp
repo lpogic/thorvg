@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 - 2025 the ThorVG project. All rights reserved.
+ * Copyright (c) 2023 - 2026 ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -164,7 +164,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    // orignal data
+    // original data
     let d0 = in.vGradCoord.xy - uPaintSettings.gradient.coords.xy;
     let d1 = uPaintSettings.gradient.coords.xy - uPaintSettings.gradient.focal.xy;
     let r0 = uPaintSettings.gradient.coords.z;
