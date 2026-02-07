@@ -899,6 +899,8 @@ void LottieBuilder::updateSolid(LottieLayer* layer)
 
 void LottieBuilder::updateImage(LottieGroup* layer)
 {
+    if (layer->children.empty()) return;
+
     auto image = static_cast<LottieImage*>(layer->children.first());
     auto picture = image->bitmap.picture;
 
@@ -914,14 +916,25 @@ void LottieBuilder::updateImage(LottieGroup* layer)
 }
 
 
-void LottieBuilder::updateURLFont( LottieLayer* layer, float frameNo, LottieText* text, const TextDocument& doc)
+void LottieBuilder::updateURLFont(LottieLayer* layer, float frameNo, LottieText* text, const TextDocument& doc)
 {
     //text load
+    //TODO: cache the text instance, don't need to reload every frame.
     auto paint = Text::gen();
-    if (paint->font(doc.name) != Result::Success) {
-        if (!(text->font && resolver && resolver->func(paint, text->font->path, resolver->data))) {
+    if ((paint->font(doc.name) != Result::Success) && resolver) {
+        char* src;
+        bool free = false;
+        if (text->font && text->font->path) src = text->font->path;
+        else {
+            auto len = (strlen(doc.name) + 6);
+            src = tvg::malloc<char>(sizeof(char) * len);
+            snprintf(src, len, "name:%s", doc.name);
+            free = true;
+        }
+        if (!(resolver->func(paint, src, resolver->data))) {
             paint->font(nullptr);  //fallback to any available font
         }
+        if (free) tvg::free(src);
     }
 
     //text build
@@ -1204,6 +1217,8 @@ void LottieBuilder::updateLocalFont(LottieLayer* layer, float frameNo, LottieTex
 
 void LottieBuilder::updateText(LottieLayer* layer, float frameNo)
 {
+    if (layer->children.empty()) return;
+
     auto text = static_cast<LottieText*>(layer->children.first());
     auto& doc = text->doc(frameNo, exps);
     if (text->font && text->font->origin == LottieFont::Origin::Local && !text->font->chars.empty()) {

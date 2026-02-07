@@ -19,7 +19,7 @@
 [![Conan](https://img.shields.io/conan/v/thorvg)](https://conan.io/center/recipes/thorvg)
 [![Fedora](https://img.shields.io/fedora/v/thorvg?color=orange)](https://src.fedoraproject.org/rpms/thorvg)
 [![MSYS2](https://img.shields.io/badge/msys2-Latest-orange)](https://packages.msys2.org/packages/mingw-w64-x86_64-thorvg?repo=mingw64)
-[![npm](https://img.shields.io/npm/v/@thorvg/lottie-player)](https://www.npmjs.com/package/@thorvg/lottie-player)
+[![npm](https://img.shields.io/npm/v/@thorvg/webcanvas)](https://www.npmjs.com/package/@thorvg/webcanvas)
 [![pub](https://img.shields.io/pub/v/thorvg.svg)](https://pub.dev/packages/thorvg)
 [![Nimble](https://img.shields.io/badge/nimble-Latest-FFE953?color=orange)](https://nimble.directory/pkg/thorvg)
 [![DUB](https://img.shields.io/badge/dub-latest-orange)](https://code.dlang.org/packages/bindbc-thorvg)
@@ -31,7 +31,7 @@
   <img width="800" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/logo/512/thorvg-banner.png">
 </p>
 
-**Thor Vector Graphics** is an **open-source** graphics library designed for creating **vector-based scenes and animations**. It combines **high performance** with **lightweight efficiency**, as Thor embodies a dual meaning—_symbolizing both immense strength and lightning-fast agility_. Embracing the philosophy of _simplicity leads to reliability_, the ThorVG project provides **intuitive, user-friendly interfaces** while maintaining a **compact footprint** and **minimal overhead**. <br />
+**Thor Vector Graphics** is an **production-ready** vector graphics engine designed for creating **interactive apps and creative tools**. It combines **high performance** with **lightweight efficiency**, as Thor embodies a dual meaning—_symbolizing both immense strength and lightning-fast agility_. Embracing the philosophy of _simplicity leads to reliability_, the ThorVG project provides **intuitive, user-friendly interfaces** while maintaining a **compact footprint** and **minimal overhead**. <br />
 <br />
 The following primitives are supported by ThorVG: <br />
  
@@ -158,9 +158,12 @@ ThorVG is designed to be portable across a wide range of devices, including smal
     - [TinyPiXOS](#tinypixos)
     - [Tizen](#tizen)
   - [Interactive App](#interactive-app)
-  - [Examples](#examples)    
+  - [Examples](#examples)
+    - [C++ Examples](#c-examples)
+    - [Playground](#playground)
   - [Tools](#tools)
     - [ThorVG Viewer](#thorvg-viewer)
+    - [ThorVG VS Code LiveView](#thorvg-vs-code-liveview)
     - [Lottie to GIF](#lottie-to-gif)
     - [SVG to PNG](#svg-to-png)
   - [Related Projects](#related-projects)
@@ -239,7 +242,7 @@ auto circle = tvg::Shape::gen();             //generate a shape
 circle->appendCircle(400, 400, 100, 100);    //define it as a circle (cx, cy, rx, ry)
 
 auto fill = tvg::RadialGradient::gen();      //generate a radial gradient
-fill->radial(400, 400, 150);                 //set the radial gradient geometry info (cx, cy, radius)
+fill->radial(400, 400, 150, 400, 400, 0);    //set the radial gradient geometry info (cx, cy, radius, fx, fy, fr)
 
 tvg::Fill::ColorStop colorStops[2];          //gradient colors
 colorStops[0] = {0.0, 255, 255, 255, 255};   //1st color values (offset, r, g, b, a)
@@ -481,7 +484,12 @@ Check out [Thor Janitor](https://github.com/thorvg/thorvg.janitor), an interacti
 <br />
 <br />
 ## Examples
-There are plenty of sample code in [thorvg.example](https://github.com/thorvg/thorvg.example) to help you in understanding the ThorVG APIs.
+
+### C++ Examples
+A wide range of native sample codes is available in the [thorvg.example](https://github.com/thorvg/thorvg.example) repository to help you understand and work with the ThorVG C++ APIs.
+
+### Playground
+The [ThorVG Playground](https://www.thorvg.org/playground) is an interactive web-based environment where you can explore various graphic features and instantly see the results in real time.
 
 [Back to contents](#contents)
 <br />
@@ -489,10 +497,17 @@ There are plenty of sample code in [thorvg.example](https://github.com/thorvg/th
 ## Tools
 ### ThorVG Viewer
 ThorVG provides a resource verification tool for the ThorVG engine. The [ThorVG viewer](https://thorvg.github.io/thorvg.viewer/) enables instant rendering directly in the web browser using the ThorVG WebAssembly binary, allowing real-time editing of vector elements. It does not upload your resources to any external server and supports exporting to formats such as GIF, ensuring that designer copyrights remain protected.</br>
-</br>
 
 <p align="center">
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg/assets/3711518/edadcc5e-3bbf-489d-a9a1-9570079c7d55"/>
+</p>
+
+### ThorVG VS Code LiveView
+A [Visual Studio Code extension](https://marketplace.visualstudio.com/items?itemName=thorvg.thorvg-liveview) that integrates ThorVG Viewer for previewing Lottie animations and SVG files directly inside the editor.
+</br>
+
+<p align="center">
+  <img width="1000" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_vscode.gif"/>
 </p>
 
 ### Lottie to GIF
@@ -572,6 +587,7 @@ ThorVG is designed to be portable and extensible across various platforms. The f
 * [ThorVG Swift](https://github.com/thorvg/thorvg.swift) - Swift bindings for rendering vector graphics with ThorVG.
 * [ThorVG Unity](https://github.com/thorvg/thorvg.unity) – ThorVG integration for Unity using C#.
 * [ThorVG Viewer](https://github.com/thorvg/thorvg.viewer) - A browser-based viewer for ThorVG using WebAssembly.
+* [ThorVG VS Code](https://github.com/thorvg/thorvg.vscode) - ThorVG VS Code Extensions.
 * [ThorVG Web](https://github.com/thorvg/thorvg.web) - WebAssembly-based integration of ThorVG for web apps.
 
 [Back to contents](#contents)
