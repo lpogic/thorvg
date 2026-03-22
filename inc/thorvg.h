@@ -195,6 +195,18 @@ enum struct FillRule : uint8_t
 
 
 /**
+ * @brief Defines the image filtering method used during image scaling or transformation.
+ *
+ * @note Experimental API
+ */
+enum struct FilterMethod : uint8_t
+{
+    Bilinear = 0,  ///< Smooth interpolation using surrounding pixels for higher quality.
+    Nearest        ///< Fast filtering using nearest-neighbor sampling.
+};
+
+
+/**
  * @brief Enumeration indicating the method used in the mask of two objects - the target and the source.
  *
  * Notation: S(Source), T(Target), SA(Source Alpha), TA(Target Alpha)
@@ -337,6 +349,50 @@ struct Matrix
     float e11, e12, e13;
     float e21, e22, e23;
     float e31, e32, e33;
+};
+
+
+/**
+ * @brief Describes the font metrics of a text object.
+ *
+ * Provides the basic vertical layout metrics used for text rendering,
+ * such as ascent, descent, and line spacing (linegap).
+ *
+ * @see Text::metrics()
+ * @note Experimental API
+ */
+struct TextMetrics
+{
+    float ascent;   ///< Distance from the baseline to the top of the highest glyph (usually positive).
+    float descent;  ///< Distance from the baseline to the bottom of the lowest glyph (usually negative, as in TTF).
+    float linegap;  ///< Additional spacing recommended between lines (leading).
+    float advance;  ///< The total vertical advance between lines of text: ascent - descent + linegap (i.e., ascent + |descent| + linegap when descent is negative).
+};
+
+
+/**
+ * @brief Describes the layout metrics of a glyph.
+ *
+ * Provides the basic layout metrics used for positioning an individual glyph,
+ * including its advance along the baseline direction, bearing relative to the
+ * inline axis origin, and its bounding box in local glyph space.
+ *
+ * The advance value represents the distance the pen position moves along the
+ * baseline (inline direction), regardless of whether the text is laid out
+ * horizontally or vertically.
+ *
+ * The bounding box is defined in the glyph’s local coordinate space and is
+ * independent of any layout direction or transformation.
+ *
+ * @see Text::metrics()
+ * @note Experimental API
+ */
+struct GlyphMetrics
+{
+    float advance;  ///< The advance distance along the baseline (inline) direction.
+    float bearing;  ///< The bearing from the origin to the glyph’s visible bound along the inline-start direction.
+    Point min;      ///< The minimum point of the glyph bounding box in local space.
+    Point max;      ///< The maximum point of the glyph bounding box in local space.
 };
 
 
@@ -1672,6 +1728,21 @@ struct TVG_API Picture : Paint
     Result resolver(std::function<bool(Paint* paint, const char* src, void* data)> func, void* data) noexcept;
 
     /**
+     * @brief Sets the image filtering method for rendering this picture.
+     *
+     * Specifies how the image data should be filtered when it is scaled or transformed
+     * during rendering. This affects the visual quality and performance of the output.
+     *
+     * @param[in] method The filtering method to apply. Default is @c FilterMethod::Bilinear.
+     *
+     * @return Always returns @c Result::Success.
+     *
+     * @see FilterMethod
+     * @note Experimental API
+     */
+    Result filter(FilterMethod method) noexcept;
+
+    /**
      * @brief Retrieve a paint object from the Picture scene by its Unique ID.
      *
      * This function searches for a paint object within the Picture scene that matches the provided @p id.
@@ -1894,9 +1965,23 @@ struct TVG_API Text : Paint
      *
      * @param[in] text The multi-byte text encoded with utf8 string to be rendered.
      *
+     * @see Text::text()
      * @since 1.0
      */
     Result text(const char* text) noexcept;
+
+    /**
+     * @brief Returns the currently assigned unicode text.
+     *
+     * This function retrieves the unicode string that is currently set
+     * for rendering. The returned text is encoded in UTF-8.
+     *
+     * @return The UTF-8 encoded multi-byte text string.
+     *
+     * @see Text::text(const char* text)
+     * @note Experimental API
+     */
+    const char* text() const noexcept;
 
     /**
      * @brief Sets text alignment or anchor per axis.
@@ -1942,9 +2027,24 @@ struct TVG_API Text : Paint
      * @param[in] mode The wrapping strategy to apply. Default is @c TextWrap::None
      *
      * @see TextWrap
+     * @see Text::lines()
      * @since 1.0
      */
     Result wrap(TextWrap mode) noexcept;
+
+    /**
+     * @brief Returns the number of text lines.
+     *
+     * This function retrieves the number of lines generated after applying text layout and wrapping.
+     * The returned value reflects the current wrapping configuration set by Text::wrap().
+     * The line count is also increased by explicit line feed characters ('\n') contained in the text.
+     *
+     * @return The total number of lines.
+     *
+     * @see Text::wrap()
+     * @since Experimental API
+     */
+    uint32_t lines() noexcept;
 
     /**
      * @brief Apply an italic (slant) transformation to the text.
@@ -2035,6 +2135,47 @@ struct TVG_API Text : Paint
      * @since 1.0
      */
     Result spacing(float letter, float line) noexcept;
+
+    /**
+     * @brief Retrieves the layout metrics of the text object.
+     *
+     * Fills the provided `TextMetrics` structure with the font layout values of this text object,
+     * such as ascent, descent, linegap, and line advance.
+     *
+     * The returned values reflect the font size applied to the text object,
+     * but do not include any transformations (e.g., scale, rotation, or translation).
+     *
+     * @param[out] metrics A reference to a `TextMetrics` structure to be filled with the resulting values.
+     *
+     * @return Result::InsufficientCondition if no font or size has been set yet.
+     *
+     * @see TextMetrics
+     * @note Experimental API
+     */
+    Result metrics(TextMetrics& metrics) const noexcept;
+
+    /**
+     * @brief Retrieves the layout metrics of a glyph in the text object.
+     *
+     * Fills the provided `GlyphMetrics` structure with the horizontal layout values
+     * of the specified glyph, such as advance, left-side bearing, and bounding box.
+     *
+     * The returned values reflect the font size applied to the text object,
+     * but do not include any transformations (e.g., scale, rotation, or translation).
+     *
+     * The input character must be a single UTF-8 encoded character.
+     *
+     * @param[in] ch A pointer to a UTF-8 encoded character.
+     * @param[out] metrics A reference to a @ref GlyphMetrics structure to be filled with the resulting values.
+     *
+     * @return Result::InsufficientCondition if no font or size has been set yet.
+     * @return Result::InvalidArguments if the given character is invalid or not supported.
+     *
+     * @see GlyphMetrics
+     * @note Currently, ThorVG only supports horizontal text layout.
+     * @note Experimental API
+     */
+    Result metrics(const char* ch, GlyphMetrics& metrics) const noexcept;
 
     /**
      * @brief Loads a scalable font data (ttf) from a file.

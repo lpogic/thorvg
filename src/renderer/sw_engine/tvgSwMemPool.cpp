@@ -22,68 +22,39 @@
 
 #include "tvgSwCommon.h"
 
+/************************************************************************/
+/* Internal Class Implementation                                        */
+/************************************************************************/
+
+static thread_local SwMpool* _pool = nullptr;
+static Array<SwMpool*> _pools;
+static uint32_t _threads = 0;
+static Key _key;
 
 /************************************************************************/
 /* External Class Implementation                                        */
 /************************************************************************/
 
-SwOutline* mpoolReqOutline(SwMpool* mpool, unsigned idx)
+SwMpool* mpoolReq()
 {
-    mpool->outline[idx].pts.clear();
-    mpool->outline[idx].cntrs.clear();
-    mpool->outline[idx].types.clear();
-    mpool->outline[idx].closed.clear();
-
-    return &mpool->outline[idx];
+    if (!_pool) {
+        _pool = new SwMpool(_threads);
+        ScopedLock lock(_key);
+        _pools.push(_pool);
+    }
+    return _pool;
 }
 
-
-SwStrokeBorder* mpoolReqStrokeLBorder(SwMpool* mpool, unsigned idx)
+void mpoolInit(uint32_t threads)
 {
-    mpool->leftBorder[idx].pts.clear();
-    mpool->leftBorder[idx].start = -1;
-    return &mpool->leftBorder[idx];
+    _threads = threads;
 }
 
-
-SwStrokeBorder* mpoolReqStrokeRBorder(SwMpool* mpool, unsigned idx)
+void mpoolTerm()
 {
-    mpool->rightBorder[idx].pts.clear();
-    mpool->rightBorder[idx].start = -1;
-    return &mpool->rightBorder[idx];
-}
-
-
-SwCellPool* mpoolReqCellPool(SwMpool* mpool, unsigned idx)
-{
-    return &mpool->cellPool[idx];
-}
-
-
-SwMpool* mpoolInit(uint32_t threads)
-{
-    auto allocSize = threads + 1;
-
-    auto mpool = tvg::malloc<SwMpool>(sizeof(SwMpool));
-    mpool->outline = new SwOutline[allocSize];
-    mpool->leftBorder = new SwStrokeBorder[allocSize];
-    mpool->rightBorder = new SwStrokeBorder[allocSize];
-    mpool->cellPool = new SwCellPool[allocSize];
-
-    mpool->allocSize = allocSize;
-
-    return mpool;
-}
-
-
-void mpoolTerm(SwMpool* mpool)
-{
-    if (!mpool) return;
-
-    delete[](mpool->outline);
-    delete[](mpool->leftBorder);
-    delete[](mpool->rightBorder);
-    delete[](mpool->cellPool);
-
-    tvg::free(mpool);
+    for (auto p : _pools) {
+        delete p;
+        _pool = nullptr;
+    }
+    _pools.reset();
 }

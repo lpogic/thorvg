@@ -272,6 +272,7 @@ struct LottieObject
         Repeater,
         RoundedCorner,
         OffsetPath,
+        PuckerBloat,
         TextRange
     };
 
@@ -952,7 +953,7 @@ struct LottieImage : LottieObject
         return backup;
     }
 
-    void prepare();
+    void prepare(bool external);
 };
 
 
@@ -1002,6 +1003,15 @@ struct LottieOffsetPath : LottieObject
     StrokeJoin join = StrokeJoin::Miter;
 };
 
+struct LottiePuckerBloat : LottieObject
+{
+    LottiePuckerBloat()
+    {
+        LottieObject::type = LottieObject::PuckerBloat;
+    }
+
+    LottieFloat amount = 0.0f;
+};
 
 struct LottieGroup : LottieObject, LottieRenderPooler<tvg::Shape>
 {

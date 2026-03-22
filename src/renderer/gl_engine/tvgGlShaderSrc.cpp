@@ -28,29 +28,25 @@ const char* COLOR_VERT_SHADER = TVG_COMPOSE_SHADER(
     uniform float uDepth;                                           \n
     uniform mat3 uViewMatrix;                                       \n
     layout(location = 0) in vec2 aLocation;                         \n
-    layout(std140) uniform SolidInfo {                              \n
-        vec4 solidColor;                                            \n
-    } uSolidInfo;                                                   \n
-                                                                    \n
-    void main()                                                     \n
+    layout(location = 1) in vec4 aColor;                            \n
+    out vec4 vColor;                                                \n
+                                                                    \n 
+    void main()                                                     \n 
     {                                                               \n
         vec3 pos = uViewMatrix * vec3(aLocation, 1.0);              \n
         gl_Position = vec4(pos.xy, uDepth, 1.0);                    \n
-    }                                                               \n
-);
+        vColor = aColor;                                            \n
+    }                                                               \n);
 
 const char* COLOR_FRAG_SHADER = TVG_COMPOSE_SHADER(
-    layout(std140) uniform SolidInfo {                       \n
-        vec4 solidColor;                                     \n
-    } uSolidInfo;                                            \n
+    in vec4 vColor;                                          \n
     out vec4 FragColor;                                      \n
-                                                             \n
-    void main()                                              \n
+                                                             \n 
+    void main()                                              \n 
     {                                                        \n
-       vec4 uColor = uSolidInfo.solidColor;                  \n
-       FragColor =  vec4(uColor.rgb * uColor.a, uColor.a);   \n
-    }                                                        \n
-);
+        vec4 uColor = vColor;                                \n
+        FragColor = vec4(uColor.rgb * uColor.a, uColor.a);   \n
+    }                                                        \n);
 
 const char* GRADIENT_VERT_SHADER = TVG_COMPOSE_SHADER(
     uniform float uDepth;                                                           \n
@@ -587,17 +583,21 @@ const char* BLIT_FRAG_SHADER = TVG_COMPOSE_SHADER(
     }
 );
 
+// SW parity map for blend sources:
+// - Solid shape: SW calls blender(srcPremul, dst) directly.
+//   Keep premultiplied source and bypass postProcess.
+// - Gradient shape: SW first does src-over (opBlendPreNormal), then blender(tmp, dst).
+//   Build equivalent tmp in getFragData() by pre-mixing with dst, then bypass postProcess.
+// - Image/Scene: SW uses blender(unpremul(src), dst), then interpolates by src alpha/opacity.
+//   Keep unpremultiplied source + postProcess mix for these headers.
 const char* BLEND_SHAPE_SOLID_FRAG_HEADER = R"(
-layout(std140) uniform SolidInfo {
-    vec4 solidColor;
-} uSolidInfo;
-
 layout(std140) uniform BlendRegion {
     vec4 region;
 } uBlendRegion;
 
 uniform sampler2D uDstTexture;
 
+in vec4 vColor;
 out vec4 FragColor;
 
 vec3 One = vec3(1.0, 1.0, 1.0);
@@ -606,16 +606,16 @@ FragData d;
 
 void getFragData() {
     vec2 uv = (gl_FragCoord.xy - uBlendRegion.region.xy) / uBlendRegion.region.zw;
-    vec4 colorSrc = uSolidInfo.solidColor;
+    vec4 colorSrc = vColor;
     vec4 colorDst = texture(uDstTexture, uv);
-    d.Sc = colorSrc.rgb;
+    d.Sc = colorSrc.rgb * colorSrc.a;
     d.Sa = colorSrc.a;
     d.So = 1.0;
     d.Dc = colorDst.rgb;
     d.Da = colorDst.a;
 }
 
-vec4 postProcess(vec4 R) { return mix(vec4(d.Dc, d.Da), R, d.Sa * d.So); }
+vec4 postProcess(vec4 R) { return R; }
 )";
 
 const char* BLEND_SHAPE_LINEAR_FRAG_HEADER = R"(
@@ -642,9 +642,12 @@ void getFragData() {
     d.Dc = colorDst.rgb;
     d.Da = colorDst.a;
     if (d.Sa > 0.0) { d.Sc = d.Sc / d.Sa; }
+    float srcOpacity = d.Sa * d.So;
+    d.Sc = mix(d.Dc, d.Sc, srcOpacity);
+    d.Sa = mix(d.Da, 1.0, srcOpacity);
 }
 
-vec4 postProcess(vec4 R) { return mix(vec4(d.Dc, d.Da), R, d.Sa * d.So); }
+vec4 postProcess(vec4 R) { return R; }
 )";
 
 const char* BLEND_SHAPE_RADIAL_FRAG_HEADER = R"(
@@ -671,11 +674,79 @@ void getFragData() {
     d.Dc = colorDst.rgb;
     d.Da = colorDst.a;
     if (d.Sa > 0.0) { d.Sc = d.Sc / d.Sa; }
+    float srcOpacity = d.Sa * d.So;
+    d.Sc = mix(d.Dc, d.Sc, srcOpacity);
+    d.Sa = mix(d.Da, 1.0, srcOpacity);
+}
+
+vec4 postProcess(vec4 R) { return R; }
+)";
+
+// GL keeps a viewport-sized dst copy, so src/dst can share vUV.
+// GLES/WebGL must keep a full resolved dst copy because MSAA resolve/blit is only valid for the
+// full buffer there; down-blitting into a smaller FBO would add another full copy pass. Rebuild
+// dst UV from gl_FragCoord + BlendRegion instead of reusing vUV.
+#if defined(THORVG_GL_TARGET_GL)
+const char* BLEND_IMAGE_FRAG_HEADER = R"(
+uniform sampler2D uSrcTexture;
+uniform sampler2D uDstTexture;
+
+in vec2 vUV;
+out vec4 FragColor;
+
+vec3 One = vec3(1.0, 1.0, 1.0);
+struct FragData { vec3 Sc; float Sa; float So; vec3 Dc; float Da; };
+FragData d;
+
+void getFragData() {
+    // get source data
+    vec4 colorSrc = texture(uSrcTexture, vUV);
+    vec4 colorDst = texture(uDstTexture, vUV);
+    // fill fragment data
+    d.Sc = colorSrc.rgb;
+    d.Sa = colorSrc.a;
+    d.So = 1.0;
+    d.Dc = colorDst.rgb;
+    d.Da = colorDst.a;
+    if (d.Sa > 0.0) { d.Sc = d.Sc / d.Sa; }
 }
 
 vec4 postProcess(vec4 R) { return mix(vec4(d.Dc, d.Da), R, d.Sa * d.So); }
 )";
 
+const char* BLEND_SCENE_FRAG_HEADER = R"(
+layout(std140) uniform ColorInfo {
+    int format;
+    int flipY;
+    int opacity;
+    int dummy;
+} uColorInfo;
+uniform sampler2D uSrcTexture;
+uniform sampler2D uDstTexture;
+
+in vec2 vUV;
+out vec4 FragColor;
+
+vec3 One = vec3(1.0, 1.0, 1.0);
+struct FragData { vec3 Sc; float Sa; float So; vec3 Dc; float Da; };
+FragData d;
+
+void getFragData() {
+    // get source data
+    vec4 colorSrc = texture(uSrcTexture, vUV);
+    vec4 colorDst = texture(uDstTexture, vUV);
+    // fill fragment data
+    d.Sc = colorSrc.rgb;
+    d.Sa = colorSrc.a;
+    d.So = float(uColorInfo.opacity) / 255.0;
+    d.Dc = colorDst.rgb;
+    d.Da = colorDst.a;
+    if (d.Sa > 0.0) {d.Sc = d.Sc / d.Sa; }
+}
+
+vec4 postProcess(vec4 R) { return mix(vec4(d.Dc, d.Da), R, d.Sa * d.So); }
+)";
+#else
 const char* BLEND_IMAGE_FRAG_HEADER = R"(
 layout(std140) uniform BlendRegion {
     vec4 region;
@@ -746,8 +817,9 @@ void getFragData() {
 
 vec4 postProcess(vec4 R) { return mix(vec4(d.Dc, d.Da), R, d.Sa * d.So); }
 )";
+#endif
 
-const char* BLEND_FRAG_HSL = R"(
+const char* BLEND_FRAG_HUE = R"(
 // RGB to HSL conversion
 vec3 rgbToHsl(vec3 color) {
     float minVal = min(color.r, min(color.g, color.b));
@@ -789,6 +861,22 @@ vec3 hslToRgb(vec3 color) {
     else                                      { rgb = vec3(C, 0.0, X); }
 
     return rgb + vec3(m);
+}
+)";
+
+//  helpers related to luminance adjustment
+const char* BLEND_FRAG_LUM = R"(
+const vec3 LUM_W = vec3(0.3, 0.59, 0.11);
+
+vec3 setLum(vec3 color, float l) {
+    color += l - dot(color, LUM_W);
+    float ll = dot(color, LUM_W);
+    float n = min(color.r, min(color.g, color.b));
+    float x = max(color.r, max(color.g, color.b));
+
+    if (n < 0.0) color = ll + (color - ll) * (ll / (ll - n));
+    if (x > 1.0) color = ll + (color - ll) * ((1.0 - ll) / (x - ll));
+    return color;
 }
 )";
 
@@ -910,7 +998,13 @@ void main() {
     vec3 Rc = d.Sc;
     if (d.Da > 0.0) {
         vec3 Dc = min(One, d.Dc / d.Da);
-        Rc = min(One, (One - 2.0 * d.Sc) * Dc * Dc + 2.0 * d.Sc * Dc);
+        vec3 Dlow = ((16.0 * Dc - 12.0) * Dc + 4.0) * Dc;
+        vec3 Dhigh = sqrt(Dc);
+        vec3 D = mix(Dhigh, Dlow, step(Dc, vec3(0.25)));
+        vec3 low = Dc - (1.0 - 2.0 * d.Sc) * Dc * (1.0 - Dc);
+        vec3 high = Dc + (2.0 * d.Sc - 1.0) * (D - Dc);
+        Rc = mix(high, low, step(d.Sc, vec3(0.5)));
+        Rc = clamp(Rc, vec3(0.0), One);
         Rc = mix(d.Sc, Rc, d.Da);
     }
     FragColor = postProcess(vec4(Rc, 1.0));
@@ -940,9 +1034,8 @@ void main()
     vec3 Rc = d.Sc;
     if (d.Da > 0.0) {
         vec3 Dc = min(One, d.Dc / d.Da);
-        vec3 Sc = d.Sc;
 
-        vec3 Shsl = rgbToHsl(Sc);
+        vec3 Shsl = rgbToHsl(d.Sc);
         vec3 Dhsl = rgbToHsl(Dc);
         Rc = hslToRgb(vec3(Shsl.r, Dhsl.g, Dhsl.b)); // sh, ds, dl
         
@@ -958,12 +1051,12 @@ void main() {
     vec3 Rc = d.Sc;
     if (d.Da > 0.0) {
         vec3 Dc = min(One, d.Dc / d.Da);
-        vec3 Sc = d.Sc;
-
-        vec3 Shsl = rgbToHsl(Sc);
-        vec3 Dhsl = rgbToHsl(Dc);
-        Rc = hslToRgb(vec3(Dhsl.r, Shsl.g, Dhsl.b)); // dh, ss, dl
-        
+        float s = max(d.Sc.r, max(d.Sc.g, d.Sc.b)) - min(d.Sc.r, min(d.Sc.g, d.Sc.b));
+        float n = min(Dc.r, min(Dc.g, Dc.b));
+        float x = max(Dc.r, max(Dc.g, Dc.b));
+        Rc = vec3(0.0);
+        if (x > n) Rc = (Dc - vec3(n)) * (s / (x - n));
+        Rc = setLum(Rc, dot(Dc, LUM_W));
         Rc = mix(d.Sc, Rc, d.Da);
     }
     FragColor = postProcess(vec4(Rc, 1.0));
@@ -976,12 +1069,7 @@ void main() {
     vec3 Rc = d.Sc;
     if (d.Da > 0.0) {
         vec3 Dc = min(One, d.Dc / d.Da);
-        vec3 Sc = d.Sc;
-
-        vec3 Shsl = rgbToHsl(Sc);
-        vec3 Dhsl = rgbToHsl(Dc);
-        Rc = hslToRgb(vec3(Shsl.r, Shsl.g, Dhsl.b)); // sh, ss, dl
-        
+        Rc = setLum(d.Sc, dot(Dc, LUM_W));
         Rc = mix(d.Sc, Rc, d.Da);
     }
     FragColor = postProcess(vec4(Rc, 1.0));
@@ -994,12 +1082,7 @@ void main() {
     vec3 Rc = d.Sc;
     if (d.Da > 0.0) {
         vec3 Dc = min(One, d.Dc / d.Da);
-        vec3 Sc = d.Sc;
-
-        vec3 Shsl = rgbToHsl(Sc);
-        vec3 Dhsl = rgbToHsl(Dc);
-        Rc = hslToRgb(vec3(Dhsl.r, Dhsl.g, Shsl.b)); // dh, ds, sl
-        
+        Rc = setLum(Dc, dot(d.Sc, LUM_W));
         Rc = mix(d.Sc, Rc, d.Da);
     }
     FragColor = postProcess(vec4(Rc, 1.0));

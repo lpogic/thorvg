@@ -33,8 +33,7 @@ struct TtfGlyph
     uint32_t idx;        //glyph index
     float advance;       //advance width/height
     float lsb;           //left side bearing
-    float y;             //y-offset
-    float w, h;          //bounding box
+    float x, y, w, h;    //bounding box
 };
 
 struct TtfGlyphMetrics : TtfGlyph
@@ -50,13 +49,7 @@ public:
 
     struct
     {
-        //horizontal header info
-        struct {
-            float ascent, descent;
-            float lineGap;
-            float advance;
-        } hhea;
-
+        TextMetrics hhea;      //horizontal header info
         uint16_t unitsPerEm;
         uint16_t numHmtx;      //the number of Horizontal metrics table
         uint8_t locaFormat;    //0 for short offsets, 1 for long

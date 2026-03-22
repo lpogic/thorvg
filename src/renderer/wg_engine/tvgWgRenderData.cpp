@@ -22,6 +22,8 @@
  */
 
 #include <algorithm>
+#include <cmath>
+#include "tvgCommon.h"
 #include "tvgWgTessellator.h"
 #include "tvgWgRenderData.h"
 #include "tvgWgShaderTypes.h"
@@ -30,7 +32,7 @@
 // WgImageData
 //***********************************************************************
 
-void WgImageData::update(WgContext& context, const RenderSurface* surface)
+void WgImageData::update(WgContext& context, const RenderSurface* surface, FilterMethod filter)
 {
     // get appropriate texture format from color space
     WGPUTextureFormat texFormat = WGPUTextureFormat_BGRA8Unorm;
@@ -46,7 +48,8 @@ void WgImageData::update(WgContext& context, const RenderSurface* surface)
         textureView = context.createTextureView(texture);
         // update bind group
         context.layouts.releaseBindGroup(bindGroup);
-        bindGroup = context.layouts.createBindGroupTexSampled(context.samplerLinearClamp, textureView);
+        auto sampler = (filter == FilterMethod::Bilinear) ? context.samplerLinearClamp : context.samplerNearestClamp;
+        bindGroup = context.layouts.createBindGroupTexSampled(sampler, textureView);
     }
 };
 
@@ -84,32 +87,45 @@ void WgImageData::release(WgContext& context)
 // WgRenderSettings
 //***********************************************************************
 
-void WgRenderSettings::update(WgContext& context, const tvg::Matrix& transform, tvg::ColorSpace cs, uint8_t opacity)
+void WgRenderSettings::bakeSolidColor()
 {
-    //TODO: Update separately according to the RenderUpdateFlag
-    settings.transform.update(transform);
-    settings.options.update(cs, opacity * opacityMultiplier);
+    if (fillType != WgRenderSettingsType::Solid) return;
+    settings.color = solidColor;
+    settings.color.vec[3] *= opacity;
+    settings.options.vec[3] = 1.0f;
 }
 
-void WgRenderSettings::update(WgContext& context, const Fill* fill)
+
+void WgRenderSettings::update(TVG_UNUSED WgContext& context, tvg::ColorSpace cs, uint8_t opacity)
+{
+    //TODO: Update separately according to the RenderUpdateFlag
+    settings.options.update(cs, opacity * opacityMultiplier);
+    this->opacity = settings.options.vec[3];
+    bakeSolidColor();
+}
+
+void WgRenderSettings::update(WgContext& context, const Fill* fill, const Matrix* modelTransform, bool updateColorRamp)
 {
     assert(fill);
-    settings.gradient.update(fill);
-    gradientData.update(context, fill);
+    settings.gradient.update(fill, modelTransform);
+    if (updateColorRamp) gradientData.update(context, fill);
     // get gradient rasterisation settings
     rasterType = WgRenderRasterType::Gradient;
     if (fill->type() == Type::LinearGradient)
         fillType = WgRenderSettingsType::Linear;
     else if (fill->type() == Type::RadialGradient)
         fillType = WgRenderSettingsType::Radial;
+    settings.options.vec[3] = opacity;
 };
 
 
-void WgRenderSettings::update(WgContext& context, const RenderColor& c)
+void WgRenderSettings::update(TVG_UNUSED WgContext& context, const RenderColor& c)
 {
-    settings.color.update(c);
+    solidColor.update(c);
+    settings.color = solidColor;
     rasterType = WgRenderRasterType::Solid;
     fillType = WgRenderSettingsType::Solid;
+    bakeSolidColor();
 };
 
 
@@ -146,17 +162,6 @@ void WgRenderDataShape::updateBBox(BBox bb)
 }
 
 
-void WgRenderDataShape::updateAABB(const Matrix& matrix)
-{
-    auto p0 = Point{bbox.min.x, bbox.min.y} * matrix;
-    auto p1 = Point{bbox.max.x, bbox.min.y} * matrix;
-    auto p2 = Point{bbox.min.x, bbox.max.y} * matrix;
-    auto p3 = Point{bbox.max.x, bbox.max.y} * matrix;
-    aabb.min = {std::min(std::min(p0.x, p1.x), std::min(p2.x, p3.x)), std::min(std::min(p0.y, p1.y), std::min(p2.y, p3.y))};
-    aabb.max = {std::max(std::max(p0.x, p1.x), std::max(p2.x, p3.x)), std::max(std::max(p0.y, p1.y), std::max(p2.y, p3.y))};
-}
-
-
 void WgRenderDataShape::updateVisibility(const RenderShape& rshape, uint8_t opacity)
 {
     renderSettingsShape.skip = (rshape.color.a * opacity == 0) && (!rshape.fill);
@@ -175,29 +180,30 @@ void WgRenderDataShape::updateMeshes(const RenderShape &rshape, RenderUpdateFlag
 
     // optimize path
     RenderPath optPath;
+    bool optPathThin = false;
     if (rshape.trimpath()) {
         RenderPath trimmedPath;
         if (rshape.stroke->trim.trim(rshape.path, trimmedPath)) {
-            trimmedPath.optimizeWG(optPath, matrix);
+            trimmedPath.optimize(optPath, matrix, optPathThin);
         } else {
             optPath.clear();
         }
-    } else rshape.path.optimizeWG(optPath, matrix);
+    } else rshape.path.optimize(optPath, matrix, optPathThin);
 
     auto updatePath = flag & (RenderUpdateFlag::Transform | RenderUpdateFlag::Path);
 
     // update fill shapes
     if (updatePath || (flag & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient))) {
         BBox bbox;
-        // in a case of single line shape we must tesselate it as a single line stroke with minimal width
-        if (optPath.pts.count == 2 && tvg::zero(rshape.strokeWidth())) {
-            WgStroker stroker(&meshShape, MIN_WG_STROKE_WIDTH / scaling(matrix), StrokeCap::Butt, StrokeJoin::Bevel);
-            stroker.run(rshape, optPath, matrix);
+        // in a case of thin shape we must tesselate it as a stroke with minimal width
+        if (optPathThin && tvg::zero(rshape.strokeWidth())) {
+            WgStroker stroker(&meshShape, MIN_WG_STROKE_WIDTH, StrokeCap::Butt, StrokeJoin::Bevel);
+            stroker.run(optPath);
             bbox = stroker.getBBox();
             renderSettingsShape.opacityMultiplier = MIN_WG_STROKE_ALPHA;
         } else {
             WgBWTessellator bwTess{&meshShape};
-            bwTess.tessellate(optPath, matrix);
+            bwTess.tessellate(optPath);
             convex = bwTess.convex;
             bbox = bwTess.getBBox();
         }
@@ -210,18 +216,17 @@ void WgRenderDataShape::updateMeshes(const RenderShape &rshape, RenderUpdateFlag
     }
     // update strokes shapes
     if (rshape.stroke && (updatePath || (flag & (RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke)))) {
-        auto strokeWidth = 0.0f;
-        if (isinf(matrix.e11)) {
-            strokeWidth = rshape.strokeWidth() * scaling(matrix);
-            if (strokeWidth <= MIN_WG_STROKE_WIDTH) strokeWidth = MIN_WG_STROKE_WIDTH;
-            strokeWidth = strokeWidth / matrix.e11;
-        } else {
-            strokeWidth = rshape.strokeWidth();
-        }
+        auto strokeWidth = rshape.strokeWidth();
+        auto strokeWidthWorld = strokeWidth * scaling(matrix);
+        if (!std::isfinite(strokeWidthWorld)) strokeWidthWorld = strokeWidth;
+        if (!std::isfinite(strokeWidthWorld)) strokeWidthWorld = 0.0f;
+
         //run stroking only if it's valid
-        if (!tvg::zero(strokeWidth)) {
-            WgStroker stroker(&meshStrokes, strokeWidth, rshape.strokeCap(), rshape.strokeJoin());
-            stroker.run(rshape, optPath, matrix);
+        if (!tvg::zero(strokeWidthWorld)) {
+            WgStroker stroker(&meshStrokes, strokeWidthWorld, rshape.strokeCap(), rshape.strokeJoin(), rshape.strokeMiterlimit());
+            RenderPath dashedPathWorld;
+            if (rshape.strokeDash(dashedPathWorld, &matrix)) stroker.run(dashedPathWorld);
+            else stroker.run(optPath);
             renderSettingsStroke.opacityMultiplier = 1.0f;
             if (meshStrokes.ibuffer.empty()) {
                 meshStrokes.clear();
@@ -233,7 +238,7 @@ void WgRenderDataShape::updateMeshes(const RenderShape &rshape, RenderUpdateFlag
         }
     }
     // update shapes bbox (with empty path handling)
-    if (!meshShape.vbuffer.empty() || !meshStrokes.vbuffer.empty()) updateAABB(matrix);
+    if (!meshShape.vbuffer.empty() || !meshStrokes.vbuffer.empty()) updateAABB();
     else bbox = aabb = {{0, 0}, {0, 0}};
     meshBBox.bbox(bbox.min, bbox.max);
 }
@@ -298,12 +303,10 @@ void WgRenderDataShapePool::release(WgContext& context)
 // WgRenderDataPicture
 //***********************************************************************
 
-void WgRenderDataPicture::updateSurface(WgContext& context, const RenderSurface* surface)
+void WgRenderDataPicture::updateSurface(WgContext& context, const RenderSurface* surface, const Matrix& transform, FilterMethod filter, bool updateTexture)
 {
-    // upoate mesh data
-    meshData.imageBox(surface->w, surface->h);
-    // update texture data
-    imageData.update(context, surface);
+    meshData.imageBox(surface->w, surface->h, transform);
+    if (updateTexture) imageData.update(context, surface, filter);
 }
 
 
@@ -524,6 +527,28 @@ void WgStageBufferGeometry::flush(WgContext& context)
 }
 
 //***********************************************************************
+// WgStageBufferSolidColor
+//***********************************************************************
+
+void WgStageBufferSolidColor::release(WgContext& context)
+{
+    context.releaseBuffer(vbuffer_gpu);
+}
+
+
+void WgStageBufferSolidColor::clear()
+{
+    vbuffer.clear();
+}
+
+
+void WgStageBufferSolidColor::flush(WgContext& context)
+{
+    if (vbuffer.count > 0)
+        context.allocateBufferVertex(vbuffer_gpu, (float*)vbuffer.data, vbuffer.count * sizeof(WgShaderTypeVec4f));
+}
+
+//***********************************************************************
 // WgIntersector
 //***********************************************************************
 
@@ -539,12 +564,12 @@ bool WgIntersector::isPointInTriangle(const Point& p, const Point& a, const Poin
 
 
 // triangle list
-bool WgIntersector::isPointInTris(const Point& p, const WgMeshData& mesh, const Matrix& tr)
+bool WgIntersector::isPointInTris(const Point& p, const WgMeshData& mesh)
 {
     for (uint32_t i = 0; i < mesh.ibuffer.count; i += 3) {
-        auto p0 = mesh.vbuffer[mesh.ibuffer[i+0]] * tr;
-        auto p1 = mesh.vbuffer[mesh.ibuffer[i+1]] * tr;
-        auto p2 = mesh.vbuffer[mesh.ibuffer[i+2]] * tr;
+        auto p0 = mesh.vbuffer[mesh.ibuffer[i+0]];
+        auto p1 = mesh.vbuffer[mesh.ibuffer[i+1]];
+        auto p2 = mesh.vbuffer[mesh.ibuffer[i+2]];
         if (isPointInTriangle(p, p0, p1, p2)) return true;
     }
     return false;
@@ -552,14 +577,14 @@ bool WgIntersector::isPointInTris(const Point& p, const WgMeshData& mesh, const 
 
 
 // even-odd triangle list
-bool WgIntersector::isPointInMesh(const Point& p, const WgMeshData& mesh, const Matrix& tr)
+bool WgIntersector::isPointInMesh(const Point& p, const WgMeshData& mesh)
 {
     uint32_t crossings = 0;
     for (uint32_t i = 0; i < mesh.ibuffer.count; i += 3) {
         Point triangle[3] = {
-            mesh.vbuffer[mesh.ibuffer[i+0]] * tr,
-            mesh.vbuffer[mesh.ibuffer[i+1]] * tr,
-            mesh.vbuffer[mesh.ibuffer[i+2]] * tr
+            mesh.vbuffer[mesh.ibuffer[i+0]],
+            mesh.vbuffer[mesh.ibuffer[i+1]],
+            mesh.vbuffer[mesh.ibuffer[i+2]]
         };
         for (uint32_t j = 0; j < 3; j++) {
             auto p1 = triangle[j];
@@ -580,7 +605,7 @@ bool WgIntersector::intersectClips(const Point& pt, const Array<WgRenderDataPain
 {
     for (uint32_t i = 0; i < clips.count; i++) {
         auto clip = (WgRenderDataShape*)clips[i];
-        if (!isPointInMesh(pt, clip->meshShape, clip->transform)) return false;
+        if (!isPointInMesh(pt, clip->meshShape)) return false;
     }
     return true;
 }
@@ -596,8 +621,8 @@ bool WgIntersector::intersectShape(const RenderRegion region, const WgRenderData
             Point pt{(float)x + region.min.x, (float)y + region.min.y};
             if (y % 2 == 1) pt.y = (float) sizeY - y - sizeY % 2 + region.min.y;
             if (intersectClips(pt, shape->clips)) {
-                if (!shape->renderSettingsShape.skip && isPointInMesh(pt, shape->meshShape, shape->transform)) return true;
-                if (!shape->renderSettingsStroke.skip && isPointInTris(pt, shape->meshStrokes, shape->transform)) return true;
+                if (!shape->renderSettingsShape.skip && isPointInMesh(pt, shape->meshShape)) return true;
+                if (!shape->renderSettingsStroke.skip && isPointInTris(pt, shape->meshStrokes)) return true;
             }
         }
     }
@@ -615,7 +640,7 @@ bool WgIntersector::intersectImage(const RenderRegion region, const WgRenderData
             Point pt{(float)x + region.min.x, (float)y + region.min.y};
             if (y % 2 == 1) pt.y = (float) sizeY - y - sizeY % 2 + region.min.y;
             if (intersectClips(pt, image->clips)) {
-                if (isPointInTris(pt, image->meshData, image->transform)) return true;
+                if (isPointInTris(pt, image->meshData)) return true;
             }
         }
     }

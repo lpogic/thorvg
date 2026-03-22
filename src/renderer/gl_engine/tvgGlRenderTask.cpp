@@ -24,6 +24,15 @@
 #include "tvgGlProgram.h"
 #include "tvgGlRenderPass.h"
 
+#if !defined(THORVG_GL_TARGET_GL)
+static void clearColorTarget(uint32_t width, uint32_t height)
+{
+    GL_CHECK(glScissor(0, 0, width, height));
+    GL_CHECK(glClearColor(0, 0, 0, 0));
+    GL_CHECK(glClear(GL_COLOR_BUFFER_BIT));
+}
+#endif
+
 /************************************************************************/
 /* GlRenderTask Class Implementation                                    */
 /************************************************************************/
@@ -61,13 +70,23 @@ void GlRenderTask::run()
     // setup scissor rect
     GL_CHECK(glScissor(mViewport.sx(), mViewport.sy(), mViewport.sw(), mViewport.sh()));
 
+    if (mUseVertexColor) {
+        GL_CHECK(glDisableVertexAttribArray(1));
+        GL_CHECK(glVertexAttrib4f(1, mVertexColor[0], mVertexColor[1], mVertexColor[2], mVertexColor[3]));
+    }
+
+    GLint defaultArrayBuffer = 0;
+    GL_CHECK(glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &defaultArrayBuffer));
+
     // setup attribute layout
     for (uint32_t i = 0; i < mVertexLayout.count; i++) {
         const auto &layout = mVertexLayout[i];
+        auto sourceBuffer = layout.arrayBufferId ? layout.arrayBufferId : static_cast<GLuint>(defaultArrayBuffer);
+        GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, sourceBuffer));
         GL_CHECK(glEnableVertexAttribArray(layout.index));
-        GL_CHECK(glVertexAttribPointer(layout.index, layout.size, GL_FLOAT,
-                                   GL_FALSE, layout.stride,
-                                   reinterpret_cast<void *>(layout.offset)));
+        GL_CHECK(glVertexAttribPointer(layout.index, layout.size, layout.type,
+                                       layout.normalized, layout.stride,
+                                       reinterpret_cast<void*>(layout.offset)));
     }
 
     // binding uniforms
@@ -75,13 +94,13 @@ void GlRenderTask::run()
         const auto& binding = mBindingResources[i];
         if (binding.type == GlBindingType::kTexture) {
             GL_CHECK(glActiveTexture(GL_TEXTURE0 + binding.bindPoint));
-            GL_CHECK(glBindTexture(GL_TEXTURE_2D, binding.gBufferId));
+            GL_CHECK(glBindTexture(GL_TEXTURE_2D, binding.resourceId));
 
             mProgram->setUniform1Value(binding.location, 1, (int32_t*)&binding.bindPoint);
         } else if (binding.type == GlBindingType::kUniformBuffer) {
 
             GL_CHECK(glUniformBlockBinding(mProgram->getProgramId(), binding.location, binding.bindPoint));
-            GL_CHECK(glBindBufferRange(GL_UNIFORM_BUFFER, binding.bindPoint, binding.gBufferId,
+            GL_CHECK(glBindBufferRange(GL_UNIFORM_BUFFER, binding.bindPoint, binding.resourceId,
                                        binding.bufferOffset, binding.bufferRange));
         }
     }
@@ -93,6 +112,8 @@ void GlRenderTask::run()
         const auto &layout = mVertexLayout[i];
         GL_CHECK(glDisableVertexAttribArray(layout.index));
     }
+
+    GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(defaultArrayBuffer)));
 }
 
 
@@ -101,6 +122,14 @@ void GlRenderTask::addVertexLayout(const GlVertexLayout &layout)
     mVertexLayout.push(layout);
 }
 
+void GlRenderTask::setVertexColor(float r, float g, float b, float a)
+{
+    mUseVertexColor = true;
+    mVertexColor[0] = r;
+    mVertexColor[1] = g;
+    mVertexColor[2] = b;
+    mVertexColor[3] = a;
+}
 
 void GlRenderTask::addBindResource(const GlBindingResource &binding)
 {
@@ -345,16 +374,17 @@ void GlSceneBlendTask::run()
     const auto height = mSrcFbo->height;
     if (width <= 0 || height <= 0) return;
 
-    GL_CHECK(glBindFramebuffer(GL_READ_FRAMEBUFFER, mSrcFbo->fbo));
-    GL_CHECK(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mDstCopyFbo->resolvedFbo));
 
 #if defined(THORVG_GL_TARGET_GL)
-    const auto& srcVp = mSrcFbo->viewport;
-    // Copy current target into dstCopyFbo for blending.
-    GL_CHECK(glViewport(0, 0, srcVp.w(), srcVp.h()));
-    GL_CHECK(glScissor(0, 0, srcVp.w(), srcVp.h()));
+    GL_CHECK(glBindFramebuffer(GL_READ_FRAMEBUFFER, getTargetFbo()));
+    GL_CHECK(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mDstCopyFbo->resolvedFbo));
+    GL_CHECK(glViewport(0, 0, mDstCopyFbo->width, mDstCopyFbo->height));
+    GL_CHECK(glScissor(0, 0, mDstCopyFbo->width, mDstCopyFbo->height));
     GL_CHECK(glBlitFramebuffer(vp.min.x, vp.min.y, vp.max.x, vp.max.y, 0, 0, vp.w(), vp.h(), GL_COLOR_BUFFER_BIT, GL_LINEAR));
 #else // TODO: create partial buffer when MSAA is disabled
+    GL_CHECK(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mDstCopyFbo->resolvedFbo));
+    if (vp.min.x != 0 || vp.min.y != 0 || mDstCopyFbo->width != static_cast<uint32_t>(vp.w()) || mDstCopyFbo->height != static_cast<uint32_t>(vp.h())) clearColorTarget(mDstCopyFbo->width, mDstCopyFbo->height);
+    GL_CHECK(glBindFramebuffer(GL_READ_FRAMEBUFFER, mSrcFbo->fbo));
     GL_CHECK(glViewport(0, 0, width, height));
     GL_CHECK(glScissor(vp.min.x, vp.min.y, vp.w(), vp.h()));
     GL_CHECK(glBlitFramebuffer(vp.min.x, vp.min.y, vp.max.x, vp.max.y, vp.min.x, vp.min.y, vp.max.x, vp.max.y, GL_COLOR_BUFFER_BIT, GL_NEAREST));
@@ -449,6 +479,7 @@ void GlDirectBlendTask::run()
     GL_CHECK(glScissor(0, 0, width, height));
     GL_CHECK(glBlitFramebuffer(x, y, x + width, y + height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_LINEAR));
 #else // TODO: create partial buffer when MSAA is disabled
+    if (x != 0 || y != 0 || mDstCopyFbo->width != static_cast<uint32_t>(width) || mDstCopyFbo->height != static_cast<uint32_t>(height)) clearColorTarget(mDstCopyFbo->width, mDstCopyFbo->height);
     GL_CHECK(glViewport(0, 0, fboW, fboH));
     GL_CHECK(glScissor(x, y, width, height));
     GL_CHECK(glBlitFramebuffer(x, y, x + width, y + height, x, y, x + width, y + height, GL_COLOR_BUFFER_BIT, GL_NEAREST));
@@ -500,6 +531,7 @@ void GlComplexBlendTask::run()
     GL_CHECK(glScissor(0, 0, dstVp.w(), dstVp.h()));
     GL_CHECK(glBlitFramebuffer(vp.min.x, vp.min.y, vp.max.x, vp.max.y, 0, 0, vp.w(), vp.h(), GL_COLOR_BUFFER_BIT, GL_LINEAR));
 #else // TODO: create partial buffer when MSAA is disabled
+    if (vp.min.x != 0 || vp.min.y != 0 || mDstCopyFbo->width != static_cast<uint32_t>(vp.w()) || mDstCopyFbo->height != static_cast<uint32_t>(vp.h())) clearColorTarget(mDstCopyFbo->width, mDstCopyFbo->height);
     GL_CHECK(glViewport(0, 0, width, height));
     GL_CHECK(glScissor(vp.min.x, vp.min.y, vp.w(), vp.h()));
     GL_CHECK(glBlitFramebuffer(vp.min.x, vp.min.y, vp.max.x, vp.max.y, vp.min.x, vp.min.y, vp.max.x, vp.max.y, GL_COLOR_BUFFER_BIT, GL_NEAREST));

@@ -81,9 +81,7 @@ struct RenderContext
     LottieObject** begin = nullptr; //iteration entry point
     Array<RenderRepeater> repeaters;
     Matrix* transform = nullptr;
-    LottieRoundnessModifier* roundness = nullptr;
-    LottieOffsetModifier* offset = nullptr;
-    LottieModifier* modifier = nullptr;
+    LottieModifier* modifiers = nullptr;
     RenderFragment fragment = ByNone;  //render context has been fragmented
     bool reqFragment = false;  //requirement to fragment the render context
 
@@ -98,8 +96,7 @@ struct RenderContext
     {
         propagator->unref(false);
         delete(transform);
-        delete(roundness);
-        delete(offset);
+        delete (modifiers);
     }
 
     RenderContext(const RenderContext& rhs, Shape* propagator, bool mergeable = false) : propagator(propagator)
@@ -108,14 +105,30 @@ struct RenderContext
         propagator->ref();
         repeaters = rhs.repeaters;
         fragment = rhs.fragment;
-        if (rhs.roundness) {
-            roundness = new LottieRoundnessModifier(rhs.roundness->buffer, rhs.roundness->r);
-            update(roundness);
+
+        // copy modifiers
+        auto m = rhs.modifiers;
+        while (m) {
+            switch (m->type) {
+                case LottieModifier::Type::Roundness: {
+                    auto roundness = static_cast<LottieRoundnessModifier*>(m);
+                    update(new LottieRoundnessModifier(roundness->buffer, roundness->r));
+                    break;
+                }
+                case LottieModifier::Type::Offset: {
+                    auto offset = static_cast<LottieOffsetModifier*>(m);
+                    update(new LottieOffsetModifier(offset->buffer, offset->offset, offset->miterLimit, offset->join));
+                    break;
+                }
+                case LottieModifier::Type::PuckerBloat: {
+                    auto pucker = static_cast<LottiePuckerBloatModifier*>(m);
+                    update(new LottiePuckerBloatModifier(pucker->buffer, pucker->amount));
+                    break;
+                }
+            }
+            m = m->next;
         }
-        if (rhs.offset) {
-            offset = new LottieOffsetModifier(rhs.offset->offset, rhs.offset->miterLimit, rhs.offset->join);
-            update(offset);
-        }
+
         if (rhs.transform) {
             transform = new Matrix;
             *transform = *rhs.transform;
@@ -124,8 +137,8 @@ struct RenderContext
 
     void update(LottieModifier* next)
     {
-        if (modifier) modifier = modifier->decorate(next);
-        else modifier = next;
+        if (modifiers) modifiers = modifiers->decorate(next);
+        else modifiers = next;
     }
 };
 
@@ -169,7 +182,8 @@ struct LottieBuilder
     const AssetResolver* resolver = nullptr;  //do not free this
 
 private:
-    void appendRect(Shape* shape, Point& pos, Point& size, float r, bool clockwise, RenderContext* ctx);
+    void appendRect(LottieRect* rect, Shape* shape, Point& pos, Point& size, float r, bool clockwise, RenderContext* ctx);
+    void appendCircle(LottieEllipse* ellipse, Shape* shape, Point& center, Point& radius, bool clockwise, RenderContext* ctx);
     bool fragmented(LottieGroup* parent, LottieObject** child, Inlist<RenderContext>& contexts, RenderContext* ctx, RenderFragment fragment);
     Shape* textShape(LottieText* text, float frameNo, const TextDocument& doc, LottieGlyph* glyph, const RenderText& ctx);
 
@@ -204,6 +218,7 @@ private:
     void updateRepeater(LottieGroup* parent, LottieObject** child, float frameNo, Inlist<RenderContext>& contexts, RenderContext* ctx);
     void updateRoundedCorner(LottieGroup* parent, LottieObject** child, float frameNo, Inlist<RenderContext>& contexts, RenderContext* ctx);
     void updateOffsetPath(LottieGroup* parent, LottieObject** child, float frameNo, Inlist<RenderContext>& contexts, RenderContext* ctx);
+    void updatePuckerBloat(LottieGroup* parent, LottieObject** child, float frameNo, Inlist<RenderContext>& contexts, RenderContext* ctx);
 
     RenderPath buffer;   //reusable path
     LottieExpressions* exps;

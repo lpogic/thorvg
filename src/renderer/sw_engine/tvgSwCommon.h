@@ -271,8 +271,9 @@ struct SwImage
     int32_t      ox = 0;         //offset x
     int32_t      oy = 0;         //offset y
     float        scale;
-    uint8_t      channelSize;
 
+    uint8_t      channelSize;
+    FilterMethod filter;
     bool         direct = false;  //draw image directly (with offset)
     bool         scaled = false;  //draw scaled image
 };
@@ -335,11 +336,56 @@ struct SwCellPool
 
 struct SwMpool
 {
-    SwOutline* outline;
-    SwStrokeBorder* leftBorder;
-    SwStrokeBorder* rightBorder;
-    SwCellPool* cellPool;
-    unsigned allocSize;
+    SwOutline* outlines;
+    SwStrokeBorder* lBorders;
+    SwStrokeBorder* rBorders;
+    SwCellPool* cellPools;
+
+    SwMpool(uint32_t threads)
+    {
+        auto allocSize = threads + 1;
+        outlines = new SwOutline[allocSize];
+        lBorders = new SwStrokeBorder[allocSize];
+        rBorders = new SwStrokeBorder[allocSize];
+        cellPools = new SwCellPool[allocSize];
+    }
+
+    ~SwMpool()
+    {
+        delete[] (outlines);
+        delete[] (lBorders);
+        delete[] (rBorders);
+        delete[] (cellPools);
+    }
+
+    SwCellPool* cell(unsigned idx)
+    {
+        return &cellPools[idx];
+    }
+
+    SwOutline* outline(unsigned idx)
+    {
+        outlines[idx].pts.clear();
+        outlines[idx].cntrs.clear();
+        outlines[idx].types.clear();
+        outlines[idx].closed.clear();
+
+        return &outlines[idx];
+    }
+
+    SwStrokeBorder* strokeLBorder(unsigned idx)
+    {
+        lBorders[idx].pts.clear();
+        lBorders[idx].start = -1;
+        return &lBorders[idx];
+    }
+
+    SwStrokeBorder* strokeRBorder(unsigned idx)
+    {
+        rBorders[idx].pts.clear();
+        rBorders[idx].start = -1;
+        return &rBorders[idx];
+    }
 };
 
 static inline int32_t TO_SWCOORD(float val)
@@ -417,6 +463,7 @@ static inline RenderColor BLEND_UPRE(uint32_t c)
 static inline uint32_t BLEND_PRE(uint32_t c1, uint32_t c2, uint8_t a)
 {
     if (a == 255) return c1;
+    else if (a == 0) return c2;
     return ALPHA_BLEND(c1, a) + ALPHA_BLEND(c2, 255 - a);
 }
 
@@ -487,7 +534,6 @@ static inline uint32_t opBlendMultiply(uint32_t s, uint32_t d)
 
     return BLEND_PRE(JOIN(255, f(C1(s), o.r), f(C2(s), o.g), f(C3(s), o.b)), s, o.a);
 }
-
 
 static inline uint32_t opBlendOverlay(uint32_t s, uint32_t d)
 {
@@ -692,13 +738,9 @@ bool rleClip(SwRle* rle, const SwRle* clip);
 bool rleClip(SwRle* rle, const RenderRegion* clip);
 bool rleIntersect(const SwRle* rle, const RenderRegion& region);
 
-SwMpool* mpoolInit(uint32_t threads);
-void mpoolTerm(SwMpool* mpool);
-SwOutline* mpoolReqOutline(SwMpool* mpool, unsigned idx);
-SwOutline* mpoolReqDashOutline(SwMpool* mpool, unsigned idx);
-SwStrokeBorder* mpoolReqStrokeLBorder(SwMpool* mpool, unsigned idx);
-SwStrokeBorder* mpoolReqStrokeRBorder(SwMpool* mpool, unsigned idx);
-SwCellPool* mpoolReqCellPool(SwMpool* mpool, unsigned idx);
+void mpoolInit(uint32_t threads);
+void mpoolTerm();
+SwMpool* mpoolReq();
 
 bool rasterCompositor(SwSurface* surface);
 bool rasterShape(SwSurface* surface, SwShape* shape, const RenderRegion& bbox, RenderColor& c);

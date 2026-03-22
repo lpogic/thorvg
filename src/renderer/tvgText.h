@@ -107,7 +107,7 @@ struct TextImpl : Text
         return to<ShapeImpl>(shape)->bounds();
     }
 
-    bool render(RenderMethod* renderer)
+    bool render(RenderMethod* renderer, TVG_UNUSED CompositionFlag flag)
     {
         if (!loader || !fm.engine) return true;
         renderer->blend(impl.blendMethod);
@@ -126,6 +126,20 @@ struct TextImpl : Text
         return true;
     }
 
+    Result metrics(TextMetrics& metrics)
+    {
+        if (!loader || fm.fontSize <= 0.0f) return Result::InsufficientCondition;
+        loader->metrics(fm, metrics);
+        return Result::Success;
+    }
+
+    Result metrics(const char* ch, GlyphMetrics& metrics)
+    {
+        if (!loader || fm.fontSize <= 0.0f) return Result::InsufficientCondition;
+        if (ch && loader->metrics(fm, ch, metrics)) return Result::Success;
+        return Result::InvalidArguments;
+    }
+
     bool skip(RenderUpdateFlag flag)
     {
         if (flag == RenderUpdateFlag::None) return true;
@@ -138,6 +152,12 @@ struct TextImpl : Text
         fm.wrap = mode;
         updated = true;
         impl.mark(RenderUpdateFlag::Path);
+    }
+
+    uint32_t lines()
+    {
+        if (load()) return fm.lines;
+        return 0;
     }
 
     void layout(float w, float h)

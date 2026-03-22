@@ -207,7 +207,8 @@ void LottieSlot::apply(LottieProperty* prop, bool byDefault)
 
     //apply slot object to all targets
     ARRAY_FOREACH(pair, pairs) {
-        pair->prop = pair->obj->override(prop, release);
+        auto backup = pair->obj->override(prop, release);
+        if (!release) pair->prop = backup;
     }
 
     if (!byDefault) overridden = true;
@@ -304,13 +305,15 @@ void LottieFont::prepare()
 }
 
 
-void LottieImage::prepare()
+void LottieImage::prepare(bool external)
 {
     LottieObject::type = LottieObject::Image;
 
     //Prepare the Picture image
+    auto result = Result::Unknown;
     auto picture = Picture::gen();
-    auto result = (bitmap.size > 0) ? picture->load((const char*)bitmap.data, bitmap.size, bitmap.mimeType) : picture->load(bitmap.path);
+    if (bitmap.size > 0) result = picture->load((const char*)bitmap.data, bitmap.size, bitmap.mimeType);
+    else if (external) result = picture->load(bitmap.path);
     if (result == Result::Success) resolved = true;
     picture->size(bitmap.width, bitmap.height);
     bitmap.picture = picture;

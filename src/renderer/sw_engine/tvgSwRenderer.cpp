@@ -21,7 +21,6 @@
  */
 
 #include <algorithm>
-#include <atomic>
 #include "tvgSwCommon.h"
 #include "tvgTaskScheduler.h"
 #include "tvgSwRenderer.h"
@@ -33,9 +32,9 @@
 /************************************************************************/
 /* Internal Class Implementation                                        */
 /************************************************************************/
-static atomic<int32_t> rendererCnt{-1};
-static SwMpool* globalMpool = nullptr;
-static uint32_t threadsCnt = 0;
+
+static int32_t _rendererCnt = -1;
+static mutex _rendererMtx;
 
 struct SwTask : Task
 {
@@ -120,8 +119,6 @@ struct SwShapeTask : SwTask
 
     void run(unsigned tid) override
     {
-        if (ready(opacity == 0 && !clipper)) return;
-
         auto strokeWidth = validStrokeWidth(clipper);
         auto updateShape = flags[0] & (RenderUpdateFlag::Path | RenderUpdateFlag::Transform | RenderUpdateFlag::Clip);
         auto updateFill = (flags[0] & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient));
@@ -203,8 +200,6 @@ struct SwImageTask : SwTask
 
     void run(unsigned tid) override
     {
-        if (ready(opacity == 0)) return;
-
         //Convert colorspace if it's not aligned.
         rasterConvertCS(source, surface->cs);
         rasterPremultiply(source);
@@ -264,9 +259,9 @@ SwRenderer::~SwRenderer()
 
     delete(surface);
 
-    if (!sharedMpool) mpoolTerm(mpool);
-
-    --rendererCnt;
+    _rendererMtx.lock();
+    --_rendererCnt;
+    _rendererMtx.unlock();
 }
 
 
@@ -844,7 +839,7 @@ void SwRenderer::dispose(RenderData data)
 }
 
 
-void* SwRenderer::prepareCommon(SwTask* task, const Matrix& transform, const Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags)
+SwTask* SwRenderer::prepareCommon(SwTask* task, const Matrix& transform, const Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool ready)
 {
     if (task->disposed) return task;
 
@@ -871,13 +866,15 @@ void* SwRenderer::prepareCommon(SwTask* task, const Matrix& transform, const Arr
         static_cast<SwTask*>(*p)->done();
     }
 
+    if (task->ready(ready)) return task;
+
     if (flags) TaskScheduler::request(task);
 
     return task;
 }
 
 
-RenderData SwRenderer::prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags)
+RenderData SwRenderer::prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, FilterMethod filter, RenderUpdateFlag flags)
 {
     auto task = static_cast<SwImageTask*>(data);
     if (task) task->done();
@@ -886,9 +883,9 @@ RenderData SwRenderer::prepare(RenderSurface* surface, RenderData data, const Ma
         task->source = surface;
     }
 
-    return prepareCommon(task, transform, clips, opacity, flags);
+    task->image.filter = filter;
+    return prepareCommon(task, transform, clips, opacity, flags, (opacity == 0));
 }
-
 
 RenderData SwRenderer::prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper)
 {
@@ -901,17 +898,21 @@ RenderData SwRenderer::prepare(const RenderShape& rshape, RenderData data, const
 
     task->clipper = clipper;
 
-    return prepareCommon(task, transform, clips, opacity, flags);
+    return prepareCommon(task, transform, clips, opacity, flags, (opacity == 0 && !clipper));
 }
-
 
 bool SwRenderer::term()
 {
-    if (rendererCnt > 0) return false;
+    _rendererMtx.lock();
+    if (_rendererCnt > 0) {
+        _rendererMtx.unlock();
+        return false;
+    }
 
-    mpoolTerm(globalMpool);
-    globalMpool = nullptr;
-    rendererCnt = -1;
+    mpoolTerm();
+
+    _rendererCnt = -1;
+    _rendererMtx.unlock();
 
     return true;
 }
@@ -920,26 +921,18 @@ bool SwRenderer::term()
 SwRenderer::SwRenderer(uint32_t threads, EngineOption op)
 {
     //initialize engine
-    if (rendererCnt == -1) {
+    _rendererMtx.lock();
+    if (_rendererCnt == -1) {
 #ifdef THORVG_OPENMP_SUPPORT
         omp_set_num_threads(threads);
 #endif
-        //Share the memory pool among the renderer
-        globalMpool = mpoolInit(threads);
-        threadsCnt = threads;
-        rendererCnt = 0;
+        mpoolInit(threads);
+        _rendererCnt = 0;
     }
+    ++_rendererCnt;
+    _rendererMtx.unlock();
 
-    if (TaskScheduler::onthread()) {
-        TVGLOG("SW_RENDERER", "Running on a non-dominant thread!, Renderer(%p)", this);
-        mpool = mpoolInit(threadsCnt);
-        sharedMpool = false;
-    } else {
-        mpool = globalMpool;
-        sharedMpool = true;
-    }
+    mpool = mpoolReq();
 
     if (op == EngineOption::None) dirtyRegion.support = false;
-
-    ++rendererCnt;
 }

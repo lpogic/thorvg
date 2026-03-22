@@ -38,7 +38,7 @@ struct SwRenderer : RenderMethod
     //main features
     bool preUpdate() override;
     RenderData prepare(const RenderShape& rshape, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool clipper) override;
-    RenderData prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags) override;
+    RenderData prepare(RenderSurface* surface, RenderData data, const Matrix& transform, Array<RenderData>& clips, uint8_t opacity, FilterMethod filter, RenderUpdateFlag flags) override;
     bool postUpdate() override;
     bool preRender() override;
     bool renderShape(RenderData data) override;
@@ -81,13 +81,12 @@ private:
     Array<SwTask*>       tasks;                       //async task list
     Array<SwSurface*>    compositors;                 //render targets cache list
     RenderDirtyRegion    dirtyRegion;                 //partial rendering support
-    SwMpool*             mpool;                       //private memory pool
-    bool                 sharedMpool;                 //memory-pool behavior policy
+    SwMpool* mpool;                                   // designated memory pool
     bool                 fulldraw = true;             //buffer is cleared (need to redraw full screen)
 
     ~SwRenderer();
 
-    RenderData prepareCommon(SwTask* task, const Matrix& transform, const Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags);
+    SwTask* prepareCommon(SwTask* task, const Matrix& transform, const Array<RenderData>& clips, uint8_t opacity, RenderUpdateFlag flags, bool ready);
 };
 
 }

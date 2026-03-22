@@ -139,8 +139,8 @@ bool LottieParser::getValue(TextDocument& doc)
         else if (KEY_AS("j"))
         {
             auto val = getInt();
-            if (val == 1) doc.justify = -1.0f;        //right align
-            else if (val == 2) doc.justify = -0.5f;   //center align
+            if (val == 1) doc.justify = 1.0f;        //right align
+            else if (val == 2) doc.justify = 0.5f;   //center align
         }
         else if (KEY_AS("ca")) doc.caps = getInt();
         else if (KEY_AS("tr")) doc.tracking = getFloat() * 0.1f;
@@ -472,6 +472,7 @@ void LottieParser::registerSlot(LottieObject* obj, const char* sid, LottieProper
     ARRAY_FOREACH(p, comp->slots) {
         if ((*p)->sid != val) continue;
         (*p)->pairs.push({obj});
+        prop.sid = val;
         return;
     }
     comp->slots.push(new LottieSlot(context.layer, context.parent, val, obj, prop.type));
@@ -867,6 +868,19 @@ LottieOffsetPath* LottieParser::parseOffsetPath()
     return offsetPath;
 }
 
+LottiePuckerBloat* LottieParser::parsePuckerBloat()
+{
+    auto puckerBloat = new LottiePuckerBloat;
+
+    context.parent = puckerBloat;
+
+    while (auto key = nextObjectKey()) {
+        if (parseCommon(puckerBloat, key)) continue;
+        else if (KEY_AS("a")) parseProperty(puckerBloat->amount);
+        else skip();
+    }
+    return puckerBloat;
+}
 
 LottieObject* LottieParser::parseObject(const char* type)
 {
@@ -883,10 +897,10 @@ LottieObject* LottieParser::parseObject(const char* type)
     else if (!strcmp(type, "gs")) return parseGradientStroke();
     else if (!strcmp(type, "tm")) return parseTrimpath();
     else if (!strcmp(type, "rp")) return parseRepeater();
-    else if (!strcmp(type, "mm")) TVGLOG("LOTTIE", "MergePath(mm) is not supported yet");
-    else if (!strcmp(type, "pb")) TVGLOG("LOTTIE", "Puker/Bloat(pb) is not supported yet");
-    else if (!strcmp(type, "tw")) TVGLOG("LOTTIE", "Twist(tw) is not supported yet");
+    else if (!strcmp(type, "pb")) return parsePuckerBloat();
     else if (!strcmp(type, "op")) return parseOffsetPath();
+    else if (!strcmp(type, "mm")) TVGLOG("LOTTIE", "MergePath(mm) is not supported yet");
+    else if (!strcmp(type, "tw")) TVGLOG("LOTTIE", "Twist(tw) is not supported yet");
     else if (!strcmp(type, "zz")) TVGLOG("LOTTIE", "ZigZag(zz) is not supported yet");
     return nullptr;
 }
@@ -949,6 +963,11 @@ void LottieParser::parseObject(Array<LottieObject*>& parent)
 
 void LottieParser::parseImage(LottieImage* image, const char* data, const char* subPath, bool embedded, float width, float height)
 {
+    auto dlen = strlen(data);
+    if (dlen == 0) return;
+
+    auto external = false;
+
     //embedded image resource. should start with "data:"
     //header look like "data:image/png;base64," so need to skip till ','.
     if (embedded && !strncmp(data, "data:", 5)) {
@@ -958,18 +977,22 @@ void LottieParser::parseImage(LottieImage* image, const char* data, const char* 
         image->bitmap.mimeType = duplicate(mimeType, needle - mimeType);
         //b64 data
         auto b64Data = strstr(data, ",") + 1;
-        size_t length = strlen(data) - (b64Data - data);
+        size_t length = dlen - (b64Data - data);
         image->bitmap.size = b64Decode(b64Data, length, &image->bitmap.data);
+    //remote image resource (https:// or http://)
+    } else if (!strncmp(data, "https://", 8) || !strncmp(data, "http://", 7)) {
+        image->bitmap.path = duplicate(data);
     //external image resource
     } else {
-        auto len = strlen(dirName) + strlen(subPath) + strlen(data) + 2;
+        auto subPathLen = subPath ? strlen(subPath) : 0;
+        auto len = strlen(dirName) + subPathLen + dlen + 2;
         image->bitmap.path = tvg::malloc<char>(len);
-        snprintf(image->bitmap.path, len, "%s/%s%s", dirName, subPath, data);
+        snprintf(image->bitmap.path, len, "%s/%s%s", dirName, subPath ? subPath : "", data);
+        external = true;
     }
-
     image->bitmap.width = width;
     image->bitmap.height = height;
-    image->prepare();
+    image->prepare(external);
 }
 
 

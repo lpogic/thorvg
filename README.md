@@ -1,5 +1,5 @@
 [![LFX Health Score](https://insights.linuxfoundation.org/api/badge/health-score?project=thorvg)](https://insights.linuxfoundation.org/project/thorvg)
-[![CodeFactor](https://www.codefactor.io/repository/github/hermet/thorvg/badge)](https://www.codefactor.io/repository/github/hermet/thorvg)
+[![CodeFactor](https://www.codefactor.io/repository/github/thorvg/thorvg/badge)](https://www.codefactor.io/repository/github/thorvg/thorvg)
 ![BinarySize](https://img.shields.io/badge/Size->150kb-black)
 [![License](https://img.shields.io/badge/licence-MIT-green.svg?style=flat)](LICENSE)
 [![Wikipedia](https://img.shields.io/badge/Wikipedia-000000?style=flat&logo=wikipedia&logoColor=white)](https://en.wikipedia.org/wiki/Thor_Vector_Graphics)
@@ -13,17 +13,17 @@
 [![Build iOS](https://github.com/thorvg/thorvg/actions/workflows/build_ios.yml/badge.svg?branch=main&event=push)](https://github.com/thorvg/thorvg/actions/workflows/build_ios.yml)
 [![Build Android](https://github.com/thorvg/thorvg/actions/workflows/build_android.yml/badge.svg?branch=main&event=push)](https://github.com/thorvg/thorvg/actions/workflows/build_android.yml)
 <br>
-[![Latest](https://img.shields.io/github/v/release/thorvg/thorvg)](https://github.com/thorvg/thorvg/releases/latest)
-[![vcpkg](https://img.shields.io/vcpkg/v/thorvg)](https://vcpkg.link/ports/thorvg)
+[![Latest](https://img.shields.io/github/v/release/thorvg/thorvg?color=orange)](https://github.com/thorvg/thorvg/releases/latest)
+[![vcpkg](https://img.shields.io/vcpkg/v/thorvg?color=orange)](https://vcpkg.link/ports/thorvg)
 [![ArchLinux](https://img.shields.io/aur/version/thorvg?color=orange)](https://aur.archlinux.org/packages/thorvg)
 [![Conan](https://img.shields.io/conan/v/thorvg)](https://conan.io/center/recipes/thorvg)
 [![Fedora](https://img.shields.io/fedora/v/thorvg?color=orange)](https://src.fedoraproject.org/rpms/thorvg)
 [![MSYS2](https://img.shields.io/badge/msys2-Latest-orange)](https://packages.msys2.org/packages/mingw-w64-x86_64-thorvg?repo=mingw64)
-[![npm](https://img.shields.io/npm/v/@thorvg/webcanvas)](https://www.npmjs.com/package/@thorvg/webcanvas)
-[![pub](https://img.shields.io/pub/v/thorvg.svg)](https://pub.dev/packages/thorvg)
 [![Nimble](https://img.shields.io/badge/nimble-Latest-FFE953?color=orange)](https://nimble.directory/pkg/thorvg)
 [![DUB](https://img.shields.io/badge/dub-latest-orange)](https://code.dlang.org/packages/bindbc-thorvg)
 [![Homebrew](https://img.shields.io/badge/homebrew-latest-orange)](https://formulae.brew.sh/formula/thorvg)
+[![npm](https://img.shields.io/npm/v/@thorvg/webcanvas?color=orange)](https://www.npmjs.com/package/@thorvg/webcanvas)
+[![PyPI version](https://img.shields.io/pypi/v/thorvg-python?color=orange)](https://pypi.org/project/thorvg-python/)
 <br>
 
 # ThorVG
@@ -31,7 +31,7 @@
   <img width="800" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/logo/512/thorvg-banner.png">
 </p>
 
-**Thor Vector Graphics** is an **production-ready** vector graphics engine designed for creating **interactive apps and creative tools**. It combines **high performance** with **lightweight efficiency**, as Thor embodies a dual meaning—_symbolizing both immense strength and lightning-fast agility_. Embracing the philosophy of _simplicity leads to reliability_, the ThorVG project provides **intuitive, user-friendly interfaces** while maintaining a **compact footprint** and **minimal overhead**. <br />
+**Thor Vector Graphics** is a **production-ready** vector graphics engine designed for creating **interactive apps** and **creative tools**. It combines **high performance** with **lightweight efficiency**, as Thor embodies a dual meaning—_symbolizing both immense strength and lightning-fast agility_. Embracing the philosophy of _simplicity leads to reliability_, the ThorVG project provides **intuitive, user-friendly interfaces** while maintaining a **compact footprint** and **minimal overhead**. <br />
 <br />
 The following primitives are supported by ThorVG: <br />
  
@@ -134,7 +134,7 @@ Furthermore, by abstracting underlying hardware graphics APIs such as Metal, Vul
 ThorVG is designed to be portable across a wide range of devices, including small IoT devices, embedded systems, mobile platforms, game consoles, desktop environments, and the web. It is actively under development, with continuous efforts to expand support for essential platforms as needed. Currently, the major supported platforms include:<br />
 
 <p align="center">
-  <img width="700" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_platforms.png">
+  <img width="650" height="auto" src="https://github.com/thorvg/thorvg.site/blob/main/readme/example_platforms.png">
 </p>
 
 ## Contents
@@ -163,7 +163,7 @@ ThorVG is designed to be portable across a wide range of devices, including smal
     - [Playground](#playground)
   - [Tools](#tools)
     - [ThorVG Viewer](#thorvg-viewer)
-    - [ThorVG VS Code LiveView](#thorvg-vs-code-liveview)
+    - [VS Code LiveView](#vs-code-liveview)
     - [Lottie to GIF](#lottie-to-gif)
     - [SVG to PNG](#svg-to-png)
   - [Related Projects](#related-projects)
@@ -502,7 +502,7 @@ ThorVG provides a resource verification tool for the ThorVG engine. The [ThorVG 
   <img width="700" height="auto" src="https://github.com/thorvg/thorvg/assets/3711518/edadcc5e-3bbf-489d-a9a1-9570079c7d55"/>
 </p>
 
-### ThorVG VS Code LiveView
+### VS Code LiveView
 A [Visual Studio Code extension](https://marketplace.visualstudio.com/items?itemName=thorvg.thorvg-liveview) that integrates ThorVG Viewer for previewing Lottie animations and SVG files directly inside the editor.
 </br>
 
@@ -625,7 +625,7 @@ ThorVG provides flexible image loading capabilities, supporting both static and 
 The following outlines the dependencies for these optional features:
 
 * **GL Engine**: [OpenGL 3.3](https://www.khronos.org/opengl/), [OpenGL ES 3.0](https://www.khronos.org/opengles/), or a browser with [WebGL2](https://www.khronos.org/webgl/) support.
-* **WG Engine**: [webgpu-native v0.25](https://github.com/gfx-rs/wgpu-native) or a browser with [WebGPU](https://www.w3.org/TR/webgpu/) support.
+* **WG Engine**: [webgpu-native v0.27](https://github.com/gfx-rs/wgpu-native) or a browser with [WebGPU](https://www.w3.org/TR/webgpu/) support.
 * **PNG Loader** (external): [libpng](https://github.com/pnggroup/libpng)
 * **JPEG Loader** (external): [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo)
 * **WebP Loader** (external): [libwebp](https://developers.google.com/speed/webp/download)
@@ -667,7 +667,7 @@ If you’re interested in partnering with ThorVG, we’d love to hear from you. 
 <br />
 <br />
 ## Sponsors
-We sincerely thank our financial sponsors for their generous support, which drives the growth and innovation of the ThorVG project. Your contributions help us make ThorVG more powerful, efficient, and accessible for everyone.
+We sincerely thank our sponsors and supporters who help drive the continuous evolution of ThorVG. Your support is more than a contribution — it is an investment in a high-performance, accessible graphics engine built for real-world production.
 <br/>
 <br/>
 <p align="center", href="https://www.lottiefiles.com">
@@ -676,10 +676,11 @@ We sincerely thank our financial sponsors for their generous support, which driv
   </a>
 </p>
 <br/>
-We are also seeking your support to ensure the continued development of the ThorVG project. Your generous donations will help cover operational costs and contribute to the growth of this open-source project. Even a small contribution can make a big difference in securing the future of ThorVG!
+ThorVG is designed to remain open, accessible, and community-driven. To help ensure long-term sustainability and faster technical iteration, we provide additional support channels for our corporate and professional sponsors.
 <br/>
 <br/>
 
+* [GitHub Sponsors](https://github.com/sponsors/thorvg)
 * [Open Collective](https://opencollective.com/thorvg)
 
 [Back to contents](#contents)
