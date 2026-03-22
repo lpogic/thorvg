@@ -2128,14 +2128,14 @@ struct TVG_API Text : Paint
      * Returns width and maximum character index of the given text substring that would be rendered using the current font styles, satisfying the given constraints.
      *
      * @param[in] text Measured text.
+     * @param[in] method floor (1), nearest (2), ceil (3)
      * @param[in] widthLimit Maximum rendered text width. (Ignore when < 0)
      * @param[in] indexLimit Maximum character index. (Ignore when < 0)
-     * @param[in] roundMethod Determines which character index is returned when limit is reached in the middle of character. Analogous to rounding float to integer ways: floor (1), nearest (2), ceil (3).
      * @param[out] width Measured substring width.
      * @param[out] index Maximum character index of the substring which matches given limits.
      *
      */
-    Result measure(const char* text, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) noexcept;
+    Result measure(const char* text, int method, float widthLimit, int indexLimit, float* width, int* index) noexcept;
 
     // END_THORVG_GUI_PATH
 

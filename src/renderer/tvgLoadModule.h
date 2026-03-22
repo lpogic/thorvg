@@ -167,7 +167,7 @@ struct FontLoader : LoadModule
     virtual void transform(Paint* paint, FontMetrics& fm, float italicShear) = 0;
     virtual void release(FontMetrics& fm) = 0;
     virtual void copy(const FontMetrics& in, FontMetrics& out) = 0;
-    virtual bool measure(FontMetrics& fm, const char* utf8, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) = 0;
+    virtual bool measure(FontMetrics& fm, const char* utf8, int method, float widthLimit, int indexLimit, float* width, int* index) = 0;
 };
 
 }

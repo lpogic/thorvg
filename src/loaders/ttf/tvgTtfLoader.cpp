@@ -590,7 +590,7 @@ void TtfLoader::copy(const FontMetrics& in, FontMetrics& out)
     *static_cast<TtfMetrics*>(out.engine) = *static_cast<TtfMetrics*>(in.engine);
 }
 
-bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int roundMethod, float widthLimit, int indexLimit, float* width, int* index)
+bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int method, float xLimit, int indexLimit, float* width, int* index)
 {
     TtfGlyphMetrics* ltgm = nullptr;
     Point cursor = {};
@@ -600,7 +600,7 @@ bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int roundMethod, flo
     size_t idx = 0;
 
     auto scale = fm.fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
-    widthLimit = widthLimit / scale;
+    xLimit = xLimit / scale;
 
     while (*utf8) {
         auto code = _codepoints(&utf8);
@@ -611,7 +611,7 @@ bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int roundMethod, flo
 
         cursor.x += (rtgm->advance + kerning.x) * fm.spacing.x;
 
-        if (widthLimit > 0 && widthLimit < cursor.x || indexLimit >= 0 && indexLimit <= idx) {
+        if (xLimit > 0 && xLimit < cursor.x || indexLimit >= 0 && indexLimit <= idx) {
             limitReached = true;
             break;
         }
@@ -621,29 +621,41 @@ bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int roundMethod, flo
         ++idx;
     }
 
-    switch(roundMethod) {
+    if(!limitReached && indexLimit < 0 && ltgm && ltgm->w > 0) {
+        lastCursorX += ltgm->w + (ltgm->lsb - ltgm->advance) * fm.spacing.x;
+    }
+
+    switch(method) {
+        case 1: // FLOOR
+            if(limitReached) {
+                if(width) *width = (lastCursorX + kerning.x / 2) * scale;
+                if(index) *index = idx;
+                break;
+            }
+            if(width) *width = lastCursorX * scale;
+            if(index) *index = idx;
+            break;
+        case 2: // NEAREST
+            if(limitReached) {
+                if(xLimit - lastCursorX > cursor.x - xLimit) {
+                    if(width) *width = cursor.x * scale;
+                    if(index) *index = idx + 1;
+                    break;
+                }
+            }
+            if(width) *width = lastCursorX * scale;
+            if(index) *index = idx;
+            break;
         case 3: // CEIL
             if(limitReached) {
                 if(width) *width = cursor.x * scale;
                 if(index) *index = idx + 1;
                 break;
             }
-        case 2: // NEAREST
-            if(limitReached) {
-                if(widthLimit - lastCursorX > cursor.x - widthLimit) {
-                    if(width) *width = cursor.x * scale;
-                    if(index) *index = idx + 1;
-                    break;
-                }
-            }
-        case 1: // FLOOR
-            if(limitReached) {
-                if(width) *width = (lastCursorX + kerning.x / 2) * scale;
-                if(index) *index = idx;
-            } else {
-                if(width) *width = lastCursorX * scale;
-                if(index) *index = idx;
-            }
+            if(width) *width = lastCursorX * scale;
+            if(index) *index = idx;
+            break;
+
     }
 
     return true;

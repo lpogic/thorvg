@@ -60,7 +60,7 @@ struct TtfLoader : public FontLoader
     bool get(FontMetrics& fm, char* text, RenderPath& out) override;
     void copy(const FontMetrics& in, FontMetrics& out) override;
     void release(FontMetrics& fm) override;
-    bool TtfLoader::measure(FontMetrics& fm, const char* utf8, int roundMethod, float widthLimit, int indexLimit, float* width, int* index) override;
+    bool TtfLoader::measure(FontMetrics& fm, const char* utf8, int method, float widthLimit, int indexLimit, float* width, int* index) override;
 
 private:
     float height(uint32_t loc, float spacing)
