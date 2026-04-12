@@ -81,7 +81,8 @@ void LottieLoader::release()
 /* External Class Implementation                                        */
 /************************************************************************/
 
-LottieLoader::LottieLoader() : FrameModule(FileType::Lot), builder(new LottieBuilder)
+LottieLoader::LottieLoader() :
+    AnimLoader(FileType::Lot), builder(new LottieBuilder)
 {
 
 }
@@ -100,12 +101,11 @@ LottieLoader::~LottieLoader()
     tvg::free(dirName);
 }
 
-
 bool LottieLoader::header()
 {
     //A single thread doesn't need to perform intensive tasks.
     if (TaskScheduler::threads() == 0) {
-        LoadModule::read();
+        Loader::read();
         if (prepare()) {
             w = static_cast<float>(comp->w);
             h = static_cast<float>(comp->h);
@@ -207,32 +207,34 @@ bool LottieLoader::header()
     return true;
 }
 
-
-bool LottieLoader::open(const char* data, uint32_t size, const char* rpath, bool copy)
+bool LottieLoader::open(const char* data, uint32_t size, const LoaderOps* _ops, bool copy)
 {
+    auto ops = static_cast<const PictureOps*>(_ops);
+    if (ops->caller != tvg::Type::Picture) return false;
+
     if (copy) {
         content = tvg::malloc<char>(size + 1);
-        if (!content) return false;
         memcpy((char*)content, data, size);
         const_cast<char*>(content)[size] = '\0';
     } else content = data;
 
     this->size = size;
     this->copy = copy;
-
-    if (!rpath) this->dirName = duplicate(".");
-    else this->dirName = duplicate(rpath);
+    dirName = ops->rpath ? duplicate(ops->rpath) : duplicate(".");
+    builder->resolver = ops->resolver;
 
     return header();
 }
 
-
-bool LottieLoader::open(const char* path)
+bool LottieLoader::open(const char* path, const LoaderOps* ops)
 {
 #ifdef THORVG_FILE_IO_SUPPORT
-    if ((content = LoadModule::open(path, size, true))) {
+    if (ops->caller != tvg::Type::Picture) return false;
+
+    if ((content = Loader::open(path, size, true))) {
         dirName = tvg::dirname(path);
         copy = true;
+        builder->resolver = static_cast<const PictureOps*>(ops)->resolver;
         return header();
     }
 #endif
@@ -259,8 +261,8 @@ bool LottieLoader::resize(Paint* paint, float w, float h)
 
 bool LottieLoader::read()
 {
-    //the loading has been already completed
-    if (!LoadModule::read()) return true;
+    // the loading has been already completed
+    if (!Loader::read()) return true;
 
     if (!content || size == 0) return false;
 
@@ -526,10 +528,4 @@ bool LottieLoader::quality(uint8_t value)
         build = true;
     }
     return true;
-}
-
-
-void LottieLoader::set(const AssetResolver* resolver)
-{
-    builder->resolver = resolver;
 }

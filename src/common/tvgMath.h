@@ -468,7 +468,6 @@ struct Bezier
     static void bounds(BBox& box, const Point& start, const Point& ctrl1, const Point& ctrl2, const Point& end);
 };
 
-
 /************************************************************************/
 /* Interpolation functions                                              */
 /************************************************************************/
@@ -483,4 +482,4 @@ uint8_t lerp(const uint8_t &start, const uint8_t &end, float t);
 
 }
 
-#endif //_TVG_MATH_H_
+#endif  //_TVG_MATH_H_

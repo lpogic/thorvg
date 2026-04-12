@@ -69,11 +69,10 @@ WebpLoader::~WebpLoader()
     tvg::free(surface.buf8);
 }
 
-
-bool WebpLoader::open(const char* path)
+bool WebpLoader::open(const char* path, TVG_UNUSED const LoaderOps* ops)
 {
 #ifdef THORVG_FILE_IO_SUPPORT
-    if (!(data = (uint8_t*)LoadModule::open(path, size))) return false;
+    if (!(data = (uint8_t*)Loader::open(path, size))) return false;
 
     int width, height;
     if (!WebPGetInfo(data, size, &width, &height)) return false;
@@ -86,8 +85,7 @@ bool WebpLoader::open(const char* path)
 #endif
 }
 
-
-bool WebpLoader::open(const char* data, uint32_t size, TVG_UNUSED const char* rpath, bool copy)
+bool WebpLoader::open(const char* data, uint32_t size, TVG_UNUSED const LoaderOps* ops, bool copy)
 {
     if (copy) {
         this->data = tvg::malloc<uint8_t>(size);
@@ -112,7 +110,7 @@ bool WebpLoader::open(const char* data, uint32_t size, TVG_UNUSED const char* rp
 
 bool WebpLoader::read()
 {
-    if (!LoadModule::read()) return true;
+    if (!Loader::read()) return true;
 
     if (!data || w == 0 || h == 0) return false;
 
@@ -126,7 +124,7 @@ bool WebpLoader::read()
 
 bool WebpLoader::close()
 {
-    if (!LoadModule::close()) return false;
+    if (!Loader::close()) return false;
     this->done();
     return true;
 }
