@@ -578,6 +578,32 @@ void TtfLoader::copy(const FontMetrics& in, FontMetrics& out)
     *static_cast<TtfMetrics*>(out.engine) = *static_cast<TtfMetrics*>(in.engine);
 }
 
+void TtfLoader::metrics(const FontMetrics& fm, TextMetrics& out)
+{
+    auto scale = (fm.fontSize * FontLoader::DPI) / reader.metrics.unitsPerEm;
+
+    out.advance = reader.metrics.hhea.advance * scale;
+    out.ascent = reader.metrics.hhea.ascent * scale;
+    out.descent = reader.metrics.hhea.descent * scale;
+    out.linegap = reader.metrics.hhea.linegap * scale;
+}
+
+
+bool TtfLoader::metrics(const FontMetrics& fm, const char *ch, GlyphMetrics& out)
+{
+    auto code = _codepoints(&ch, ch + strlen(ch));
+    auto glyph = request(code);
+    if (!glyph) return false;
+
+    auto scale = (fm.fontSize * FontLoader::DPI) / reader.metrics.unitsPerEm;
+
+    out.advance = glyph->advance * scale;
+    out.bearing = glyph->lsb * scale;
+    out.min = Point{glyph->x, glyph->y} * scale;
+    out.max = Point{glyph->w + glyph->x - 1, glyph->h + glyph->y - 1} * scale;
+
+    return true;
+}
 
 bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int method, float xLimit, int indexLimit, float* width, int* index)
 {
@@ -587,12 +613,13 @@ bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int method, float xL
     float lastCursorX = 0.0f;
     bool limitReached = false;
     size_t idx = 0;
+    auto utf8End = utf8 + strlen(utf8);
 
     auto scale = fm.fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
     xLimit = xLimit / scale;
 
-    while (*utf8) {
-        auto code = _codepoints(&utf8);
+    while (utf8 < utf8End) {
+        auto code = _codepoints(&utf8, utf8End);
         auto rtgm = request(code);
         if (!rtgm) continue;
         kerning = {0.0f, 0.0f};
@@ -646,34 +673,6 @@ bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int method, float xL
             break;
 
     }
-
-    return true;
-}
-
-
-void TtfLoader::metrics(const FontMetrics& fm, TextMetrics& out)
-{
-    auto scale = (fm.fontSize * FontLoader::DPI) / reader.metrics.unitsPerEm;
-
-    out.advance = reader.metrics.hhea.advance * scale;
-    out.ascent = reader.metrics.hhea.ascent * scale;
-    out.descent = reader.metrics.hhea.descent * scale;
-    out.linegap = reader.metrics.hhea.linegap * scale;
-}
-
-
-bool TtfLoader::metrics(const FontMetrics& fm, const char *ch, GlyphMetrics& out)
-{
-    auto code = _codepoints(&ch, ch + strlen(ch));
-    auto glyph = request(code);
-    if (!glyph) return false;
-
-    auto scale = (fm.fontSize * FontLoader::DPI) / reader.metrics.unitsPerEm;
-
-    out.advance = glyph->advance * scale;
-    out.bearing = glyph->lsb * scale;
-    out.min = Point{glyph->x, glyph->y} * scale;
-    out.max = Point{glyph->w + glyph->x - 1, glyph->h + glyph->y - 1} * scale;
 
     return true;
 }
