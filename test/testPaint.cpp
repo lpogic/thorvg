@@ -219,20 +219,20 @@ TEST_CASE("Bounding Box", "[tvgPaint]")
         REQUIRE(canvas->update() == Result::Success);
 
         REQUIRE(shape->bounds(&x, &y, &w, &h) == Result::Success);
-        REQUIRE(x == 4.0f);
-        REQUIRE(y == 4.0f);
-        REQUIRE(h == 12.0f);
-        REQUIRE(w == 192.0f);
+        REQUIRE(x == Approx(4.0f).margin(0.000001));
+        REQUIRE(y == Approx(4.0f).margin(0.000001));
+        REQUIRE(h == Approx(12.0f).margin(0.000001));
+        REQUIRE(w == Approx(192.0f).margin(0.000001));
 
         REQUIRE(shape->bounds(pts) == Result::Success);
-        REQUIRE(pts[0].x == 4.0f);
-        REQUIRE(pts[3].x == 4.0f);
-        REQUIRE(pts[0].y == 4.0f);
-        REQUIRE(pts[1].y == 4.0f);
-        REQUIRE(pts[1].x == 196.0f);
-        REQUIRE(pts[2].x == 196.0f);
-        REQUIRE(pts[2].y == 16.0f);
-        REQUIRE(pts[3].y == 16.0f);
+        REQUIRE(pts[0].x == Approx(4.0f).margin(0.000001));
+        REQUIRE(pts[3].x == Approx(4.0f).margin(0.000001));
+        REQUIRE(pts[0].y == Approx(4.0f).margin(0.000001));
+        REQUIRE(pts[1].y == Approx(4.0f).margin(0.000001));
+        REQUIRE(pts[1].x == Approx(196.0f).margin(0.000001));
+        REQUIRE(pts[2].x == Approx(196.0f).margin(0.000001));
+        REQUIRE(pts[2].y == Approx(16.0f).margin(0.000001));
+        REQUIRE(pts[3].y == Approx(16.0f).margin(0.000001));
 
 #ifdef THORVG_TTF_LOADER_SUPPORT
         //Text
@@ -301,7 +301,7 @@ TEST_CASE("Intersection", "[tvgPaint]")
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
 
-        uint32_t buffer[200 * 200];
+        uint32_t buffer[200 * 200] = {};
         canvas->target(buffer, 200, 200, 200, ColorSpace::ARGB8888);
 
         auto shape = Shape::gen();

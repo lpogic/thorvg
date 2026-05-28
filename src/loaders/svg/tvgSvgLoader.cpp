@@ -125,7 +125,7 @@ static void _parseAspectRatio(const char** content, AspectRatioAlign* align, Asp
 static float _findEmBaseFontSize(const SvgNode* from)
 {
     for (auto n = from; n; n = n->parent) {
-        if (n->type == SvgNodeType::Text && n->node.text.fontSize > 0.0f) return n->node.text.fontSize;
+        if ((n->type == SvgNodeType::Text || n->type == SvgNodeType::Tspan) && n->node.text.fontSize > 0.0f) return n->node.text.fontSize;
     }
     return DEFAULT_FONT_SIZE;
 }
@@ -1078,6 +1078,14 @@ static void _handleMixBlendModeAttr(TVG_UNUSED SvgParserContext* ctx, SvgNode* n
     node->style->flags |= SvgStyleFlags::BlendMode;
 }
 
+static void _handleTextAnchorAttr(TVG_UNUSED SvgParserContext* ctx, SvgNode* node, const char* value)
+{
+    node->style->flags |= SvgStyleFlags::TextAnchor;
+    if (STR_AS(value, "middle")) node->style->textAnchor = 0.5f;
+    else if (STR_AS(value, "end")) node->style->textAnchor = 1.0f;
+    else node->style->textAnchor = 0.0f;
+}
+
 static void _handleCssClassAttr(SvgParserContext* ctx, SvgNode* node, const char* value)
 {
     auto cssClass = &node->style->cssClass;
@@ -1121,9 +1129,8 @@ static constexpr struct
     STYLE_DEF(display, Display, SvgStyleFlags::Display),
     STYLE_DEF(paint-order, PaintOrder, SvgStyleFlags::PaintOrder),
     STYLE_DEF(filter, Filter, SvgStyleFlags::Filter),
-    STYLE_DEF(mix-blend-mode, MixBlendMode, SvgStyleFlags::BlendMode)
-};
-
+    STYLE_DEF(mix-blend-mode, MixBlendMode, SvgStyleFlags::BlendMode),
+    STYLE_DEF(text-anchor, TextAnchor, SvgStyleFlags::TextAnchor)};
 
 static SvgXmlSpace _toXmlSpace(const char* str)
 {
@@ -2102,7 +2109,9 @@ static constexpr struct
     size_t offset;
 } textTags[] = {
     {"x", SvgParserLengthType::Horizontal, sizeof("x"), offsetof(SvgTextNode, x)},
-    {"y", SvgParserLengthType::Vertical, sizeof("y"), offsetof(SvgTextNode, y)}};
+    {"y", SvgParserLengthType::Vertical, sizeof("y"), offsetof(SvgTextNode, y)},
+    {"dx", SvgParserLengthType::Horizontal, sizeof("dx"), offsetof(SvgTextNode, dx)},
+    {"dy", SvgParserLengthType::Vertical, sizeof("dy"), offsetof(SvgTextNode, dy)}};
 
 static bool _attrPrescanTextFontSize(void* data, const char* key, const char* value)
 {
@@ -2155,6 +2164,19 @@ static SvgNode* _createTextNode(SvgParserContext* ctx, SvgNode* parent, const ch
     return ctx->parser->node;
 }
 
+static SvgNode* _createTspanNode(SvgParserContext* ctx, SvgNode* parent, const char* buf, unsigned bufLength, parseAttributes func)
+{
+    ctx->parser->node = _createNode(parent, SvgNodeType::Tspan);
+    if (!ctx->parser->node) return nullptr;
+
+    ctx->parser->node->node.text.x = FLT_MAX;
+    ctx->parser->node->node.text.y = FLT_MAX;
+
+    func(buf, bufLength, _attrPrescanTextFontSize, ctx);
+    func(buf, bufLength, _attrParseTextNode, ctx);
+
+    return ctx->parser->node;
+}
 
 static constexpr struct
 {
@@ -2172,9 +2194,7 @@ static constexpr struct
     {"line", sizeof("line"), _createLineNode},
     {"image", sizeof("image"), _createImageNode},
     {"text", sizeof("text"), _createTextNode},
-    {"feGaussianBlur", sizeof("feGaussianBlur"), _createGaussianBlurNode}
-};
-
+    {"feGaussianBlur", sizeof("feGaussianBlur"), _createGaussianBlurNode}};
 
 static constexpr struct
 {
@@ -2912,6 +2932,7 @@ static void _styleInherit(SvgStyleProperty* child, const SvgStyleProperty* paren
     if (!(child->stroke.flags & SvgStrokeFlags::Cap)) child->stroke.cap = parent->stroke.cap;
     if (!(child->stroke.flags & SvgStrokeFlags::Join)) child->stroke.join = parent->stroke.join;
     if (!(child->stroke.flags & SvgStrokeFlags::Miterlimit)) child->stroke.miterlimit = parent->stroke.miterlimit;
+    if (!(child->flags & SvgStyleFlags::TextAnchor)) child->textAnchor = parent->textAnchor;
 }
 
 
@@ -2928,6 +2949,7 @@ static void _styleCopy(SvgStyleProperty* to, const SvgStyleProperty* from)
     if (from->flags & SvgStyleFlags::PaintOrder) to->paintOrder = from->paintOrder;
     if (from->flags & SvgStyleFlags::Display) to->display = from->display;
     if (from->flags & SvgStyleFlags::BlendMode) to->blendMode = from->blendMode;
+    if (from->flags & SvgStyleFlags::TextAnchor) to->textAnchor = from->textAnchor;
 
     //Fill
     to->fill.flags = (to->fill.flags | from->fill.flags);
@@ -3026,9 +3048,12 @@ static void _copyAttr(SvgNode* to, const SvgNode* from)
             to->node.use = from->node.use;
             break;
         }
+        case SvgNodeType::Tspan:
         case SvgNodeType::Text: {
             to->node.text.x = from->node.text.x;
             to->node.text.y = from->node.text.y;
+            to->node.text.dx = from->node.text.dx;
+            to->node.text.dy = from->node.text.dy;
             to->node.text.fontSize = from->node.text.fontSize;
             svgUtilReplace(&to->node.text.text, from->node.text.text);
             svgUtilReplace(&to->node.text.fontFamily, from->node.text.fontFamily);
@@ -3132,6 +3157,23 @@ static int _svgLoaderParserXmlTagName(const char* content, char* tagName, unsign
     return sz;
 }
 
+static void _spliceTspanClose(SvgParserContext* ctx)
+{
+    auto cur = ctx->parser->node;
+    if (!cur || cur->type != SvgNodeType::Tspan) return;
+
+    auto& t = cur->node.text;
+    bool unpositioned = (t.x == FLT_MAX && t.y == FLT_MAX && t.dx == 0.0f && t.dy == 0.0f);
+    bool noOverride = (t.fontSize <= 0.0f && !t.fontFamily && cur->xmlSpace == SvgXmlSpace::None && !(cur->style->flags & SvgStyleFlags::TextAnchor));
+
+    if (t.text && unpositioned && noOverride && cur->parent) {
+        auto& parentText = cur->parent->node.text;
+        parentText.text = append(parentText.text, t.text, strlen(t.text));
+        tvg::free(t.text);
+        t.text = nullptr;
+    }
+    ctx->parser->node = cur->parent;
+}
 
 static void _svgLoaderParserXmlClose(SvgParserContext* ctx, const char* content, unsigned int length)
 {
@@ -3156,6 +3198,11 @@ static void _svgLoaderParserXmlClose(SvgParserContext* ctx, const char* content,
             ctx->gradientStack.pop();
             break;
         }
+    }
+
+    if (ctx->openedTag == OpenedTagType::Text && STR_AS(tagName, "tspan")) {
+        _spliceTspanClose(ctx);
+        return;
     }
 
     for (unsigned int i = 0; i < sizeof(graphicsTags) / sizeof(graphicsTags[0]); i++) {
@@ -3253,6 +3300,10 @@ static void _svgLoaderParserXmlOpen(SvgParserContext* ctx, const char* content, 
         if (node->type != SvgNodeType::Defs || !empty) {
             ctx->stack.push(node);
         }
+    } else if (ctx->openedTag == OpenedTagType::Text && STR_AS(tagName, "tspan")) {
+        parent = ctx->parser->node;
+        node = _createTspanNode(ctx, parent, attrs, attrsLength, xmlParseAttributes);
+        if (empty) ctx->parser->node = parent;
     } else if ((method = _findGraphicsFactory(tagName))) {
         if (ctx->stack.count > 0) parent = ctx->stack.last();
         else parent = ctx->doc;
@@ -3384,6 +3435,7 @@ static void _free(SvgNode* node)
              tvg::free(node->node.image.href);
              break;
          }
+         case SvgNodeType::Tspan:
          case SvgNodeType::Text: {
              tvg::free(node->node.text.text);
              tvg::free(node->node.text.fontFamily);
@@ -3713,6 +3765,8 @@ void SvgLoader::clear(bool all)
 
 void SvgLoader::run(unsigned tid)
 {
+    if (!ctx.parser) return;
+
     //According to the SVG standard the value of the width/height of the viewbox set to 0 disables rendering
     if ((viewFlag & SvgViewFlag::Viewbox) && (fabsf(vbox.w) <= FLOAT_EPSILON || fabsf(vbox.h) <= FLOAT_EPSILON)) {
         TVGLOG("SVG", "The <viewBox> width and/or height set to 0 - rendering disabled.");
@@ -3752,7 +3806,7 @@ void SvgLoader::run(unsigned tid)
             }
         }
     }
-    root->ref();
+    if (root) root->ref();
     clear(false);
 }
 

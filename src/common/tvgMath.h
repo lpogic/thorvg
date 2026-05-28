@@ -33,7 +33,8 @@ namespace tvg
 {
 
 #define MATH_PI  3.14159265358979323846f
-#define MATH_PI2 1.57079632679489661923f
+#define MATH_PI2 (MATH_PI * 0.5f)
+#define MATH_2PI (MATH_PI * 2.0f)
 #define FLOAT_EPSILON 1.0e-06f  //1.192092896e-07f
 #define PATH_KAPPA 0.552284f
 
@@ -44,6 +45,10 @@ namespace tvg
 float atan2(float y, float x);
 float length(const PathCommand* cmds, uint32_t cmdsCnt, const Point* pts, uint32_t ptsCnt);
 
+static inline float atan(const Point& pt)
+{
+    return atan2(pt.y, pt.x);
+}
 
 static inline float deg2rad(float degree)
 {
@@ -130,7 +135,9 @@ static inline constexpr const Matrix identity()
 
 static inline float scaling(const Matrix& m)
 {
-    return sqrtf(m.e11 * m.e11 + m.e21 * m.e21);
+    auto sx = m.e11 * m.e11 + m.e21 * m.e21;
+    auto sy = m.e12 * m.e12 + m.e22 * m.e22;
+    return sqrtf((sx > sy) ? sx : sy);
 }
 
 
@@ -249,6 +256,9 @@ static inline bool zero(const Point& p)
 
 static inline float length(const Point& a, const Point& b)
 {
+    /* approximate sqrt(x*x + y*y) using alpha max plus beta min algorithm.
+       With alpha = 1, beta = 3/8, giving results with the largest error less
+       than 7% compared to the exact value. */
     auto x = b.x - a.x;
     auto y = b.y - a.y;
 
@@ -326,6 +336,11 @@ static inline void operator*=(Point& lhs, const Point& rhs)
     lhs.y *= rhs.y;
 }
 
+static inline void operator/=(Point& lhs, const Point& rhs)
+{
+    lhs.x /= rhs.x;
+    lhs.y /= rhs.y;
+}
 
 static inline Point operator*(const Point& lhs, const float rhs)
 {
@@ -420,6 +435,21 @@ struct BBox
         min = {FLT_MAX, FLT_MAX};
         max = {-FLT_MAX, -FLT_MAX};
     }
+
+    bool zero()
+    {
+        return (max.x == 0.0f && max.y == 0.0f);
+    }
+
+    float w()
+    {
+        return max.x - min.x;
+    }
+
+    float h()
+    {
+        return max.y - min.y;
+    }
 };
 
 
@@ -460,8 +490,8 @@ struct Bezier
     float atApprox(float at, float length) const;
     Point at(float t) const;
     float angle(float t) const;
-    bool flatten() const;
-    uint32_t segments() const;
+    bool flatten(float tolerance) const;
+    uint32_t segments(float scale = 1.0f) const;
 
     Bezier operator*(const Matrix& m);
 

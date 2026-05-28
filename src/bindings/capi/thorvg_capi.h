@@ -162,9 +162,10 @@ typedef enum
  */
 typedef enum
 {
-    TVG_ENGINE_OPTION_NONE = 0,                   /**< No engine options are enabled. This may be used to explicitly disable all optional behaviors. */
-    TVG_ENGINE_OPTION_DEFAULT = 1 << 0,           /**< Uses the default rendering mode. */
-    TVG_ENGINE_OPTION_SMART_RENDER = 1 << 1       /**< Enables automatic partial (smart) rendering optimizations. */
+    TVG_ENGINE_OPTION_NONE = 0,                      /**< No engine options are enabled. This may be used to explicitly disable all optional behaviors. */
+    TVG_ENGINE_OPTION_DEFAULT = 1 << 0,              /**< Uses the default rendering mode. */
+    TVG_ENGINE_OPTION_SMART_RENDER = 1 << 1,         /**< Enables automatic partial (smart) rendering optimizations. */
+    TVG_ENGINE_OPTION_ALIASED = 1 << 2               /**< Disables anti-aliased rendering from the default rendering mode. @note Experimental API */
 } Tvg_Engine_Option;
 
 /**
@@ -3136,23 +3137,6 @@ TVG_API Tvg_Result tvg_lottie_animation_get_marker_info(Tvg_Animation animation,
  * @since 1.0
  */
 TVG_API Tvg_Result tvg_lottie_animation_tween(Tvg_Animation animation, float from, float to, float progress);
-
-/**
- * @brief Updates the value of an expression variable for a specific layer.
- *
- * @param[in] animation The Lottie animation object.
- * @param[in] layer The name of the layer containing the variable to be updated.
- * @param[in] ix The property index of the variable within the layer.
- * @param[in] var The name of the variable to be updated.
- * @param[in] val The new value to assign to the variable.
- *
- * @retval TVG_RESULT_INSUFFICIENT_CONDITION If the animation is not loaded.
- * @retval TVG_RESULT_INVALID_ARGUMENT When the given parameter is invalid.
- * @retval TVG_RESULT_NOT_SUPPORTED When neither the layer nor the property is found in the current animation.
- *
- * @note Experimental API
- */
-TVG_API Tvg_Result tvg_lottie_animation_assign(Tvg_Animation animation, const char* layer, uint32_t ix, const char* var, float val);
 
 /**
  * @brief Sets the quality level for Lottie effects.

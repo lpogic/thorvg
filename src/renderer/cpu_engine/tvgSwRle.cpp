@@ -280,6 +280,37 @@ static inline int32_t HYPOT(SwPoint pt)
     return ((pt.x > pt.y) ? (pt.x + (3 * pt.y >> 3)) : (pt.y + (3 * pt.x >> 3)));
 }
 
+static void _splitCubic(SwPoint* base)
+{
+    int32_t a, b, c, d;
+
+    base[6].x = base[3].x;
+    c = base[1].x;
+    d = base[2].x;
+    base[1].x = a = (base[0].x + c) >> 1;
+    base[5].x = b = (base[3].x + d) >> 1;
+    c = (c + d) >> 1;
+    base[2].x = a = (a + c) >> 1;
+    base[4].x = b = (b + c) >> 1;
+    base[3].x = (a + b) >> 1;
+
+    base[6].y = base[3].y;
+    c = base[1].y;
+    d = base[2].y;
+    base[1].y = a = (base[0].y + c) >> 1;
+    base[5].y = b = (base[3].y + d) >> 1;
+    c = (c + d) >> 1;
+    base[2].y = a = (a + c) >> 1;
+    base[4].y = b = (b + c) >> 1;
+    base[3].y = (a + b) >> 1;
+}
+
+static void _splitLine(SwPoint* base)
+{
+    base[2] = base[1];
+    base[1] = {(base[0].x >> 1) + (base[1].x >> 1), (base[0].y >> 1) + (base[1].y >> 1)};
+}
+
 static void _horizLine(RleWorker& rw, int32_t x, int32_t y, int32_t area, int32_t aCount)
 {
     x += rw.cellMin.x;
@@ -302,12 +333,6 @@ static void _horizLine(RleWorker& rw, int32_t x, int32_t y, int32_t area, int32_
     }
 
     if (coverage == 0) return;
-
-    //span has ushort coordinates. check limit overflow
-    if (x >= SHRT_MAX || y >= SHRT_MAX) {
-        TVGERR("SW_ENGINE", "XY-coordinate overflow!");
-        return;
-    }
 
     auto rle = rw.rle;
 
@@ -338,7 +363,7 @@ static void _horizLine(RleWorker& rw, int32_t x, int32_t y, int32_t area, int32_
     if (aCount + xOver <= 0) return;
 
     //add a span to the current list
-    rle->spans.next() = {(uint16_t)x, (uint16_t)y, uint16_t(aCount + xOver), (uint8_t)coverage};
+    rle->spans.next() = {x, y,  aCount + xOver, (uint8_t)coverage};
 }
 
 
@@ -487,7 +512,7 @@ static bool _lineTo(RleWorker& rw, const SwPoint& to)
 
         // avoid possible arithmetic overflow below by splitting
         if (HYPOT(diff) > SHRT_MAX) {
-            mathSplitLine(line);
+            _splitLine(line);
             ++line;
             continue;
         }
@@ -651,7 +676,7 @@ static bool _cubicTo(RleWorker& rw, const SwPoint& ctrl1, const SwPoint& ctrl2, 
             goto draw;
         }
     split:
-        mathSplitCubic(arc);
+        _splitCubic(arc);
         arc += 3;
         continue;
 
@@ -671,13 +696,13 @@ static bool _decomposeOutline(RleWorker& rw)
 
     ARRAY_FOREACH(p, outline->cntrs) {
         auto last = *p;
-        auto limit = outline->pts.data + last;
-        auto start = UPSCALE(outline->pts[first]);
-        auto pt = outline->pts.data + first;
+        auto limit = outline->out.data + last;
+        auto start = UPSCALE(outline->out[first]);
+        auto pt = outline->out.data + first;
         auto types = outline->types.data + first;
         ++types;
 
-        if (!_moveTo(rw, UPSCALE(outline->pts[first]))) return false;
+        if (!_moveTo(rw, UPSCALE(outline->out[first]))) return false;
 
         while (pt < limit) {
             //emit a single line_to
@@ -847,9 +872,9 @@ SwRle* rleRender(const RenderRegion* bbox)
     rle->spans.count = bbox->h();
 
     //cheaper without push()
-    auto x = uint16_t(bbox->min.x);
-    auto y = uint16_t(bbox->min.y);
-    auto len = uint16_t(bbox->w());
+    auto x = bbox->min.x;
+    auto y = bbox->min.y;
+    auto len = (int32_t)bbox->w();
 
     ARRAY_FOREACH(p, rle->spans) {
         *p = {x, y++, len, 255};
@@ -910,7 +935,7 @@ bool rleClip(SwRle* rle, const SwRle *clip)
             //clip span region
             auto x = std::max(spans->x, temp->x);
             auto len = std::min((spans->x + spans->len), (temp->x + temp->len)) - x;
-            if (len > 0) out.next() = {uint16_t(x), temp->y, uint16_t(len), (uint8_t)(((spans->coverage * temp->coverage) + 0xff) >> 8)};
+            if (len > 0) out.next() = {x, temp->y, len, (uint8_t)(((spans->coverage * temp->coverage) + 0xff) >> 8)};
             ++temp;
         }
         ++spans;
@@ -932,17 +957,17 @@ bool rleClip(SwRle *rle, const RenderRegion* clip)
     out.reserve(rle->spans.count);
     auto data = out.data;
     const SwSpan* end;
-    uint16_t x, len;
+    int32_t x, len;
 
     for (auto p = rle->fetch(*clip, &end); p < end; ++p) {
         if (p->y >= max.y) break;
         if (p->y < min.y || p->x >= max.x || (p->x + p->len) <= min.x) continue;
         if (p->x < min.x) {
             x = min.x;
-            len = std::min(uint16_t(p->len - (x - p->x)), uint16_t(max.x - x));
+            len = std::min(p->len - (x - p->x), (max.x - x));
         } else {
             x = p->x;
-            len = std::min(p->len, uint16_t(max.x - x));
+            len = std::min(p->len, max.x - x);
         }
         if (len > 0) {
             *data = {x, p->y, len, p->coverage};

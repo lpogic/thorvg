@@ -39,7 +39,7 @@ Point LottieTextFollowPath::split(float dLen, float lenSearched, float& angle)
         }
         case PathCommand::LineTo: {
             auto dp = *pts - *(pts - 1);
-            angle = tvg::atan2(dp.y, dp.x);
+            angle = tvg::atan(dp);
             break;
         }
         case PathCommand::CubicTo: {
@@ -50,7 +50,7 @@ Point LottieTextFollowPath::split(float dLen, float lenSearched, float& angle)
         }
         case PathCommand::Close: {
             auto dp = *start - *(pts - 1);
-            angle = tvg::atan2(dp.y, dp.x);
+            angle = tvg::atan(dp);
             break;
         }
     }
@@ -95,7 +95,7 @@ Point LottieTextFollowPath::position(float lenSearched, float& angle)
             switch (*(cmds + 1)) {
                 case PathCommand::LineTo: {
                     auto dp = *(pts + 1) - *pts;
-                    angle = tvg::atan2(dp.y, dp.x);
+                    angle = tvg::atan(dp);
                     return {pts->x + lenSearched * cos(angle), pts->y + lenSearched * sin(angle)};
                 }
                 case PathCommand::CubicTo: {
@@ -139,7 +139,7 @@ Point LottieTextFollowPath::position(float lenSearched, float& angle)
                 case PathCommand::LineTo: {
                     auto len = lenSearched - totalLen;
                     auto dp = *pts - *(pts - 1);
-                    angle = tvg::atan2(dp.y, dp.x);
+                    angle = tvg::atan(dp);
                     return {pts->x + len * cos(angle), pts->y + len * sin(angle)};
                 }
                 case PathCommand::CubicTo: {
@@ -150,7 +150,7 @@ Point LottieTextFollowPath::position(float lenSearched, float& angle)
                 case PathCommand::Close: {
                     auto len = lenSearched - totalLen;
                     auto dp = *start - *(pts - 1);
-                    angle = tvg::atan2(dp.y, dp.x);
+                    angle = tvg::atan(dp);
                     return {(pts - 1)->x + len * cos(angle), (pts - 1)->y + len * sin(angle)};
                 }
             }
@@ -299,9 +299,7 @@ float LottieTextRange::factor(float frameNo, float totalLen, float idx)
 
 void LottieFont::prepare()
 {
-    if (!b64src) return;
-
-    Text::load(name, b64src, size, "ttf", false);
+    if (b64src) Text::load(name, b64src, size, mime, false);
 }
 
 
@@ -461,7 +459,7 @@ Fill* LottieGradient::fill(float frameNo, uint8_t opacity, Tween& tween, LottieE
         if (tvg::zero(progress)) {
             static_cast<RadialGradient*>(fill)->radial(s.x, s.y, r, s.x, s.y, 0.0f);
         } else {
-            auto startAngle = rad2deg(tvg::atan2(e.y - s.y, e.x - s.x));
+            auto startAngle = rad2deg(tvg::atan(e - s));
             auto angle = deg2rad((startAngle + this->angle(frameNo, tween, exps)));
             auto fx = s.x + cos(angle) * progress * r;
             auto fy = s.y + sin(angle) * progress * r;
@@ -619,19 +617,13 @@ void LottieLayer::prepare(RGB32* color)
         return;
     }
 
-    //prepare the viewport clipper
-    if (type == LottieLayer::Precomp) {
-        auto clipper = Shape::gen();
-        clipper->appendRect(0.0f, 0.0f, w, h);
-        clipper->ref();
-        statical.pooler.push(clipper);
-    //prepare solid fill in advance if it is a layer type.
-    } else if (color && type == LottieLayer::Solid) {
-        auto solidFill = Shape::gen();
-        solidFill->appendRect(0, 0, static_cast<float>(w), static_cast<float>(h));
-        solidFill->fill(color->r, color->g, color->b);
-        solidFill->ref();
-        statical.pooler.push(solidFill);
+    // prepare the viewport clipper or a solid fill in advance if it is a layer type.
+    if (type == LottieLayer::Precomp || (color && type == LottieLayer::Solid)) {
+        auto obj = Shape::gen();
+        obj->appendRect(0.0f, 0.0f, w, h);
+        obj->ref();
+        if (color && type == LottieLayer::Solid) obj->fill(color->r, color->g, color->b);
+        statical.pooler.push(obj);
     }
 
     LottieGroup::prepare(LottieObject::Layer);
@@ -645,21 +637,6 @@ float LottieLayer::remap(LottieComposition* comp, float frameNo, LottieExpressio
     }
     return (frameNo - startFrame) / timeStretch;
 }
-
-
-bool LottieLayer::assign(const char* layer, uint32_t ix, const char* var, float val)
-{
-    //find the target layer by name
-    auto target = layerById(djb2Encode(layer));
-    if (!target) return false;
-
-    //find the target property by ix
-    auto property = target->property(ix);
-    if (property && property->exp) return property->exp->assign(var, val);
-
-    return false;
-}
-
 
 LottieComposition::~LottieComposition()
 {

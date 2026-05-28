@@ -29,7 +29,7 @@
 using namespace tvg;
 using namespace std;
 
-#ifdef THORVG_TTF_LOADER_SUPPORT
+#ifdef THORVG_SFNT_LOADER_SUPPORT
 
 TEST_CASE("Text Creation", "[tvgText]")
 {
@@ -40,6 +40,10 @@ TEST_CASE("Text Creation", "[tvgText]")
 
     Paint::rel(text);
 }
+
+#endif
+
+#ifdef THORVG_TTF_LOADER_SUPPORT
 
 TEST_CASE("Load TTF Data from a file", "[tvgText]")
 {
@@ -127,7 +131,7 @@ TEST_CASE("Text Basic", "[tvgText]")
     Initializer::init();
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        uint32_t buffer[100*100];
+        uint32_t buffer[100*100] = {};
         canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888);
 
         auto text = Text::gen();
@@ -153,7 +157,7 @@ TEST_CASE("Text with composite glyphs", "[tvgText]")
     Initializer::init();
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        uint32_t buffer[100*100];
+        uint32_t buffer[100*100] = {};
         canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888);
 
         auto text = Text::gen();
@@ -176,7 +180,7 @@ TEST_CASE("Text Styles", "[tvgText]")
     Initializer::init();
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        uint32_t buffer[100*100];
+        uint32_t buffer[100*100] = {};
         canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888);
 
         auto text = Text::gen();
@@ -210,7 +214,7 @@ TEST_CASE("Text Layout", "[tvgText]")
     Initializer::init();
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        uint32_t buffer[100*100];
+        uint32_t buffer[100*100] = {};
         canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888);
 
         auto text = Text::gen();
@@ -244,7 +248,7 @@ TEST_CASE("Text Wrap Mode", "[tvgText]")
     Initializer::init();
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        uint32_t buffer[100*100];
+        uint32_t buffer[100*100] = {};
         canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888);
 
         auto text = Text::gen();
@@ -283,7 +287,7 @@ TEST_CASE("Text Spacing", "[tvgText]")
     Initializer::init();
     {
         auto canvas = unique_ptr<SwCanvas>(SwCanvas::gen());
-        uint32_t buffer[100*100];
+        uint32_t buffer[100*100] = {};
         canvas->target(buffer, 100, 100, 100, ColorSpace::ARGB8888);
 
         auto text = Text::gen();

@@ -30,19 +30,12 @@
 /* Internal Class Implementation                                        */
 /************************************************************************/
 
-static float _lineLengthApprox(const Point& pt1, const Point& pt2)
+static float _lengthApprox(const Point& pt1, const Point& pt2)
 {
-    /* approximate sqrt(x*x + y*y) using alpha max plus beta min algorithm.
-       With alpha = 1, beta = 3/8, giving results with the largest error less
-       than 7% compared to the exact value. */
-    Point diff = {pt2.x - pt1.x, pt2.y - pt1.y};
-    if (diff.x < 0) diff.x = -diff.x;
-    if (diff.y < 0) diff.y = -diff.y;
-    return (diff.x > diff.y) ? (diff.x + diff.y * 0.375f) : (diff.y + diff.x * 0.375f);
+    return tvg::length(pt1, pt2);
 }
 
-
-static float _lineLength(const Point& pt1, const Point& pt2)
+static float _length(const Point& pt1, const Point& pt2)
 {
     Point diff = {pt2.x - pt1.x, pt2.y - pt1.y};
     return sqrtf(diff.x * diff.x + diff.y * diff.y);
@@ -276,7 +269,7 @@ void normalize(Point& pt)
 
 float Line::length() const
 {
-    return _lineLength(pt1, pt2);
+    return _length(pt1, pt2);
 }
 
 
@@ -296,7 +289,7 @@ void Line::split(float at, Line& left, Line& right) const
 Bezier::Bezier(const Point& st, const Point& ed, float radius)
 {
     // Calculate the angle between the start and end points
-    auto angle = tvg::atan2(ed.y - st.y, ed.x - st.x);
+    auto angle = tvg::atan(ed - st);
 
     // Calculate the control points of the cubic bezier curve
     auto c = radius * PATH_KAPPA;  // c = radius * (4/3) * tan(pi/8)
@@ -340,13 +333,13 @@ void Bezier::split(float at, Bezier& left, Bezier& right) const
 
 float Bezier::length() const
 {
-    return _bezLength(*this, _lineLength);
+    return _bezLength(*this, _length);
 }
 
 
 float Bezier::lengthApprox() const
 {
-    return _bezLength(*this, _lineLengthApprox);
+    return _bezLength(*this, _lengthApprox);
 }
 
 
@@ -376,13 +369,13 @@ void Bezier::split(float t, Bezier& left)
 
 float Bezier::at(float at, float length) const
 {
-    return _bezAt(*this, at, length, _lineLength);
+    return _bezAt(*this, at, length, _length);
 }
 
 
 float Bezier::atApprox(float at, float length) const
 {
-    return _bezAt(*this, at, length, _lineLengthApprox);
+    return _bezAt(*this, at, length, _lengthApprox);
 }
 
 
@@ -426,7 +419,7 @@ float Bezier::angle(float t) const
     pt.x *= 3;
     pt.y *= 3;
 
-    return rad2deg(tvg::atan2(pt.y, pt.x));
+    return rad2deg(tvg::atan(pt));
 }
 
 
@@ -465,7 +458,7 @@ void Bezier::bounds(BBox& box, const Point& start, const Point& ctrl1, const Poi
 }
 
 
-bool Bezier::flatten() const
+bool Bezier::flatten(float tolerance) const
 {
     float diff1_x = fabsf((ctrl1.x * 3.f) - (start.x * 2.f) - end.x);
     float diff1_y = fabsf((ctrl1.y * 3.f) - (start.y * 2.f) - end.y);
@@ -473,22 +466,22 @@ bool Bezier::flatten() const
     float diff2_y = fabsf((ctrl2.y * 3.f) - (end.y * 2.f) - start.y);
     if (diff1_x < diff2_x) diff1_x = diff2_x;
     if (diff1_y < diff2_y) diff1_y = diff2_y;
-    return (diff1_x + diff1_y <= 0.5f);
+    return (diff1_x + diff1_y <= tolerance);
 }
 
 
-uint32_t Bezier::segments() const
+uint32_t Bezier::segments(float scale) const
 {
     static constexpr uint32_t MaxSegments = 1u << 10; // 2^10 segments cap keeps runtime bounded
+    auto tolerance = 0.5f / scale;
     uint32_t count = 0;
     Array<Bezier> stack;
     stack.push(*this);
     Bezier left, right;
 
     while (!stack.empty()) {
-        auto current = stack.last();
-        stack.pop();
-        if (current.flatten()) {
+        auto current = stack.pick();
+        if (current.flatten(tolerance)) {
             ++count;
             continue;
         }

@@ -37,6 +37,7 @@ void WgRenderer::release()
     if (!mContext.queue) return;
 
     disposeObjects();
+    mTextures.clear(mContext);
 
     // clear render data paint pools
     mRenderDataShapePool.release(mContext);
@@ -67,7 +68,9 @@ void WgRenderer::disposeObjects()
         if (renderData->type() == Type::Shape) {
             mRenderDataShapePool.free(mContext, (WgRenderDataShape*)renderData);
         } else {
-            mRenderDataPicturePool.free(mContext, (WgRenderDataPicture*)renderData);
+            auto* renderDataPicture = (WgRenderDataPicture*)renderData;
+            renderDataPicture->releaseTexture(mTextures, mContext);
+            mRenderDataPicturePool.free(mContext, renderDataPicture);
         }
     }
     mDisposeRenderDatas.clear();
@@ -163,7 +166,7 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
     if (rshape.stroke && !renderDataShape->renderSettingsStroke.skip) {
         if (rshape.stroke->fill && (!data || (flags & (RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform)))) {
             bool updateColorRamp = !data || ((flags & RenderUpdateFlag::GradientStroke) != RenderUpdateFlag::None);
-            renderDataShape->renderSettingsStroke.update(mContext, rshape.stroke->fill, &transform, updateColorRamp);
+            renderDataShape->renderSettingsStroke.update(mContext, rshape.stroke->fill, nullptr, updateColorRamp);
         } else if (!data || (flags & RenderUpdateFlag::Stroke)) {
             renderDataShape->renderSettingsStroke.update(mContext, rshape.stroke->color);
         }
@@ -177,6 +180,12 @@ RenderData WgRenderer::prepare(const RenderShape& rshape, RenderData data, const
 RenderData WgRenderer::prepare(RenderSurface* surface, RenderData data, const Matrix& transform, const Array<RenderData>& clips, uint8_t opacity, FilterMethod filter, RenderUpdateFlag flags)
 {
     auto renderDataPicture = data ? (WgRenderDataPicture*)data : mRenderDataPicturePool.allocate(mContext);
+    auto cacheStale = renderDataPicture->imageTexture && (renderDataPicture->imageStamp != mTextures.stamp);
+    auto updateGeometry = !data || (flags & (RenderUpdateFlag::Transform | RenderUpdateFlag::Path | RenderUpdateFlag::Image));
+    auto refreshTexture = ((flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Image)) != RenderUpdateFlag::None);
+    auto sourceChanged = (renderDataPicture->imageSource != surface);
+    auto filterChanged = (renderDataPicture->imageFilter != filter);
+    auto needsImage = !renderDataPicture->imageTexture || sourceChanged || filterChanged || refreshTexture || cacheStale;
 
     // update paint settings
     renderDataPicture->viewport = vport;
@@ -186,9 +195,13 @@ RenderData WgRenderer::prepare(RenderSurface* surface, RenderData data, const Ma
     }
 
     // update image data
-    if (!data || (flags & (RenderUpdateFlag::Transform | RenderUpdateFlag::Path | RenderUpdateFlag::Image))) {
-        auto updateTexture = !data || ((flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Image)) != RenderUpdateFlag::None);
-        renderDataPicture->updateSurface(mContext, surface, transform, filter, updateTexture);
+    if (updateGeometry) {
+        renderDataPicture->updateSurface(surface, transform);
+    }
+    if (needsImage) {
+        renderDataPicture->releaseTexture(mTextures, mContext);
+        auto* entry = mTextures.retain(mContext, surface, filter, refreshTexture);
+        renderDataPicture->setImage(entry->texture, entry->bindGroup, surface, filter, mTextures.stamp);
     }
 
     if (flags & RenderUpdateFlag::Clip) renderDataPicture->updateClips(clips);
@@ -262,9 +275,7 @@ bool WgRenderer::postRender()
 
     // clear the render tasks tree
     mSceneTaskStack.pop();
-    assert(mSceneTaskStack.count == 0);
     mRenderTargetStack.pop();
-    assert(mRenderTargetStack.count == 0);
     ARRAY_FOREACH(p, mRenderTaskList) { delete (*p); };
     mRenderTaskList.clear();
     ARRAY_FOREACH(p, mCompositorList) { delete (*p); };
@@ -291,22 +302,10 @@ bool WgRenderer::bounds(RenderData data, Point* pt4, const Matrix& m)
                 bbox.init();
                 auto& vertexes = renderData->meshStrokes.vbuffer;
 
-                if (m == renderData->transform) {
-                    for (uint32_t i = 0; i < vertexes.count; i++) {
-                        Point vert = vertexes[i];
-                        bbox.min = min(bbox.min, vert);
-                        bbox.max = max(bbox.max, vert);
-                    }
-                } else {
-                    Matrix inverseModel;
-                    inverse(&renderData->transform, &inverseModel);
-                    inverseModel *= m;
-                    for (uint32_t i = 0; i < vertexes.count; i++) {
-                        Point vert = vertexes[i];
-                        vert *= inverseModel;
-                        bbox.min = min(bbox.min, vert);
-                        bbox.max = max(bbox.max, vert);
-                    }
+                for (uint32_t i = 0; i < vertexes.count; i++) {
+                    Point vert = vertexes[i] * m;
+                    bbox.min = min(bbox.min, vert);
+                    bbox.max = max(bbox.max, vert);
                 }
 
                 pt4[0] = bbox.min;

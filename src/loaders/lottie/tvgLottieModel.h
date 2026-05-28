@@ -449,11 +449,13 @@ struct LottieFont
 
     ~LottieFont()
     {
+        if (b64src) Text::unload(name);
         ARRAY_FOREACH(p, chars) delete(*p);
         tvg::free(style);
         tvg::free(family);
         tvg::free(name);
         tvg::free(b64src);
+        tvg::free(mime);
     }
 
     union {
@@ -465,6 +467,7 @@ struct LottieFont
     char* name = nullptr;
     char* family = nullptr;
     char* style = nullptr;
+    char* mime = nullptr;
     uint32_t size = 0;
     float ascent = 0.0f;
     Origin origin = Local;
@@ -1061,7 +1064,6 @@ struct LottieLayer : LottieGroup
     void prepare(RGB32* color = nullptr);
     float remap(LottieComposition* comp, float frameNo, LottieExpressions* exp);
     LottieProperty* property(uint16_t ix) override;
-    bool assign(const char* layer, uint32_t ix, const char* var, float val);
 
     char* name = nullptr;
     LottieLayer* parent = nullptr;
