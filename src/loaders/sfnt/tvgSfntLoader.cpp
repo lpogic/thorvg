@@ -514,7 +514,8 @@ SfntReader* SfntLoader::gen(uint8_t* data, uint32_t size)
 void SfntLoader::transform(Paint* paint, FontMetrics& fm, float italicShear)
 {
     auto engine = static_cast<SfntMetrics*>(fm.engine);
-    auto scale = 1.0f / fm.scale;
+    auto scale = fm.fontSize / (reader->metrics.hhea.ascent - reader->metrics.hhea.descent);
+    // auto scale = 1.0f / fm.scale;
     auto baseWidth = (engine->baseGlyph) ? engine->baseGlyph->bbox.w() : 0.0f;
     Matrix m = {scale, -italicShear * scale, italicShear * baseWidth * scale, 0, scale, reader->metrics.hhea.ascent * scale, 0, 0, 1};
     paint->transform(m);
@@ -633,27 +634,27 @@ bool SfntLoader::metrics(const FontMetrics& fm, const char* ch, GlyphMetrics& ou
     return true;
 }
 
-bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int method, float xLimit, int indexLimit, float* width, int* index)
+bool SfntLoader::measure(FontMetrics& fm, const char* utf8,  int method, float xLimit, int indexLimit, float* width, int* index)
 {
-    TtfGlyphMetrics* ltgm = nullptr;
+    SfntGlyphMetrics* ltgm = nullptr;
     Point cursor = {};
-    Point kerning{};
+    Point position{};
     float lastCursorX = 0.0f;
     bool limitReached = false;
     size_t idx = 0;
     auto utf8End = utf8 + strlen(utf8);
 
-    auto scale = fm.fontSize / (reader.metrics.hhea.ascent - reader.metrics.hhea.descent);
+    auto scale = fm.fontSize / (reader->metrics.hhea.ascent - reader->metrics.hhea.descent);
     xLimit = xLimit / scale;
 
     while (utf8 < utf8End) {
         auto code = _codepoints(&utf8, utf8End);
         auto rtgm = request(code);
         if (!rtgm) continue;
-        kerning = {0.0f, 0.0f};
-        if (ltgm) reader.kerning(ltgm->idx, rtgm->idx, kerning);
+        position = {0.0f, 0.0f};
+        if (ltgm) reader->positioning(ltgm->idx, rtgm->idx, position);
 
-        cursor.x += (rtgm->advance + kerning.x) * fm.spacing.x;
+        cursor.x += (rtgm->advance + position.x) * fm.spacing.x;
 
         if (xLimit > 0 && xLimit < cursor.x || indexLimit >= 0 && indexLimit <= idx) {
             limitReached = true;
@@ -665,14 +666,14 @@ bool TtfLoader::measure(FontMetrics& fm, const char* utf8,  int method, float xL
         ++idx;
     }
 
-    if(!limitReached && indexLimit < 0 && ltgm && ltgm->w > 0) {
-        lastCursorX += ltgm->w + (ltgm->lsb - ltgm->advance) * fm.spacing.x;
+    if(!limitReached && indexLimit < 0 && ltgm && ltgm->bbox.w() > 0) {
+        lastCursorX += ltgm->bbox.w() + (ltgm->lsb - ltgm->advance) * fm.spacing.x;
     }
 
     switch(method) {
         case 1: // FLOOR
             if(limitReached) {
-                if(width) *width = (lastCursorX + kerning.x / 2) * scale;
+                if(width) *width = (lastCursorX + position.x / 2) * scale;
                 if(index) *index = idx;
                 break;
             }
